@@ -1,6 +1,6 @@
 <img width="960" height="410" alt="image" src="https://github.com/user-attachments/assets/8471da74-e628-4a74-b92d-b647e532d95d" />
 
-**Kernels & Shaders**
+**Kernels & Shaders**[^kand]
 
 **Many architectures. Endless debugging.**
 
@@ -282,3 +282,7 @@ We are testing two real NVIDIA CUDA to HIP ports using K_and_S on actual GPU har
 ## License
 
 Knowledge base and tools provided as documentation and reference implementations. See individual file headers for details.
+
+---
+
+[^kand]: <sub><i>Kand means some scam, or a problem someone sets in motion. Kernels And Shaders accidentally ended up as Kands. As we say in Hindi, "Kand kar diya".</i></sub>
