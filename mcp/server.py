@@ -232,15 +232,16 @@ class PerfDiffParams(BaseModel):
 class AutonomousPortParams(BaseModel):
     repo_path: str = Field("", description="Path to the engine repo (must exist). Use github_url instead for remote repos.")
     github_url: str = Field("", description="GitHub URL to clone (e.g. https://github.com/ggerganov/llama.cpp). SECURITY: repo is read-only; no build scripts are executed. Must be https://github.com/ or git+https://github.com/")
-    source_arch: str = Field(..., description="Source arch ID (e.g. 'sm_80', 'gfx1100')")
-    target_arch: str = Field(..., description="Target arch ID (e.g. 'gfx1201', 'gen12_lp')")
-    target_backend: str = Field("hip", description="Target backend: 'hip', 'cuda', 'vulkan', 'directx', 'sycl'")
+    source_arch: str = Field("auto", description="Source arch ID (e.g. 'sm_80', 'gfx1100'). 'auto' = auto-detect from repo")
+    target_arch: str = Field("auto", description="Target arch ID (e.g. 'gfx1201'). 'auto' = suggest based on installed hardware")
+    project_type: str = Field("auto", description="Type of project: 'llm', 'game', 'sdk', 'compute', 'inference', or 'auto'")
+    target_language: str = Field("auto", description="Target language: 'cxx', 'rust', 'python', or 'auto' = analyze repo for optimal choice")
+    target_backend: str = Field("auto", description="Target backend: 'hip', 'cuda', 'vulkan', 'directx', 'sycl', or 'auto'")
     target_os: str = Field("auto", description="Target OS: 'linux', 'windows', 'auto'")
-    target_tok_per_s: float = Field(0, description="Performance target (0 = no target)")
+    target_tok_per_s: float = Field(0, description="Performance target for LLM workloads (0 = no target)")
     mode: str = Field("strict", description="Porting mode: 'strict' or 'loose'")
     max_files: int = Field(1000, description="Maximum number of files to scan (security: prevents resource exhaustion from large repos)")
     timeout_seconds: int = Field(60, description="Timeout for clone + scan operations (seconds)")
-    skip_clone: bool = Field(False, description="If true and repo_path is set, skip re-cloning (use existing local copy)")
 
 
 class EstimatePerfParams(BaseModel):
@@ -2046,11 +2047,178 @@ def _search_online(query: str, max_results: int) -> str:
 
 # ── Autonomous Port orchestration ─────────────────────────────────────────────
 
+def _auto_detect_source_arch(root: Path, arch_map: dict) -> str:
+    """Scan repo to detect the source GPU architecture from code patterns."""
+    findings = _scan_sources(root)
+    if not findings:
+        return "sm_80"  # Default to modern CUDA
+
+    # Check if repo is CUDA, HIP, or SYCL
+    has_cuda = any(f["backend"] == "gpu_cuda" for f in findings)
+    has_hip = any(f["backend"] == "gpu_hip" for f in findings)
+    has_sycl = any(f["backend"] == "gpu_sycl" for f in findings)
+
+    if has_cuda:
+        # Scan source for CUDA version markers or arch specifiers
+        import re as _re
+        cuda_arches = []
+        for f in findings:
+            if f["backend"] == "gpu_cuda":
+                try:
+                    with open(root / f["path"], "r", errors="ignore") as fh:
+                        content = fh.read()
+                        # Look for arch flags or __CUDA_ARCH__ version
+                        for m in _re.finditer(r'__CUDA_ARCH__\s*[><=]=?\s*(\d+)', content):
+                            cuda_arches.append(int(m.group(1)))
+                        if "-arch=sm_" in content or "nvcc -arch=sm_" in content:
+                            for m in _re.finditer(r'sm_(\d+)', content):
+                                cuda_arches.append(int(m.group(1)) * 10)
+                except:
+                    pass
+        # Default to sm_80 (Ampere) for CUDA repos without specific markers
+        if cuda_arches:
+            max_arch = max(cuda_arches)
+            if max_arch >= 900:
+                return "sm_89"  # Ada
+            elif max_arch >= 800:
+                return "sm_80"  # Ampere
+            elif max_arch >= 700:
+                return "sm_75"  # Turing
+        return "sm_80"  # Default modern CUDA
+    if has_hip:
+        return "gfx1100"
+    if has_sycl:
+        return "gen12_lp"
+    return "sm_80"
+
+
+def _infer_project_type(root: Path) -> str:
+    """Analyse repo to guess the project type (llm, game, sdk, compute)."""
+    import os as _os
+    # Check for common files/patterns
+    markers = {
+        "llm": ["model.py", "attention.py", "transformer.py", "llama.cpp", "kernels.py", "ggml.h", "flash_attn", "embedding", "tokenizer", "vocab.json"],
+        "game": ["renderer.cpp", "shader", "pipeline", "vulkan", "directx", "engine.cpp", "scene.cpp", "mesh.cpp", "material"],
+        "sdk": ["CMakeLists.txt", "include/", "api.h", "wrapper.py", "bindings.rs"],
+        "compute": ["cuda_utils", "kernel_utils", "bitonic_sort", "reduce.cu", "scan.cu"],
+        "inference": ["inference.py", "model_inference", "predict.py", "runtime.py"],
+    }
+    found_types = []
+    all_files = []
+    for root_path, dirs, files in _os.walk(root):
+        for f in files:
+            all_files.append(f)
+
+    # Check content for ML-specific keywords
+    ml_keywords = ["neural", "encoding", "mlp", "optimizer", "fully_fused", "hash_grid"]
+    if not found_types:
+        for f in all_files[:500]:
+            try:
+                with open(_os.path.join(root, root_path, f), "r", errors="ignore") as fh:
+                    content = fh.read()
+                    if any(kw in content for kw in ml_keywords):
+                        found_types.append("llm")
+                        break
+            except:
+                pass
+
+    for label, keywords in markers.items():
+        for kw in keywords:
+            if any(kw.lower() in f.lower() for f in all_files):
+                found_types.append(label)
+                break
+
+    if "llm" in found_types:
+        return "llm"
+    if "game" in found_types:
+        return "game"
+    if "sdk" in found_types:
+        return "sdk"
+    if "compute" in found_types:
+        return "compute"
+    if "inference" in found_types:
+        return "inference"
+    return "compute"  # Default fallback
+
+
+def _suggest_target_arch(source_arch: str, arch_map: dict) -> str:
+    """Suggest a target arch based on source vendor and common porting paths."""
+    entries = arch_map.get("entries", {})
+    source_info = entries.get(source_arch, {})
+    source_vendor = source_info.get("vendor", "NVIDIA")
+
+    # Cross-vendor suggestions
+    if source_vendor == "NVIDIA":
+        return "gfx1201"  # RDNA4 (common porting target)
+    elif source_vendor == "AMD":
+        return "sm_89"  # Ada Lovelace
+    elif source_vendor == "Intel":
+        return "gfx1201"
+    return "gfx1201"
+
+
+def _infer_target_language(source_files: list, project_type: str) -> str:
+    """Infer the best target language based on source patterns."""
+    has_rust = any("Cargo.toml" in str(f) for f in source_files[:100])
+    has_cxx = any(str(f).endswith((".cpp", ".cu", ".cc", ".cuh")) for f in source_files[:100])
+    has_pybind = any("pybind" in str(f).lower() for f in source_files[:20])
+
+    if has_rust and project_type in ("llm", "sdk"):
+        return "rust"
+    if has_cxx:
+        return "cxx"
+    if has_pybind:
+        return "python"
+    return "cxx"
+
+
 async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
     """Run the full porting workflow in one call: discover → check → compare → toolchain → estimate → research → plan."""
     now = datetime.now(timezone.utc)
     root = Path(params.repo_path)
     entries = arch_map.get("entries", {})
+
+    # ── Auto-detect missing parameters ──
+    detected_info = {}
+
+    if params.source_arch == "auto" or params.target_arch == "auto" or params.project_type == "auto" or params.target_language == "auto" or params.target_backend == "auto":
+        findings = _scan_sources(root)
+        detected_info["findings_count"] = len(findings)
+        detected_info["backends"] = list(set(f["backend"] for f in findings)) if findings else []
+
+    if params.source_arch == "auto":
+        params.source_arch = _auto_detect_source_arch(root, arch_map)
+        detected_info["source_arch"] = params.source_arch
+
+    if params.project_type == "auto":
+        params.project_type = _infer_project_type(root)
+        detected_info["project_type"] = params.project_type
+
+    if params.target_arch == "auto":
+        params.target_arch = _suggest_target_arch(params.source_arch, arch_map)
+        detected_info["target_arch"] = params.target_arch
+
+    if params.target_language == "auto":
+        source_files = []
+        if root.exists():
+            import os as _os
+            for root_path, dirs, files in _os.walk(root):
+                for f in files:
+                    source_files.append(f)
+        params.target_language = _infer_target_language(source_files, params.project_type)
+        detected_info["target_language"] = params.target_language
+
+    if params.target_backend == "auto":
+        source_vendor = entries.get(params.source_arch, {}).get("vendor", "NVIDIA")
+        if source_vendor == "NVIDIA":
+            params.target_backend = "hip"  # Most common cross-port target
+        elif source_vendor == "AMD":
+            params.target_backend = "cuda"
+        else:
+            params.target_backend = "hip"
+        detected_info["target_backend"] = params.target_backend
+
+    # Now resolve arch info
     source_info = entries.get(params.source_arch, {})
     target_info = entries.get(params.target_arch, {})
 
@@ -2067,15 +2235,24 @@ async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
 **Source arch:** `{params.source_arch}` — {source_info.get('name', '?')}
 **Target arch:** `{params.target_arch}` — {target_info.get('name', '?')}
 **Target backend:** `{params.target_backend}`
+**Target language:** `{params.target_language}`
+**Project type:** `{params.project_type}`
 **Target OS:** `{params.target_os}`
 **Mode:** `{params.mode}`
 **Performance target:** {params.target_tok_per_s if params.target_tok_per_s else 'N/A'} tok/s
 
 ---
 
-## Phase 1 — Environment Scan
+## Phase 0 — Auto-Detected Parameters
 
-### GPU Toolkits Detected (from kands://tk-tools)"""
+"""
+    if detected_info:
+        report += "The following parameters were auto-detected (not explicitly provided by user):\n\n"
+        for k, v in detected_info.items():
+            report += f"- **{k}:** {v}\n"
+        report += "\n"
+
+    report += """### GPU Toolkits Detected (from kands://tk-tools)"""
 
     # Scan for installed toolkits in env
     import os as _os
@@ -2853,23 +3030,25 @@ def _tools() -> list[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="autonomous_port",
-            description="FULLY AUTOMATIC porting workflow: discovers kernels, checks arch compatibility, compares arches, looks up toolchain, estimates performance, searches references, generates complete porting plan. Accepts github_url (clones with security safeguards) OR repo_path (local). SECURITY: repo cloned read-only, no build scripts executed, file count + timeout limits enforced.",
+            description="FULLY AUTOMATIC porting workflow: discovers kernels, checks arch compatibility, compares arches, looks up toolchain, estimates performance, searches references, generates complete porting plan. Pass explicit target_arch + target_backend for direct analysis. If 'auto', will detect from installed hardware + repo and suggest optimal target. SECURITY: repo cloned read-only, no build scripts executed.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "repo_path": {"type": "string", "description": "Local repo path (must exist). Use github_url for remote"},
                     "github_url": {"type": "string", "description": "GitHub URL to clone. SECURITY: read-only, no scripts executed"},
-                    "source_arch": {"type": "string", "description": "Source arch ID (e.g. 'sm_80')"},
-                    "target_arch": {"type": "string", "description": "Target arch ID (e.g. 'gfx1201')"},
-                    "target_backend": {"type": "string", "description": "hip/cuda/vulkan/directx/sycl", "default": "hip"},
+                    "source_arch": {"type": "string", "description": "Source arch ID (e.g. 'sm_80')", "default": "auto"},
+                    "target_arch": {"type": "string", "description": "Target arch ID (e.g. 'gfx1201'). 'auto' = auto-detect + suggest", "default": "auto"},
+                    "project_type": {"type": "string", "description": "Project type: llm, game, sdk, compute, inference, or 'auto' for auto-detect", "default": "auto"},
+                    "target_language": {"type": "string", "description": "Target language: cxx, rust, python, or 'auto' for optimal choice", "default": "auto"},
+                    "target_backend": {"type": "string", "description": "hip/cuda/vulkan/directx/sycl/auto", "default": "auto"},
                     "target_os": {"type": "string", "description": "linux/windows/auto", "default": "auto"},
-                    "target_tok_per_s": {"type": "number", "description": "Performance target (0 = no target)", "default": 0},
+                    "target_tok_per_s": {"type": "number", "description": "Performance target for LLM workloads", "default": 0},
                     "mode": {"type": "string", "description": "strict/loose", "default": "strict"},
-                    "max_files": {"type": "integer", "description": "Max files to scan (default 1000)", "default": 1000},
+                    "max_files": {"type": "integer", "description": "Max files to scan", "default": 1000},
                     "timeout_seconds": {"type": "integer", "description": "Timeout for clone+scan (default 60s)", "default": 60},
                     "force_refresh": {"type": "boolean", "description": "Force re-analysis", "default": False},
                 },
-                "required": ["source_arch", "target_arch"],
+                "required": [],
             },
         ),
     ]
@@ -3176,6 +3355,57 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
         if not params.repo_path and not params.github_url:
             results.append(mcp_types.TextContent(type="text", text="ERROR: Must provide repo_path or github_url"))
             return results
+
+        # ── Guided target selection ──
+        # When target_arch is "auto", suggest targets based on source vendor
+        if params.target_arch == "auto":
+            source_info = arch_map.get("entries", {}).get(params.source_arch, {})
+            source_vendor = source_info.get("vendor", "NVIDIA")
+            # Detect installed hardware
+            detected = _detect_installed_toolchain("auto", "auto")
+            det = detected.get("detected", {})
+
+            report = "# Target Architecture Selection\n\n"
+            report += f"**Source arch:** `{params.source_arch}` — {source_info.get('name', 'unknown')}\n\n"
+
+            # Suggest targets by vendor (skip source vendor unless cross-porting)
+            suggestions = {
+                "NVIDIA": ["gfx1030", "gfx1100", "gfx1150", "gfx1200", "gfx1201", "meteor_lake"],
+                "AMD": ["sm_89", "sm_80", "gen12_lp", "arc_b580"],
+                "Intel": ["sm_89", "gfx1100", "gfx1201"],
+            }
+            vendor_suggestions = suggestions.get(source_vendor, ["gfx1201", "sm_89", "meteor_lake"])
+
+            report += "## Detected toolchains on this machine:\n\n"
+            for tool_key, tool_info in det.items():
+                if isinstance(tool_info, dict):
+                    for sub_key in ("path", "hipcc", "nvcc", "glslc", "icpx"):
+                        val = tool_info.get(sub_key)
+                        if val:
+                            report += f"- **{tool_key}** `{val}` ✅\n"
+                elif isinstance(tool_info, str):
+                    report += f"- **{tool_key}** `{tool_info}` ✅\n"
+
+            report += "\n## Suggested target architectures:\n\n"
+            for arch_id in vendor_suggestions:
+                info = arch_map.get("entries", {}).get(arch_id, {})
+                if info:
+                    report += f"- `{arch_id}` — {info.get('name', '?')} ({info.get('vendor', '?')})\n"
+
+            report += "\n## Next steps:\n\n"
+            report += f"Call `autonomous_port` again with `target_arch=<one-of-above>`.\n"
+            report += f"Example: `autonomous_port(github_url='{params.github_url or params.repo_path}', source_arch='{params.source_arch}', target_arch='gfx1201')`\n"
+            report += "\nOr use `compare_archs(arch_a='{src}', arch_b='gfx1201')` to compare two architectures first.\n".format(src=params.source_arch)
+
+            # Prepend security header
+            if security_warnings:
+                report += "\n## Security Safeguards\n\n"
+                for w in security_warnings:
+                    report += f"- {w}\n"
+
+            results.append(mcp_types.TextContent(type="text", text=report))
+            return results
+
         report = await _autonomous_port(params, arch_map)
         # Prepend security header if any warnings
         if security_warnings:
