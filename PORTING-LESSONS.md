@@ -563,6 +563,18 @@ fp8), the operand width is a **design constraint, not an implementation detail**
   provide a load-and-transpose that pulls a 16x16 tile straight into matrix-core
   operand registers (on RDNA4: `GLOBAL_LOAD_TR_B64/B128`), which is what makes a
   hand-written matrix-core kernel viable at all.
+- **Check whether the matrix core offers a mixed pair before assuming weight-only
+  quantisation works.** On one target every matrix pair was same-type (wide/wide,
+  8-bit/8-bit, narrow/narrow), so choosing a 4-bit *weight* operand forced a 4-bit
+  *activation* operand too, which is a numerical change to everything the activations
+  feed. On a different target the mixed narrow-weight/wide-activation pair existed. That
+  single fact decides whether the quantised path can stay numerically transparent, so
+  establish it before designing the kernel, not after.
+- **Enumerate the datatype pairs the target actually exposes** from the vendor's
+  kernel-template library. That table is the real menu, and it is frequently wider or
+  narrower than the manual implies: it is where a 4-bit matrix path that the assembly
+  generator cannot express will show up, and where a "supported" pair that exists only
+  on a later target family will be revealed as unavailable on yours.
 
 ---
 

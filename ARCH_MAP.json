@@ -308,6 +308,9 @@
           "tuned_census": "across the whole tuned GEMM set for this target: MatrixInstruction is always [16,16,16,1], MacroTile 128x128 is most common (then 64x64), DepthU is 32 or 64, and there is no 4-bit kernel in the set",
           "tuned_inner_loop": "a real tuned int8 kernel marshals operands with a byte permute (V_PERM_B32) and a half-word shared-memory load (DS_LOAD_U16_D16 / _HI), pipelines with S_WAIT_LOADCNT, uses S_BARRIER_SIGNAL in the loop, and the compiler emits dual-issued pairs (V_DUAL_MOV_B32) in the same block",
           "operand_expansion": "narrow packed weights can be widened to 4-bit operands in registers with a byte permute, so no expanded weight copy needs to exist in device memory: this is the difference between losing the context to the weight expansion and keeping it",
+          "dtype_pairs": "gfx12 matrix pairs, all same-type: fp16/fp16, bf16/bf16, int8/int8 -> int32, and fp8/bf8 in all four mixes, all at K=16; plus packed-int4/packed-int4 -> int32 at K=16 and K=32. There is no mixed fp16xint4 pair on gfx12, so an int4 weight operand forces an int4 activation operand. fp4, fp6 and mixed fp16xint4 exist only on the gfx1250 family",
+          "int4_packing": "the packed 4-bit operand type is two int4 per byte with the low nibble first, and a compile-time variant swaps the nibble order",
+          "generator_gap": "the assembly-generating path behind the vendor BLAS library has no 4-bit datatype at all, so no 4-bit kernel is generatable from its solution yaml for any target, while it does have a working WMMA path for this target at fp16/bf16/int8 with wave32 and matrix-instruction shapes of the form [M,N,K,Batch,BM,BN,Bk,WTA,WTB]. The 4-bit matrix path lives instead in the vendor's kernel-template library",
           "fp4": "absent",
           "fp8": "exists only as WMMA; no scalar fp8 conversion (v_cvt_pk_fp8_f32 is rejected)",
           "pipeline_rules": "ISA 7.12.1 needs >=1 independent VALU between WMMAs whose operands overlap the previous D; 7.12.2 fixes lane/vgpr/startPosn per element; 11.6.2 gives GLOBAL_LOAD_TR_B64/B128 load-and-transpose straight into operand registers",
@@ -317,6 +320,15 @@
           "ternary_bits_per_weight_ideal": 1.585,
           "packed_bits_per_weight_used": 2,
           "rule": "for a memory-bound quantised matmul no wider operand can win at T=1 (dp4a 8 bits, fp8 8, iu4 4, fp16 16 against 2 packed); at batch T>=64 the weight read is amortised and compute binds instead, so matrix cores win"
+        },
+        "context_budget": {
+          "measured_weights_gb": 6.8,
+          "measured_per_token_kv_bytes": 35328,
+          "measured_chunk_buffers_mb_t256": 123,
+          "measured_max_context_tokens": 274944,
+          "rule": "context tokens = free_bytes / per_token_bytes, so on this model 1 GB of device memory is about 30000 tokens and the whole context question reduces to which byte is a weight, which is a scratch buffer and which is K/V",
+          "operand_expansion_cost": "widening the packed weights to 4-bit in device memory would cost about 6.8 GB, i.e. roughly 193000 tokens of context, which is larger than the entire context currently in use, while the same widening done in registers costs no device memory at all",
+          "sharding": "splitting weights and K/V over two devices halves both per-device, so it raises the per-device context by roughly 2.5x and also halves the bytes each device must read per token"
         }
       },
       "tensor_cores": false,
