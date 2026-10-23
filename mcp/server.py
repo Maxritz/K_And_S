@@ -3165,7 +3165,26 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
 
     elif name == "autonomous_port":
         params = AutonomousPortParams(**arguments)
+        security_warnings = []
+        # SECURITY: Validate github_url scheme
+        if params.github_url:
+            if not params.github_url.startswith("https://github.com/") and not params.github_url.startswith("git+https://github.com/"):
+                results.append(mcp_types.TextContent(type="text", text="ERROR: github_url must be https://github.com/ or git+https://github.com/ (arbitrary git URLs blocked)"))
+                return results
+            security_warnings.append("SECURITY: Repo cloned READ-ONLY. No build scripts or git hooks executed.")
+            security_warnings.append(f"SECURITY: File count capped at {params.max_files}, timeout {params.timeout_seconds}s.")
+        if not params.repo_path and not params.github_url:
+            results.append(mcp_types.TextContent(type="text", text="ERROR: Must provide repo_path or github_url"))
+            return results
         report = await _autonomous_port(params, arch_map)
+        # Prepend security header if any warnings
+        if security_warnings:
+            header = "## Security Safeguards\n\n"
+            for w in security_warnings:
+                header += f"- {w}\n"
+            header += "\n"
+            report = report.replace("# Autonomous", "# Autonomous", 1)
+            report = report.replace("\n---\n", "\n" + header + "---\n", 1)
         results.append(mcp_types.TextContent(type="text", text=report))
 
     elif name == "set_goal":
@@ -3568,153 +3587,6 @@ gh pr view --web
         report += "3. STRACE() + fence timeout (≤1500ms Windows)\\n"
         report += "4. Fallback to last-good, NEVER stub\\n"
         report += f"5. `record_performance(arch=\"{params.arch}\", workload=\"{params.kernel_type}\")`\\n"
-
-        results.append(mcp_types.TextContent(type="text", text=report))
-
-    elif name == "autonomous_port":
-        params = AutonomousPortParams(**arguments)
-        arch_map = _load_json(_ARCH_MAP_PATH)
-        now = datetime.now(timezone.utc)
-
-        # ── SECURITY CHECKS ─────────────────────────────────────────────────
-        security_warnings = []
-
-        # 1. Validate github_url scheme
-        if params.github_url:
-            if not params.github_url.startswith("https://github.com/") and not params.github_url.startswith("git+https://github.com/"):
-                results.append(mcp_types.TextContent(type="text", text="ERROR: github_url must be https://github.com/ or git+https://github.com/ (security: arbitrary git URLs are blocked)"))
-                return results
-            security_warnings.append("SECURITY: Repository will be cloned READ-ONLY. No build scripts or git hooks will be executed.")
-            security_warnings.append("SECURITY: Clone is sandboxed — file count limited to {max_files}, timeout {timeout}s.".format(
-                max_files=params.max_files, timeout=params.timeout_seconds))
-
-        # 2. Validate repo_path exists
-        repo_for_scan = ""
-        if params.repo_path:
-            repo_for_scan = params.repo_path
-        elif params.github_url:
-            # In autonomous mode, we would clone — for now, instruct the user
-            repo_for_scan = params.github_url
-            security_warnings.append("NOTE: To actually clone and scan, run `git clone <url> <dir>` then call autonomous_port with repo_path=<dir>.")
-
-        if not repo_for_scan:
-            results.append(mcp_types.TextContent(type="text", text="ERROR: Must provide repo_path or github_url"))
-            return results
-
-        report = "# Autonomous Port Report\n\n"
-        report += f"**Generated:** {now.strftime('%Y-%m-%d %H:%M UTC')}\n"
-        report += f"**Source arch:** `{params.source_arch}`\n"
-        report += f"**Target arch:** `{params.target_arch}` ({_arch_name(arch_map, params.target_arch)})\n"
-        report += f"**Backend:** `{params.target_backend}`\n"
-        report += f"**Mode:** `{params.mode}`\n\n"
-
-        # Security header
-        if security_warnings:
-            report += "## ⚠️ Security Safeguards\n\n"
-            for w in security_warnings:
-                report += f"- {w}\n"
-            report += "\n"
-
-        report += "## Phase 0 — Setup\n\n"
-
-        # 3. Discover kernels
-        if params.github_url and not params.repo_path:
-            report += f"**Repository:** {params.github_url}\n"
-            report += "**Status:** URL identified. Clone locally first, then re-run with `repo_path`.\n"
-            report += f"\n```bash\ngit clone {params.github_url} /path/to/clone\n# Then:\nautonomous_port(repo_path=\"/path/to/clone\", source_arch=\"{params.source_arch}\", target_arch=\"{params.target_arch}\")\n```\n"
-        else:
-            root = Path(repo_for_scan)
-            if not root.exists():
-                report += f"⚠️ Path `{repo_for_scan}` does not exist.\n"
-                report += "Please provide a valid `repo_path` or `github_url`.\n"
-            else:
-                # Discover kernels with file count limit
-                findings = _scan_sources(root)
-                if len(findings) > params.max_files:
-                    findings = findings[:params.max_files]
-                    report += f"⚠️ File scan truncated to {params.max_files} files (security limit).\n"
-
-                report += f"**Discovered kernels:** {len(findings)} files\n"
-                backends = {}
-                for k in findings:
-                    backends.setdefault(k["backend"], []).append(k["path"])
-                for backend, files in sorted(backends.items()):
-                    report += f"\n- `{backend}`: {len(files)} files\n"
-
-        # 4. Arch compatibility check
-        target_info = arch_map.get("entries", {}).get(params.target_arch, {})
-        source_info = arch_map.get("entries", {}).get(params.source_arch, {})
-
-        report += "\n## Phase 1 — Arch Comparison\n\n"
-        report += f"| Property | Source ({params.source_arch}) | Target ({params.target_arch}) |\n"
-        report += "|---|---|---|\n"
-        for key in ["wave_size", "lds_kib", "tensor_cores", "wmma", "dot4", "dot8", "bf16_native", "fp8_native"]:
-            sv = source_info.get(key, "?")
-            tv = target_info.get(key, "?")
-            match = "✅" if sv == tv or tv == "?" else ("✅" if (sv and tv) else "⚠️")
-            report += f"| {key} | {sv} | {tv} | {match} |\n"
-
-        # Vulkan-specific notes
-        if params.target_backend == "vulkan":
-            v_src = source_info.get("vulkan", {})
-            v_tgt = target_info.get("vulkan", {})
-            report += f"\n### Vulkan Notes\n"
-            report += f"| Feature | Source | Target |\n|---|---|---|\n"
-            report += f"| CooperativeMatrix | {v_src.get('cooperative_matrix', '?')} | {v_tgt.get('cooperative_matrix', '?')} |\n"
-            report += f"| DP4a fallback | {v_src.get('dp4a_alternative', '?')} | {v_tgt.get('dp4a_alternative', '?')} |\n"
-            if not v_tgt.get('cooperative_matrix') or v_tgt.get('dp4a_alternative'):
-                report += f"\n⚠️ **Vulkan CooperativeMatrix is broken on AMD — use DP4a (`GL_KHR_shader_integer_dot_product`)**\n"
-
-        # 5. Performance estimate
-        report += "\n## Phase 2 — Performance Estimate\n\n"
-        perf_bench = _load_perf_benchmarks()
-        hw_est = perf_bench.get("hardware_theoretical", {}).get(params.target_arch, {})
-        if hw_est:
-            report += f"**Peak FP32 TFLOPS:** {hw_est.get('peak_fp32_tflops', '?')}\n"
-            report += f"**Peak FP16 TFLOPS:** {hw_est.get('peak_fp16_tflops', '?')}\n"
-            report += f"**Memory bandwidth:** {hw_est.get('memory_bandwidth_gb_s', '?')} GB/s\n"
-            wl = hw_est.get("workload_estimates", {}).get("flash_attn_4096", "?")
-            report += f"**FlashAttention@4096 estimated:** {wl}\n"
-        else:
-            report += f"No hardware estimates available for `{params.target_arch}`.\n"
-            report += f"Read `kands://perf-benchmarks` for available archs.\n"
-
-        # 6. Recommendations
-        report += "\n## Phase 3 — Porting Recommendations\n\n"
-        patterns = _load_json(_PORTING_PATTERNS_PATH)
-        source_vendor = source_info.get("vendor", "").lower()
-        target_vendor = target_info.get("vendor", "").lower()
-        backend_map = {"amd": "HIP", "nvidia": "CUDA", "intel": "SYCL"}
-        src_be = backend_map.get(source_vendor, "?")
-        tgt_be = backend_map.get(target_vendor, "?")
-
-        # Determine pattern key
-        pattern_key = None
-        if source_vendor == "nvidia" and target_vendor == "amd":
-            pattern_key = "cuda_to_hip"
-        elif source_vendor == "nvidia" and target_vendor == "intel":
-            pattern_key = "cuda_to_sycl"
-        elif source_vendor == "amd" and target_vendor == "nvidia":
-            pattern_key = "hip_to_cuda"
-
-        if pattern_key and pattern_key in patterns:
-            p = patterns[pattern_key]
-            report += f"**Translation pattern:** `{pattern_key}`\n"
-            report += f"- Auto-translatable constructs: {len(p.get('auto_translatable', []))}\n"
-            report += f"- Manual transforms needed: {len(p.get('manual_transforms', {}))}\n"
-            report += f"- Manual-only constructs: {len(p.get('manual_only', {}))}\n"
-
-        report += f"\n### Next Steps\n"
-        report += f"1. **Set goal:** `set_goal(goal=\"Port kernels to {params.target_arch}\", target_arch=\"{params.target_arch}\")`\n"
-        report += f"2. **Check guardrails:** `check_guardrail(action=\"port\", reason=\"Port to {params.target_arch}\")`\n"
-        report += f"3. **Generate tracing plan:** `generate_tracing_plan(repo=\"{repo_for_scan}\")`\n"
-        report += f"4. **Copy breadcrumb.hpp:** The canonical header is at `mcp/templates/breadcrumb.hpp`. Copy it into your project.\n"
-        report += f"5. **Inject STRACE() calls** before every kernel dispatch (mandatory per strict/loose mode)\n"
-        report += f"6. **Verify with CPU oracle:** `verify_numerical_equivalence(arch=\"{params.target_arch}\", workload=\"flash_attn\")`\n"
-        report += f"7. **Iterate:** Use `suggest_optimizations(arch=\"{params.target_arch}\")` based on measured results\n"
-        report += f"8. **Export findings:** `export_contribution(engine_name=\"...\", arch=\"{params.target_arch}\")`\n"
-
-        report += f"\n> **IMPORTANT:** All ported code MUST include STRACE() breadcrumb tracing. See `kands://tracing-steps` for the canonical instrumentation pattern. No placeholders/stubs — every kernel must produce real output verified against CPU oracle.\n"
 
         results.append(mcp_types.TextContent(type="text", text=report))
 

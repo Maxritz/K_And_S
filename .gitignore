@@ -24,3 +24,6 @@ mcp/state/analysis/
 # OS
 .DS_Store
 Thumbs.db
+
+# Test repos (cloned for testing, not committed)
+test_repos/
