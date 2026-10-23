@@ -36,13 +36,14 @@
         "__half2float": {"hip": "__half2float", "notes": "Supported"}
       },
       "manual_only": {
-        "wmma": {"hip": "rocWMMA (gfx1100+) or F32 fallback", "notes": "No WMMA on gfx1030/gfx1200/gfx1201 without rocWMMA"},
+        "wmma": {"hip": "rocWMMA (gfx1100+, gfx1200/gfx1201) or F32 fallback", "notes": "RDNA4 (gfx1200/gfx1201) supports rocWMMA. Use __builtin_amdgcn_wmma_*_gfx12 intrinsics. RDNA2 (gfx1030) has NO WMMA — use F32 fallback"},
         "mma": {"hip": "rocBLASLt or dot4 instructions", "notes": "Tensor cores → dot4 or rocBLASLt"},
         "tensor_core_mma": {"hip": "rocWMMA or rocBLASLt MMA API", "notes": "Requires ROCm 5.7+"},
         "nvrtc": {"hip": "hiprtc or runtime compilation via HIPRTC", "notes": "Different API but similar concept"},
         "cuMemPool": {"hip": "hipMemPool (if available) or hipMalloc managed", "notes": "Memory pooling support varies by ROCm version"},
         "cudaGraph": {"hip": "hipGraph (experimental)", "notes": "HIP graphs are experimental; may need fallback"},
-        "cuStreamWorkDescrib": {"hip": "hipStreamWorkStealing", "notes": "Different semantics"}
+        "cuStreamWorkDescrib": {"hip": "hipStreamWorkStealing", "notes": "Different semantics"},
+        "header_order": {"hip": "Include runtime FIRST", "notes": "MUST #include hip_runtime.h BEFORE custom headers using __device__/__forceinline__/__shared__"}
       },
       "hipify_notes": {
         "command": "hipify-perl source.cu > target.cpp --inplace",
