@@ -251,13 +251,13 @@
       "wave_size": 32,
       "lds_kib": 128,
       "tensor_cores": false,
-      "wmma": false,
+      "wmma": true,
       "dot4": true,
       "dot8": true,
       "bf16_native": true,
       "fp8_native": false,
       "known_issues": [
-        "community-validated; no rocWMMA; portable kernels; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "community-validated; portable kernels; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
       ],
       "vulkan": {
         "cooperative_matrix": false,
@@ -273,13 +273,13 @@
       "wave_size": 32,
       "lds_kib": 128,
       "tensor_cores": false,
-      "wmma": false,
+      "wmma": true,
       "dot4": true,
       "dot8": true,
       "bf16_native": true,
       "fp8_native": false,
       "known_issues": [
-        "no rocWMMA; builds validated; gfx1201 hipBLASLt table needed; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "builds validated; gfx1201 hipBLASLt table needed; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
       ],
       "vulkan": {
         "cooperative_matrix": false,
