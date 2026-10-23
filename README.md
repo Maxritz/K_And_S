@@ -29,7 +29,22 @@ Point K_and_S at any codebase. It will scan every `.cu`, `.hip`, `.comp`, `.hlsl
 ### Check Compatibility
 Before you start porting, see if your target architecture supports everything your source needs. Does your target have tensor cores? DP4a? Native BF16? Will Vulkan cooperative matrices work (they do not on AMD, use DP4a instead). K_and_S tells you upfront so you do not waste weeks on a dead end.
 
-### Verify the ISA — do not trust the table
+### Inventory before you port — the pre-port reference
+Do not start from "where do I begin". Start from a complete list of what the tree actually depends on.
+
+`build_function_reference` scans the sources and produces the vendor-function reference for your target: every CUDA runtime call, driver call, inline-PTX instruction, device intrinsic and framework feature that is genuinely used, each with
+
+- the replacement on the target,
+- a status — **Auto** (compiler maps it), **Partial** (maps but differs), **Manual** (source must change) or **No equivalent** (restructure),
+- the call sites and the files that depend on it.
+
+Status resolves **per architecture**, because the answer changes within a vendor family: `mma.sync` is manual on every AMD target, but MFMA covers CDNA, WMMA covers RDNA3/RDNA4, and RDNA2 has no matrix core at all — the table says so rather than flattening it into "manual".
+
+Anything with **no equivalent** is reported as a hard blocker. A blocker is not a partial gap: the kernel must be redesigned or dropped, and that decision belongs before the first line of code, not after.
+
+`lookup_api` gives the same answer for a single symbol while you are reading code.
+
+
 Capability tables lie. A real port was designed around `v_dot4_i32_i8`; that mnemonic has **no gfx12 encoding** and crashes the LLVM backend rather than failing at the assembler. Its replacement, `amd_mixed_dot`, compiles fine and emits `v_dot4_i32_iu8` — same hardware, different spelling.
 
 `probe_isa` compiles each candidate **for your actual target**, one translation unit per candidate so a single failure cannot mask the rest, and returns both the verdict and the disassembled mnemonics. That is the only reliable oracle for "does this instruction exist on this chip".

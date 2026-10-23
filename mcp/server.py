@@ -3249,6 +3249,11 @@ _pm_probe_candidates = porting_map.probe_candidates
 _pm_unresolved = porting_map.unresolved
 _PM_CONSTRUCTS = porting_map.CONSTRUCTS
 
+import api_map  # noqa: E402
+_build_reference = api_map.build_reference
+_render_reference = api_map.render_reference
+_lookup_api = api_map.lookup_api
+
 
 def _tools() -> list[mcp_types.Tool]:
     """All available MCP tools."""
@@ -3760,6 +3765,32 @@ def _tools() -> list[mcp_types.Tool]:
                     "backend": {"type": "string", "default": "auto"},
                 },
                 "required": ["files", "target_arch"],
+            },
+        ),
+        mcp_types.Tool(
+            name="build_function_reference",
+            description="PRE-PORT TASK. Scan a source tree and produce the CUDA/vendor function reference for a target: every runtime API, driver API, inline-PTX instruction, device intrinsic and framework feature the code actually uses, each with its target replacement, an auto/partial/manual/no-equivalent status, the call sites and the files that depend on it. Status is resolved per architecture (e.g. mma.sync is manual on all AMD, but MFMA vs WMMA vs no-matrix-core changes at RDNA2/RDNA3/RDNA4/CDNA). Features with no equivalent are reported as hard blockers that must be resolved before any kernel work begins. Run this BEFORE designing the port: it converts 'where do I start' into a work list.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "files": {"type": "array", "items": {"type": "string"}, "description": "Source files to scan"},
+                    "source_arch": {"type": "string", "description": "Origin arch id, e.g. 'sm_120a'"},
+                    "target_arch": {"type": "string", "description": "Destination arch id, e.g. 'gfx1201'"},
+                    "format": {"type": "string", "enum": ["markdown", "json", "both"], "default": "markdown"},
+                },
+                "required": ["files", "target_arch"],
+            },
+        ),
+        mcp_types.Tool(
+            name="lookup_api",
+            description="What replaces one CUDA API, PTX instruction, intrinsic or feature on a target arch, and is it automatic or manual? Resolves per architecture, so the same symbol gives different answers on RDNA2 vs RDNA4 vs CDNA. Use when reviewing a line of code during the pre-port inventory.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "api": {"type": "string", "description": "e.g. 'cudaMalloc', 'cp.async.wait_group', '__shfl_xor_sync', 'TMA (Tensor Memory Accelerator)'"},
+                    "target_arch": {"type": "string"},
+                },
+                "required": ["api", "target_arch"],
             },
         ),
     ]
@@ -4730,6 +4761,49 @@ gh pr view --web
                               f"{', '.join(f['constructs']) or '—'} | "
                               f"`{Path(f['file']).name}:{f['line']}` |")
             results.append(mcp_types.TextContent(type="text", text="\n".join(md)))
+
+    elif name == "build_function_reference":
+        files = arguments.get("files", []) or []
+        target = arguments.get("target_arch", "")
+        if not files or not target:
+            results.append(mcp_types.TextContent(
+                type="text", text="Error: files[] and target_arch are required"))
+        else:
+            ref = _build_reference(files, arguments.get("source_arch", "auto"), target)
+            fmt = arguments.get("format", "markdown")
+            if fmt in ("markdown", "both"):
+                results.append(mcp_types.TextContent(
+                    type="text", text=_render_reference(ref)))
+            if fmt in ("json", "both"):
+                slim = {k: v for k, v in ref.items() if k != "rows"}
+                results.append(mcp_types.TextContent(
+                    type="text", text=json.dumps(slim, indent=2)))
+                results.append(mcp_types.TextContent(
+                    type="text", text=json.dumps(ref["rows"], indent=2)))
+            if ref["blockers"]:
+                results.append(mcp_types.TextContent(
+                    type="text",
+                    text=("\n**Pre-port stop:** "
+                          f"{len(ref['blockers'])} feature(s) have no equivalent on "
+                          f"`{target}`. Resolve the design for each before writing "
+                          "kernel code — a blocker is not a partial gap.")))
+
+    elif name == "lookup_api":
+        r = _lookup_api(arguments.get("api", ""), arguments.get("target_arch", ""))
+        if not r.get("known"):
+            results.append(mcp_types.TextContent(
+                type="text",
+                text=(f"`{r['id']}` is not in the reference table.\n\n"
+                      "Probe it with `probe_isa` before relying on it — an unknown "
+                      "symbol is an unverified assumption.")))
+        else:
+            results.append(mcp_types.TextContent(
+                type="text",
+                text=(f"# `{r['id']}` → `{r['target']}` (`{r['bucket']}`)\n\n"
+                      f"- category: {r['category']}\n"
+                      f"- replacement: **{r['replacement']}**\n"
+                      f"- status: **{r['status']}**\n"
+                      + (f"- note: {r['note']}\n" if r.get("note") else ""))))
 
     return results
 

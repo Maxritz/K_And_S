@@ -16,6 +16,7 @@ The short version:
 
 | # | Gate | Why it exists |
 |---|---|---|
+| G0 | `build_function_reference` before anything else | the pre-port inventory turns "where do I start" into a work list: every runtime API, PTX instruction, intrinsic and feature used, its replacement, and whether that is auto / partial / manual / no-equivalent |
 | G1 | `probe_isa` every instruction the port depends on, one candidate per TU | a whole port was designed around `v_dot4_i32_i8`; the gfx12 backend *crashes* on it rather than rejecting it at the assembler |
 | G2 | `scan_residual_asm` must return zero before compiling | foreign mnemonics survived four "fix" passes because each regex silently no-op'd |
 | G3 | delete the output artifact before every build | a stale `.hsaco` made a probe report kernels the current source could not produce |
