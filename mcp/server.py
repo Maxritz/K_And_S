@@ -2506,18 +2506,27 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
     src_backend = backend_map.get(source_vendor, "?")
     tgt_backend = backend_map.get(target_vendor, "?")
 
-    # Determine pattern key
+    # Determine pattern key based on target_backend (explicit) first, then vendor
     pattern_key = None
-    if source_vendor == "nvidia" and target_vendor == "amd":
-        pattern_key = "cuda_to_hip"
-    elif source_vendor == "nvidia" and target_vendor == "intel":
-        pattern_key = "cuda_to_sycl"
-    elif source_vendor == "amd" and target_vendor == "nvidia":
-        pattern_key = "hip_to_cuda"
-    elif source_vendor == "nvidia" and params.target_backend == "vulkan":
+    tgt_lookup_key = "hip"  # default for lookups in manual_transforms
+    if source_vendor == "nvidia" and params.target_backend == "vulkan":
         pattern_key = "cuda_to_vulkan"
+        tgt_lookup_key = "vulkan"
     elif source_vendor == "nvidia" and params.target_backend == "directx":
         pattern_key = "cuda_to_directx"
+        tgt_lookup_key = "hlsl"
+    elif source_vendor == "nvidia" and params.target_backend == "sycl":
+        pattern_key = "cuda_to_sycl"
+        tgt_lookup_key = "sycl"
+    elif source_vendor == "nvidia" and target_vendor == "amd":
+        pattern_key = "cuda_to_hip"
+        tgt_lookup_key = "hip"
+    elif source_vendor == "nvidia" and target_vendor == "intel":
+        pattern_key = "cuda_to_sycl"
+        tgt_lookup_key = "sycl"
+    elif source_vendor == "amd" and target_vendor == "nvidia":
+        pattern_key = "hip_to_cuda"
+        tgt_lookup_key = "cuda"
 
     if pattern_key and pattern_key in patterns.get("patterns", {}):
         p = patterns["patterns"][pattern_key]
@@ -2534,7 +2543,7 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
             report += f"- {item}\n"
         report += f"\n**Manual transforms needed:** {len(manual)} constructs\n"
         for src, tgt in list(manual.items())[:10]:
-            tgt_val = tgt.get("hip", tgt.get("sycl", tgt.get("cuda", tgt.get("vulkan", "?"))))
+            tgt_val = tgt.get(tgt_lookup_key, tgt.get("hip", tgt.get("sycl", tgt.get("cuda", tgt.get("vulkan", "?")))))
             report += f"- `{src}` → `{tgt_val}`\n"
         if len(manual) > 10:
             report += f"... and {len(manual) - 10} more\n"
@@ -2542,23 +2551,40 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
         report += f"\n**Manual-only (no auto translation):** {len(manual_only)} constructs\n"
         for src, tgt in manual_only.items():
             note = tgt.get("notes", "")
-            tgt_name = tgt.get("hip", tgt.get("sycl", tgt.get("vulkan", "?")))
+            tgt_name = tgt.get(tgt_lookup_key, tgt.get("hip", tgt.get("sycl", tgt.get("vulkan", "?"))))
             report += f"- `{src}` → `{tgt_name}` — {note}\n"
 
         report += f"\n### Strategy Decision (for `{params.mode}` mode)\n\n"
         report += "| Kernel category | Strategy | Reason |\n|---|---|---|\n"
-        report += "| Memory management (cudaMalloc → hipMalloc) | Copy | Direct replacement, auto-translatable |\n"
-        report += "| Kernel launch (<<<>>> → hipLaunchKernelGGL) | Copy | Auto-translatable via hipify |\n"
-        report += "| WMMA/MMA | Adapt | Source has {src_wmma} target has {tgt_wmma} — needs rocWMMA or F32 fallback |\n".format(
+
+        # Backend-specific memory + launch strategy
+        if tgt_lookup_key == "hip":
+            report += "| Memory (cudaMalloc → hipMalloc) | Copy | Direct replacement |\n"
+            report += "| Kernel launch (<<<>>> → hipLaunchKernelGGL) | Copy | hipify-perl auto-translates |\n"
+        elif tgt_lookup_key == "vulkan":
+            report += "| Memory (cudaMalloc → vkAllocateMemory) | Rewrite | Requires staging buffers + resource creation pipeline |\n"
+            report += "| Kernel launch (<<<>>> → vkCmdDispatch) | Rewrite | Workgroup size via layout(local_size_x=N) in GLSL/SPIR-V |\n"
+        elif tgt_lookup_key == "hlsl":
+            report += "| Memory (cudaMalloc → D3D12 upload heap) | Rewrite | CreateCommittedResource with D3D12_HEAP_TYPE_UPLOAD |\n"
+            report += "| Kernel launch (<<<>>> → DispatchMesh/Dispatch) | Rewrite | numthreads attribute + ID3D12GraphicsCommandList::Dispatch |\n"
+        elif tgt_lookup_key == "sycl":
+            report += "| Memory (cudaMalloc → sycl::malloc_device) | Rewrite | SYCL uses explicit buffer or unified shared memory |\n"
+            report += "| Kernel launch (<<<>>> → parallel_for) | Rewrite | nd_range model — specify global/local sizes |\n"
+
+        report += "| WMMA/MMA | Adapt | Source: {src_wmma} → Target: {tgt_wmma} |\n".format(
             src_wmma="✅ WMMA" if source_info.get("wmma") else "❌ WMMA",
             tgt_wmma="✅ WMMA" if target_info.get("wmma") else "❌ WMMA"
         )
-        report += "| Tensor cores/MMA | Adapt | Source has {src_tc} target has {tgt_tc} — needs dot4 or rocBLASLt |\n".format(
+        report += "| Tensor cores/MMA | Adapt | Source: {src_tc} → Target: {tgt_tc} |\n".format(
             src_tc="✅ TC" if source_info.get("tensor_cores") else "❌ TC",
             tgt_tc="✅ TC" if target_info.get("tensor_cores") else "❌ TC"
         )
         if params.target_backend == "vulkan":
             report += "| Vulkan matmul | Rewrite | AMD CM broken → must use DP4a (spv_dp4) |\n"
+        if params.target_backend == "directx":
+            report += "| DirectX matmul | Adapt | WaveActiveMatMul or DP4a fallback for AMD |\n"
+        if params.target_language == "c":
+            report += "| C99 host code | Adapt | Plain C structs, no C++ RAII. Use hip_runtime_api.h / dxc compiler for kernels |\n"
     else:
         report += f"**No auto-migration pattern from {src_backend} → {tgt_backend}. This requires manual adaptation.**\n"
         report += "Read `kands://porting-patterns` for the full matrix.\n"
@@ -2574,24 +2600,48 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
 
 1. **Build setup:** Read `kands://tk-tools` for compiler paths and flags
 """
-    if toolkit_key:
+    # Determine compiler + cmake flags based on target_backend (explicit), not just toolkit
+    if params.target_backend == "directx":
+        compiler_example = f"dxc -T cs_6_8 -E main -spirv source.hlsl -Fo shader.dxil"
+        cmake_flags = f"-DCMAKE_BUILD_TYPE=Release -DDIRECTX12_ENABLE=1"
+        report += f"2. **CMake:** `cmake {cmake_flags}`\n3. **Shader compile:** `{compiler_example}`\n4. **Host compile:** `cl /std:c11 /O2 host.c`\n"
+    elif params.target_backend == "vulkan":
+        compiler_example = f"glslc shader.comp -o shader.spv"
+        cmake_flags = f"-DCMAKE_BUILD_TYPE=Release"
+        report += f"2. **CMake:** `cmake {cmake_flags}`\n3. **Shader compile:** `{compiler_example}`\n4. **Validate:** `spirv-val shader.spv`\n"
+    elif toolkit_key:
         compiler_example = ""
         if toolkit_key == "rocm":
             compiler_example = f"hipcc --offload-arch={params.target_arch} -O3"
+            cmake_flags = f"-DCMAKE_HIP_ARCHITECTURES={params.target_arch} -DCMAKE_BUILD_TYPE=Release"
         elif toolkit_key == "cuda":
             compiler_example = f"nvcc --arch={params.target_arch} -O3"
-        report += f"2. **CMake:** `cmake -DCMAKE_HIP_ARCHITECTURES={params.target_arch} -DCMAKE_BUILD_TYPE=Release`\n3. **Compile:** `{compiler_example} source.cu -o target`\n"
+            cmake_flags = f"-DCMAKE_CUDA_ARCHITECTURES={params.target_arch} -DCMAKE_BUILD_TYPE=Release"
+        else:
+            cmake_flags = "-DCMAKE_BUILD_TYPE=Release"
+        report += f"2. **CMake:** `cmake {cmake_flags}`\n3. **Compile:** `{compiler_example} source.cu -o target`\n"
 
     report += "4. **Parity testing:** Run CPU oracle + GPU output comparison (see `kands://diagnostics`)\n"
     report += "5. **Performance:** Run `--perf-tracing`, then iterate using the sherlock-it loop (see `kands://diagnostics`)\n"
     report += f"6. **Export:** Run `export_contribution(engine_name='...', arch='{params.target_arch}')` to share results\n"
     report += "7. **Verify:** `ctest -R _parity` && `./engine --selftest`\n"
 
+    if params.target_backend == "directx":
+        translate_tool = "Manually port CUDA kernels to HLSL — no auto-translator exists for D3D12 compute. Use the Phase 7 mapping table."
+    elif params.target_backend == "vulkan":
+        translate_tool = "Manually port CUDA kernels to GLSL/SPIR-V — no direct auto-translator. Use Phase 7 mapping table."
+    elif params.target_backend == "hip" or (params.target_backend == "auto" and toolkit_key == "rocm"):
+        translate_tool = "Copy + auto-translate with `hipify-perl`"
+    elif params.target_backend == "sycl":
+        translate_tool = "Copy + auto-translate with `dpct`"
+    else:
+        translate_tool = "Copy + auto-translate with `hipify-perl` or `dpct`"
+
     report += f"""
 
 ### Loose mode (get it running first):
 
-1. **Get it compiling:** Copy + auto-translate with `hipify-perl` or `dpct`
+1. **Get it compiling:** {translate_tool}
 2. **Fallback everywhere:** Use FP32 where BF16/WMMA/Tensor cores are missing
 3. **Quick test:** Verify output is in the right ballpark (tolerance 1e-2)
 4. **Iterate:** Run perf tracing, note bottlenecks, run `suggest_optimizations`
