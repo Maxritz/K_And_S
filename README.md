@@ -1,201 +1,177 @@
-# K_and_S — Kernel & Shader Porting Skill Bundle
+# K_and_S
 
-A reusable methodology (as an MCP server) for mapping any GPU engine's kernels and shaders
-to target GPU architectures and model families, with breadcrumb/perf-tracing instrumentation
-built into every phase. The name "K_and_S" is mnemonic: **K**ernels **a**nd **S**haders.
+**K_and_S** (Kernels and Shaders) is an MCP server that helps you port GPU kernels and shaders across different hardware vendors and APIs. Instead of guessing how to translate a CUDA kernel to HIP for AMD, or how to get the best performance out of RDNA on Vulkan, K_and_S gives you the knowledge, patterns, and tools to do it properly.
 
 ---
 
-## What This Bundle Provides
+## Why This Exists
 
-| Artifact | Purpose |
-|---|---|
-| `PORTING_METHOD.md` | Phase 0–8 methodology (setup → census → arch map → models → instrument → gaps → tasks → verify → share) |
-| `ARCH_MAP.json` | GPU architecture → kernel features matrix (17 entries: NVIDIA/AMD/Intel) |
-| `MODEL_MAP.json` | Model family → kernel requirements + dispatch points |
-| `TK_TOOLS.json` | GPU toolkits (ROCm, CUDA, Vulkan, DirectX, oneAPI, OpenVINO) + host toolchains (MSVC, MinGW, MSYS2, GCC, Clang) |
-| `CROSS_PORT.json` | C++ ↔ Python ↔ Rust ↔ PTX/SPIR-V porting matrix |
-| `AI_FRAMEWORKS.json` | PyTorch, TensorFlow, JAX, llama.cpp + LLM engine APIs (OpenAI, vLLM, TGI, Triton, MCP) |
-| `MODEL_FORMATS.json` | GGUF, Safetensors, ONNX, HDF5 — quant support + GPU porting implications |
-| `PORTING_PATTERNS.json` | CUDA↔HIP↔SYCL↔Vulkan↔DirectX transformation patterns |
-| `PERF_BENCHMARKS.json` | Theoretical performance + web search queries by arch |
-| `ISA_REFERENCES.md` | Machine-readable ISA docs for AMD, Intel, NVIDIA + Vulkan DP4a vs CoopMatrix |
-| `PORTING_STRATEGIES.md` | Copy vs Adapt vs Rewrite decision guide + strict/loose modes |
-| `DIAGNOSTICS.md` | Ponytail-diag + sherlock-it methods, CPU-as-oracle, iterative perf loop |
-| `DOX_STYLE.md` | Doxygen/rustdoc/Python docstring audit templates |
-| `GOAL_TEMPLATE.md` | Goal + guardrails template for autonomous porting |
-| `CONTRIBUTING.md` | How to contribute findings back to the bundle |
-| `TEMPLATE.md` | Blank porting report template |
-| `mcp/server.py` | MCP server (16 tools + 16 resources, MCP 2.x) |
-| `mcp/reference_search.py` | ArXiv + GitHub reference search utilities |
-| `findings/portfolio.md` | Worked example (engine-agnostic) |
+Modern GPU development is complicated. You have NVIDIA with CUDA, AMD with HIP and ROCm, Intel with oneAPI and SYCL, and then there is Vulkan and DirectX for cross-platform compute. Most developers stick to one vendor because porting is hard. When you do try to port, you end up copying code blindly, hoping intrinsics translate, and debugging mysterious performance regressions.
+
+K_and_S was built to fix that. It started as a collection of notes from real kernel porting work, documenting what actually works on real hardware. We tested on AMD RDNA2 and RDNA3 (gfx1031, gfx1101, gfx1201), NVIDIA Ada Lovelace (sm_89, sm_90), Intel Arc (arc_b580) and Intel Core Ultra 5 135H (meteor_lake). We learned which patterns fail, which optimizations actually help, and which myths waste hours of development time.
+
+This is not just a tool. It is a knowledge base that travels with you. When you fix a kernel on one project, you can save the solution as a template and reuse it on the next project. When the team grows, the knowledge stays.
+
+---
+
+## What You Can Do With It
+
+### Discover and Audit
+Point K_and_S at any codebase. It will scan every `.cu`, `.hip`, `.comp`, `.hlsl`, `.cpp` file and tell you exactly what GPU code exists and what backend it targets. No more hunting through thousands of files.
+
+### Check Compatibility
+Before you start porting, see if your target architecture supports everything your source needs. Does your target have tensor cores? DP4a? Native BF16? Will Vulkan cooperative matrices work (they do not on AMD, use DP4a instead). K_and_S tells you upfront so you do not waste weeks on a dead end.
+
+### Find Installed Toolchains
+Instead of reading docs and guessing where hipcc or nvcc lives on your machine, K_and_S checks at runtime. It looks in your PATH, checks your environment variables (ROCM_PATH, CUDA_PATH, VULKAN_SDK, ONEAPI_ROOT), and scans common install locations. It even detects Strawberry Perl, which you need for some build scripts alongside MSVC.
+
+### Estimate Performance
+Got a target architecture and a workload (say, flash attention at 8192 sequence length)? K_and_S uses roofline models to tell you the theoretical ceiling and what real developers achieve in practice. You get a target tokens per second number before you write a single line of code.
+
+### Reject Common Myths
+Before you follow the usual advice, check if it is actually wisdom or just cargo culting. Is hipify-perl enough to port a CUDA project to HIP? No. Can you copy CUDA code to HIP verbatim? No. Does Vulkan CooperativeMatrix work on AMD? No. K_and_S has a tool that calls out these patterns as wrong and explains the correct approach for your specific architecture.
+
+### Plan Radical Experiments
+RDNA has hundreds of extensions most developers never use because they copy CUDA habits. K_and_S generates experiments you can try instead: use DPP shuffles instead of LDS transposes, try register-only blocking for small tiles, compare wave32 vs wave64, write raw AMDGCN assembly for hot loops. Each experiment comes with a verification plan so you do not break correctness while chasing performance.
+
+### Verify Correctness
+Every port gets checked against a CPU reference (the CPU-as-oracle strategy). Feed it your reference output and your ported output, specify a tolerance, and it tells you if they match. No more shipping broken ports and finding out later that outputs diverged by 0.3 percent on half the test cases.
+
+---
+
+## What Users Share As Templates
+
+One of the most powerful features is the ability to save and share learnings. After you successfully port something, you do not just move on. You save what worked.
+
+### Porting Reports
+Run the full porting workflow and K_and_S generates a complete report covering every phase: baseline capture, source analysis, arch comparison, toolchain setup, performance estimates, code tracing plan, and final verification checklist. Save this report and you have a blueprint for anyone else porting a similar engine.
+
+### Tracing Plans
+Every kernel gets a STRACE breadcrumb trail plan. This tells you exactly where to add tracing macros so you can measure stage-by-stage performance. Save these as templates so your team always instruments consistently.
+
+### Optimization Experiments
+Did you find that wave32 with DPP shuffles beats the naive port by 2.3x on gfx1201? Document it. The `radical_experiment_plan` tool creates an experimentation plan with hypotheses, implementation steps, and verification requirements. When you find something that works, save it as a contribution template.
+
+### Toolchain Results
+After running `detect_toolchain`, save the output. Next time someone on your team sets up a new machine, they know exactly which environment variables and paths to check.
+
+### Sharing Format
+All templates are standard markdown files. You can:
+- Put them in a `findings/` directory in your project
+- Share them with your team via Git or Slack
+- Submit them as contributions back to the K_and_S bundle using `export_contribution`
+- Load them later using `read kands://findings/engine-name`
+
+---
+
+## How It Makes Things Easier
+
+### Before K_and_S
+1. Google for how to install ROCm on Windows
+2. Try hipify-perl and hope for the best
+3. Debug kernel by kernel, discovering incompatibilities late
+4. No way to know what performance to expect
+5. Lose hard-won knowledge when team members leave
+
+### With K_and_S
+1. One command tells you what is actually installed (`detect_toolchain`)
+2. `reject_common_pattern` stops you from following dead-end advice
+3. `compare_archs` shows all feature gaps before you start coding
+4. `estimate_performance` gives you a realistic target upfront
+5. `verify_numerical_equivalence` catches correctness bugs immediately
+6. Save successful approaches as templates for the whole team
+
+---
+
+## Supported Hardware
+
+| Vendor | Architecture IDs | Notes |
+|---|---|---|
+| NVIDIA | sm_75, sm_80, sm_86, sm_89, sm_90, sm_120 | CUDA, cuBLAS, cuBLASLt |
+| AMD | gfx908, gfx1030, gfx1031, gfx1100, gfx1150, gfx1200, gfx1201 | ROC 10.1, TheRock, Tensile, hipBLASLt |
+| Intel | gen12, gen13, meteor_lake, arc_alchemist, arc_battlemage, arc_b580 | oneAPI DPC++, SYCL, Vulkan |
+
+**Special note on AMD Vulkan**: CooperativeMatrix is broken on AMD Vulkan drivers. K_and_S automatically routes to DP4a (GL_KHR_shader_integer_dot_product) instead.
 
 ---
 
 ## Quick Start
 
-### As an MCP Server (recommended)
+### Install the MCP Server
 
 ```bash
-# 1. Install MCP
-pip install mcp
+cd mcp
+pip install -e .
+```
 
-# 2. Add to your MCP client config:
+### Configure Your MCP Client
+
+Use the included `claude_desktop_config.json` or add to your client config:
+
+```json
 {
   "mcpServers": {
     "kands": {
       "command": "python",
-      "args": ["-m", "mcp_kands.server"],
+      "args": ["-m", "server"],
       "env": { "PYTHONPATH": "/path/to/K_and_S/mcp" }
     }
   }
 }
 ```
 
-### 3. In your AI assistant, ask:
+### Typical Workflow
 
 ```
-# Browse all GPU architectures
-> Read kands://architectures
+# 1. What is installed?
+detect_toolchain(gpu_vendor="AMD", host_compiler="auto")
 
-# Set your ultimate goal + guardrails (prevents drift)
-> Call set_goal with goal="Port llama.cpp to gfx1201 at 25+ tok/s", target_arch="gfx1201", target_backend="hip", target_tok_per_s=25
+# 2. Compare source and target architectures
+compare_archs(arch_a="sm_80", arch_b="gfx1201")
 
-# Auto-clone + analyze a repo (fully autonomous)
-> Call autonomous_port with github_url="https://github.com/ggerganov/llama.cpp", source_arch="sm_80", target_arch="gfx1201"
+# 3. What performance can I realistically get?
+estimate_performance(arch="gfx1201", workload="flash_attn", seq_len=8192)
 
-# Check a proposed action against your guardrails
-> Call check_guardrail with action="modify src/kernels/attention.cu", reason="adding DP4a fallback"
+# 4. Check a common idea before implementing
+reject_common_pattern("hipify-perl handles everything", arch="gfx1201")
 
-# Search for optimization references
-> Call search_references with query="AMD RDNA4 flash attention DP4a performance"
+# 5. Port the full repo
+autonomous_port(repo_path="/path/to/kernel/code", source_arch="sm_80", target_arch="gfx1201")
 
-# After optimizing, record your result
-> Call record_performance with arch="gfx1201", workload="flash_attn", tok_per_s=18.5
+# 6. Verify correctness after each change
+verify_numerical_equivalence(arch="gfx1201", workload="gemm", source_values=[...], target_values=[...])
 
-# Export findings to share back
-> Call export_contribution with engine_name="llama-port", arch="gfx1201"
-```
+# 7. Record what you learned
+record_performance(arch="gfx1201", workload="gemm", tok_per_s=42500.0, notes="Used DPP shuffle, wave32")
 
-### As a CLI tool
-
-```python
-PYTHONPATH=/path/to/K_and_S/mcp python -c "
-import asyncio, sys
-sys.path.insert(0, '/path/to/K_and_S/mcp')
-from server import _dispatch_tool
-result = asyncio.run(_dispatch_tool('autonomous_port', {
-    'repo_path': '/path/to/engine',
-    'source_arch': 'sm_80',
-    'target_arch': 'gfx1201',
-    'target_backend': 'hip',
-    'mode': 'strict'
-}))
-print(result[0].text)
-"
+# 8. Save as a template for next time
+export_contribution(engine_name="MyEngine", arch="gfx1201", workload="gemm")
 ```
 
 ---
 
-## MCP Resources
+## Phase 0 to Phase 8 Methodology
 
-| URI | Description |
-|---|---|
-| `kands://architectures` | All GPU arches with capabilities (wave size, tensor cores, dot4, WMMA, bf16, FP8) — includes Vulkan DP4a notes |
-| `kands://models` | Model families → kernel requirements (DeepSeek, GLM, Qwen, LLaMA) |
-| `kands://porting-steps` | Phase 0-8 full methodology |
-| `kands://porting-template` | Blank porting report template |
-| `kands://tracing-steps` | Breadcrumb + perf-tracing instrumentation guide |
-| `kands://isa-references` | AMD XML, Intel PISA/IGA, NVIDIA PTX + Vulkan CooperativeMatrix/DP4a |
-| `kands://tk-tools` | GPU + host toolchain matrix (ROCm/CUDA/Vulkan/DirectX/oneAPI/OpenVINO) |
-| `kands://cpu-os` | Host toolchain matrix (MSVC/MinGW/MSYS2/GCC/Clang) — paths like `C:\msys64` |
-| `kands://cross-port` | C++ ↔ Python ↔ Rust ↔ PTX/SPIR-V type/memory/ABI mappings |
-| `kands://ai-frameworks` | PyTorch/TF/JAX/llama.cpp + LLM engine APIs |
-| `kands://model-formats` | GGUF, Safetensors, ONNX, HDF5 — quant support matrix |
-| `kands://porting-patterns` | CUDA↔HIP↔SYCL↔Vulkan↔DirectX transformation patterns |
-| `kands://porting-strategies` | Copy vs Adapt vs Rewrite guide + strict/loose modes |
-| `kands://diagnostics` | Ponytail-diag + sherlock-it methods, CPU-as-oracle, perf optimization loop |
-| `kands://dox-style` | Doxygen/rustdoc/Python audit templates |
-| `kands://status` | Live date/time, resource counts, data freshness |
-| `kands://perf-history` | Local performance measurements (learned over time) |
-| `kands://perf-benchmarks` | Theoretical perf estimates + web search queries |
-| `kands://setup-guide` | Interactive target selection (backend, OS, arch, host compiler) |
-| `kands://goal` | Current goal + guardrails state + override log |
-| `kands://findings/{name}` | Completed porting analyses |
+K_and_S follows an eight phase methodology so you never miss a step:
 
-## MCP Tools
-
-| Tool | Purpose |
-|---|---|
-| `discover_kernels` | Scan any repo for `.cu`/`.comp`/`.metal`/`.cl`/`.cpp` kernel sources |
-| `check_arch_compatibility` | Check if kernel list is compatible with a target arch |
-| `query_kernel_features` | Find arch-specific `#if` branches + feature flags in source |
-| `compare_archs` | Diff two arches' feature matrices |
-| `generate_porting_report` | Walk Phase 0-8 for a target engine+arch+model |
-| `generate_tracing_plan` | Produce STRACE() placement plan for any engine |
-| `diff_perf_traces` | Compare before/after `--perf-tracing` output |
-| `query_toolchain` | Look up compiler paths, nvcc flags, OS-specific toolchain details |
-| `estimate_performance` | Estimate theoretical + real-world GPU perf for a workload |
-| `compare_to_target` | Compare your target tok/s vs estimated achievable |
-| `record_performance` | Record measured performance into local history (auto-sanitized) |
-| `suggest_optimizations` | Read perf history, suggest next optimization steps |
-| `export_contribution` | Export findings as reusable git contribution template |
-| `set_goal` | Define ultimate goal + guardrails (prevents agent drift) |
-| `update_goal` | Override/update goal or guardrails (flexible, logged) |
-| `check_guardrail` | Verify action is within defined guardrails |
-| `prepare_pull_request` | Generate git commands + PR description for contributions |
-| `autonomous_port` | **Full auto:** clone → discover → analyze → research → plan (one call) |
-| `search_arxiv` | Scan ArXiv for GPU ISO/kernel/porting papers |
-| `search_github` | Search GitHub for kernel/porting code references |
-| `search_references` | Combined ArXiv + GitHub search |
+**Phase 0**: Establish baseline with perf tracing before any changes
+**Phase 1**: Environmental scan and toolchain detection
+**Phase 2**: Kernel census and feature discovery
+**Phase 3**: Architecture comparison and gap analysis
+**Phase 4**: Instrumentation with breadcrumb tracing
+**Phase 5**: Manual or assisted porting
+**Phase 6**: Numerical equivalence verification against CPU oracle
+**Phase 7**: Performance optimization loop (declare, trace, dissect, hypothesize, experiment, verify, record)
+**Phase 8**: Share and contribute your findings back
 
 ---
 
-## The Core Question This Bundle Answers
+## Coming Soon
 
-> "To port engine X to architecture Y for model family Z, which kernels and shaders
-> must compile, which must be re-implemented, and which must be performance-tuned?"
-
-The bundle answers this with a deterministic, auditable checklist — so a future port
-to a new GPU or model family is a checklist, not a research project.
+We are testing two real NVIDIA CUDA to HIP ports using K_and_S on actual GPU hardware. Results and templates from those experiments will be added to the `findings/` directory so the whole community can learn from them.
 
 ---
 
-## Key Features
+## License
 
-- **Engine-agnostic:** Works with any GPU engine (llama.cpp, Maya/Strata, your own)
-- **Vulkan-aware:** Documents that CooperativeMatrix is broken on AMD → use DP4a
-- **Date-aware:** Every search shows current UTC date/time; perf history is timestamped
-- **Auto-sanitized:** Personal data (emails, paths, git hashes) stripped from all recordings
-- **Cached analysis:** Results saved to markdown; re-run only when source data changes
-- **CPU-as-oracle:** Verification strategy using CPU reference implementations as golden output
-- **Iterative perf loop:** Declare bottleneck → trace (sherlock-it) → dissect → hypothesize → experiment → verify
-- **Community contribution:** One-click export of findings as shareable templates
-
----
-
-## Vulkan on AMD: The Gotchas
-
-| Issue | Solution |
-|---|---|
-| `GL_KHR_cooperative_matrix` is broken on AMD Vulkan drivers | Use `GL_KHR_shader_integer_dot_product` (DP4a / `spv_dp4`) for matmul |
-| No rocWMMA on gfx1030/gfx1200/gfx1201 | Use F32 fallback for attention |
-| Wave64 on CDNA (gfx908) | Use logical-32 half-wavefront compat layer |
-| 64 KiB LDS on RDNA2 | Optimize shared memory tile sizes |
-
----
-
-## Contributing
-
-See `CONTRIBUTING.md` for full guidelines, or simply:
-
-```bash
-# After using the bundle:
-# 1. record_performance(arch="gfx1201", workload="flash_attn", tok_per_s=22.0)
-# 2. export_contribution(engine_name="my-engine", arch="gfx1201")
-# 3. prepare_pull_request()  # gets the exact git commands
-```
-
----
-
-*The bundle repo on GitHub (github.com/MaxRitz/K_and_S) is open for contributions. Help make GPU porting a shared skill, not a secret.*
+Knowledge base and tools provided as documentation and reference implementations. See individual file headers for details.
