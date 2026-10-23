@@ -3415,6 +3415,20 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
             header += "\n"
             report = report.replace("# Autonomous", "# Autonomous", 1)
             report = report.replace("\n---\n", "\n" + header + "---\n", 1)
+
+        # Save report to working folder
+        import datetime as _dt
+        repo_dir = Path(params.repo_path or params.github_url or ".")
+        findings_dir = repo_dir / "findings"
+        findings_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
+        report_file = findings_dir / f"porting-report-{timestamp}.md"
+        try:
+            report_file.write_text(report, encoding="utf-8")
+            report += f"\n\n---\n**Report saved to:** `{report_file}`\n"
+        except Exception as e:
+            report += f"\n\n---\n**Could not save report:** {e}\n"
+
         results.append(mcp_types.TextContent(type="text", text=report))
 
     elif name == "set_goal":
@@ -3819,6 +3833,8 @@ gh pr view --web
         report += f"5. `record_performance(arch=\"{params.arch}\", workload=\"{params.kernel_type}\")`\\n"
 
         results.append(mcp_types.TextContent(type="text", text=report))
+
+    return results
 
 
 # Register resource handlers
