@@ -1,7 +1,9 @@
 <img width="960" height="410" alt="image" src="https://github.com/user-attachments/assets/8471da74-e628-4a74-b92d-b647e532d95d" />
 
 ##Kernels & Shaders
+
 **One kernel. Many architectures. Endless debugging.**
+
 
 ---
 
