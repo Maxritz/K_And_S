@@ -2785,6 +2785,7 @@ export_contribution(engine_name="my-port", arch="{params.target_arch}", workload
     import datetime as _dt
     repo_dir = Path(params.repo_path) if params.repo_path else Path(".")
     findings_dir = repo_dir / "findings"
+    findings_dir.mkdir(parents=True, exist_ok=True)
     timestamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
     # Include target_language and target_backend in filename for deterministic naming
     safe_lang = params.target_language.replace(" ", "-").lower() if params.target_language else "auto"
