@@ -2376,7 +2376,7 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
             src_wmma="✅ WMMA" if source_info.get("wmma") else "❌ WMMA",
             tgt_wmma="✅ WMMA" if target_info.get("wmma") else "❌ WMMA"
         )
-        report += f"| Tensor cores/MMA | Adapt | Source has {src_tc} target has {tgt_tc} — needs dot4 or rocBLASLt |\n".format(
+        report += "| Tensor cores/MMA | Adapt | Source has {src_tc} target has {tgt_tc} — needs dot4 or rocBLASLt |\n".format(
             src_tc="✅ TC" if source_info.get("tensor_cores") else "❌ TC",
             tgt_tc="✅ TC" if target_info.get("tensor_cores") else "❌ TC"
         )
