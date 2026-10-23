@@ -125,6 +125,51 @@
       }
     },
 
+    "cuda_to_cuda": {
+      "name": "CUDA → CUDA (Arch Translation)",
+      "source": "CUDA",
+      "target": "CUDA (different arch)",
+      "complexity": "low",
+      "auto_translatable": ["nvcc --gpu-architecture flag"],
+      "manual_transforms": {
+        "cudaMalloc": {"cuda": "cudaMalloc", "notes": "No change needed"},
+        "cudaFree": {"cuda": "cudaFree", "notes": "No change needed"},
+        "cudaMemcpy": {"cuda": "cudaMemcpy", "notes": "No change needed"},
+        "<<<blocks, threads>>>": {"cuda": "<<<blocks, threads>>>", "notes": "No change — just adjust arch flag"},
+        "threadIdx": {"cuda": "threadIdx", "notes": "No change"},
+        "blockIdx": {"cuda": "blockIdx", "notes": "No change"},
+        "__syncthreads": {"cuda": "__syncthreads", "notes": "No change"}
+      },
+      "manual_only": {
+        "wmma": {"cuda": "Check arch WMMA support (sm_75+ for FP16 WMMA, sm_80+ for BF16/TF32)", "notes": "Tensor Core intrinsics are arch-specific"},
+        "mma": {"cuda": "Check tensor core support for target SM", "notes": "mma.sm80 only on sm_80+"},
+        "tensor_core_mma": {"cuda": "Verify tensor core availability on target arch", "notes": "May need to disable on older arches"},
+        "shared_memory_dynamic": {"cuda": "Check maxSharedMemoryPerBlock for target arch", "notes": "Varies: 48KB (sm_70) vs 164KB (sm_80+) vs 100KB (sm_89+)"}
+      }
+    },
+
+    "hip_self": {
+      "name": "HIP → HIP (Arch Translation)",
+      "source": "HIP",
+      "target": "HIP (different arch)",
+      "complexity": "low",
+      "auto_translatable": ["hipify-perl for ROCm version compat"],
+      "manual_transforms": {
+        "hipMalloc": {"hip": "hipMalloc", "notes": "No change"},
+        "hipFree": {"hip": "hipFree", "notes": "No change"},
+        "hipMemcpy": {"hip": "hipMemcpy", "notes": "No change"},
+        "hipLaunchKernelGGL": {"hip": "hipLaunchKernelGGL", "notes": "No change — just adjust offload-arch"},
+        "__syncthreads": {"hip": "__syncthreads", "notes": "No change"},
+        "blockIdx": {"hip": "hipBlockIdx", "notes": "No change"},
+        "threadIdx": {"hip": "hipThreadIdx", "notes": "No change"}
+      },
+      "manual_only": {
+        "rocwmma": {"hip": "Check rocWMMA support for target arch (gfx1100+)", "notes": "WMMA only on RDNA3+"},
+        "hipblaslt": {"hip": "Check hipBLASLt availability for target ROCm version", "notes": "Not available on ROCm < 5.7"},
+        "shared_memory_dynamic": {"hip": "Check LDS size for target arch", "notes": "32KB (gfx1030) vs 64KB (gfx1100) vs 128KB (gfx1201)"}
+      }
+    },
+
     "cuda_to_directx": {
       "name": "CUDA → HLSL (Direct3D 12)",
       "source": "CUDA",

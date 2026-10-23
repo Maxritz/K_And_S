@@ -1,0 +1,108 @@
+{
+  "description": "Target language metadata for GPU porting. Each entry defines the compiler, build system, interop method, and template strings for Phase 7/8 generation. Adding a new language only requires extending this file — no server.py edits needed.",
+  "version": "1.0",
+
+  "languages": {
+
+    "c": {
+      "name": "C99",
+      "compiler": "gcc/clang",
+      "compiler_cmd": "gcc -std=c99 -O2 -Wall host.c -o host",
+      "cmake_flags": "-DCMAKE_C_STANDARD=99 -DCMAKE_BUILD_TYPE=Release",
+      "interop": "Plain C ABI. Extern C functions for host<->kernel interface.",
+      "host_language_note": "Plain C structs, no C++ RAII. Use hip_runtime_api.h / dxc compiler for kernels",
+      "strengths": ["Universal portability", "Minimal toolchain", "Tiny binary size"],
+      "weaknesses": ["No generics", "Manual memory management"]
+    },
+
+    "cxx": {
+      "name": "C++17",
+      "compiler": "gcc/g++/clang",
+      "compiler_cmd": "g++ -std=c++17 -O2 host.cpp -o host",
+      "cmake_flags": "-DCMAKE_CXX_STANDARD=17 -DCMAKE_BUILD_TYPE=Release",
+      "interop": "C++ classes/structs with RAII. CUDA/HIP C++ wrapper or C API.",
+      "host_language_note": "C++ RAII for buffers. Use std::vector + hip::array or D3D12 smart pointers.",
+      "strengths": ["RAII", "Templates", "Rich ecosystem"],
+      "weaknesses": ["ABI fragility", "Complex build chains"]
+    },
+
+    "rust": {
+      "name": "Rust",
+      "compiler": "cargo",
+      "compiler_cmd": "cargo build --release",
+      "cmake_flags": "N/A (Cargo handles builds)",
+      "interop": "FFI via extern \"C\". GPU compute via wgpu/ash/rust-gpu or CUDA/HIP Rust crates.",
+      "host_language_note": "ownership model for memory. Use #[repr(C)] for FFI. GPU kernels via rust-gpu or C interop.",
+      "strengths": ["Memory safety", "Zero-cost abstractions", "Cargo ecosystem"],
+      "weaknesses": ["Learning curve", "FFI overhead", "GPU ecosystem maturing"]
+    },
+
+    "zig": {
+      "name": "Zig",
+      "compiler": "zig",
+      "compiler_cmd": "zig build -Drelease=Fast",
+      "cmake_flags": "N/A (zig build system)",
+      "interop": "C interop via extern fn. Compiles to C/LLVM/Mach-O. Direct C ABI calls.",
+      "host_language_note": "No GC, no hidden allocations. Extern declarations for DirectX/Vulkan C headers.",
+      "strengths": ["Comptime execution", "No hidden allocations", "C interop baked in"],
+      "weaknesses": ["Immature GPU ecosystem", "Limited libraries", "Learning curve"]
+    },
+
+    "goose": {
+      "name": "Goose",
+      "compiler": "goose",
+      "compiler_cmd": "goose build source.goose",
+      "cmake_flags": "N/A (goose handles builds, emits C)",
+      "interop": "extern fn binds to C symbols. Goose compiles to one C file, links with any C compiler.",
+      "host_language_note": "Memory-safe systems language, compiles to C. Use extern fn for DirectX/Vulkan C headers.",
+      "strengths": ["Memory safe", "No GC/allocator", "C in/C out", "Fast"],
+      "weaknesses": ["New language", "Small ecosystem", "Whole-program only"]
+    },
+
+    "csharp": {
+      "name": "C#",
+      "compiler": "dotnet",
+      "compiler_cmd": "dotnet build -c Release",
+      "cmake_flags": "N/A (dotnet handles builds)",
+      "interop": "P/Invoke for native calls, or managed wrappers (Veldon/SharpDX/OpenTK). DirectX via COM interop.",
+      "host_language_note": "Managed wrappers for D3D12. Kernels still HLSL. Use Veldon for modern D3D12 in C#.",
+      "strengths": ["Mature ecosystem", "IDE support", "Rapid development"],
+      "weaknesses": ["GC overhead", "Native interop complexity", "Less control"]
+    },
+
+    "python": {
+      "name": "Python",
+      "compiler": "python",
+      "compiler_cmd": "python -m pip install -e .",
+      "cmake_flags": "N/A (pure Python or C extension)",
+      "interop": "ctypes/cffi for native, or PyTorch/TensorFlow tensor ops. GPU via PyCUDA/torch.compile.",
+      "host_language_note": "Use tensor libraries for GPU ops. C extension via extern C for custom kernels.",
+      "strengths": ["Rapid prototyping", "Rich ML ecosystem", "Easy FFI"],
+      "weaknesses": ["GIL limitations", "Slow numeric code", "GC overhead"]
+    }
+  },
+
+  "backend_compilers": {
+    "directx": { "shader_compiler": "dxc", "shader_cmd": "dxc -T cs_6_8 -E main source.hlsl -Fo shader.dxil" },
+    "vulkan": { "shader_compiler": "glslc", "shader_cmd": "glslc shader.comp -o shader.spv" },
+    "hip": { "shader_compiler": "hipcc", "shader_cmd": "hipcc --offload-arch=gfx1201 -O3" },
+    "cuda": { "shader_compiler": "nvcc", "shader_cmd": "nvcc --arch=sm_80 -O3" },
+    "sycl": { "shader_compiler": "dpcpp", "shader_cmd": "dpcpp -O3 source.cpp" }
+  },
+
+  "backend_interop_notes": {
+    "directx": "Kernels written in HLSL (.hlsl → .dxil). Host uses D3D12 device/command lists. C interop via D3D12 C headers.",
+    "vulkan": "Kernels written in GLSL/SPIR-V (.comp.hlsl → .spv). Host uses Vulkan device/queues. C interop via vulkan.h.",
+    "hip": "Kernels in HIP C++ (.cu/.hip → .hsaco). Host uses hip runtime API. C interop via hip_runtime_api.h.",
+    "cuda": "Kernels in CUDA C++ (.cu → .cubin). Host uses CUDA runtime API. C interop via cuda_runtime_api.h.",
+    "sycl": "Kernels embedded in host C++ via parallel_for. Host uses SYCL queue/event model."
+  },
+
+  "agnostic_recommendations": [
+    "The porting approach is backend-determined (DirectX, Vulkan, HIP, CUDA), not language-determined.",
+    "Any target language that supports C interop can use the same HLSL/GLSL/DXIL shader pipeline.",
+    "Kernel code is always in the target backend's shader language (HLSL/GLSL/HIP C++).",
+    "Host code only varies by compiler/build system — the GPU interop pattern is identical across languages.",
+    "tilelang can target any backend via its tensor IR — provides a framework-agnostic tensor compilation layer."
+  ]
+}

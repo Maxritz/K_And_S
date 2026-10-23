@@ -79,6 +79,7 @@ _AI_FRAMEWORKS_PATH = _KANDS_ROOT / "AI_FRAMEWORKS.json"
 _MODEL_FORMATS_PATH = _KANDS_ROOT / "MODEL_FORMATS.json"
 _PORTING_PATTERNS_PATH = _KANDS_ROOT / "PORTING_PATTERNS.json"
 _PERF_BENCHMARKS_PATH = _KANDS_ROOT / "PERF_BENCHMARKS.json"
+_TARGET_LANGUAGES_PATH = _KANDS_ROOT / "TARGET_LANGUAGES.json"
 _DIAGNOSTICS_PATH = _KANDS_ROOT / "docs" / "DIAGNOSTICS.md"
 _DOX_STYLE_PATH = _KANDS_ROOT / "docs" / "DOX_STYLE.md"
 _PORTING_STRATEGIES_PATH = _KANDS_ROOT / "docs" / "PORTING_STRATEGIES.md"
@@ -235,7 +236,7 @@ class AutonomousPortParams(BaseModel):
     source_arch: str = Field("auto", description="Source arch ID (e.g. 'sm_80', 'gfx1100'). 'auto' = auto-detect from repo")
     target_arch: str = Field("auto", description="Target arch ID (e.g. 'gfx1201'). 'auto' = suggest based on installed hardware")
     project_type: str = Field("auto", description="Type of project: 'llm', 'game', 'sdk', 'compute', 'inference', or 'auto'")
-    target_language: str = Field("auto", description="Target language: 'cxx', 'rust', 'python', or 'auto' = analyze repo for optimal choice")
+    target_language: str = Field("auto", description="Target language: 'cxx', 'c', 'rust', 'zig', 'goose', 'python', 'csharp', or 'auto' = analyze repo for optimal choice")
     target_backend: str = Field("auto", description="Target backend: 'hip', 'cuda', 'vulkan', 'directx', 'sycl', or 'auto'")
     target_os: str = Field("auto", description="Target OS: 'linux', 'windows', 'auto'")
     target_tok_per_s: float = Field(0, description="Performance target for LLM workloads (0 = no target)")
@@ -2506,7 +2507,7 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
     src_backend = backend_map.get(source_vendor, "?")
     tgt_backend = backend_map.get(target_vendor, "?")
 
-    # Determine pattern key based on target_backend (explicit) first, then vendor
+    # Determine pattern key — target_backend (explicit) takes priority over vendor inference
     pattern_key = None
     tgt_lookup_key = "hip"  # default for lookups in manual_transforms
     if source_vendor == "nvidia" and params.target_backend == "vulkan":
@@ -2518,6 +2519,9 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
     elif source_vendor == "nvidia" and params.target_backend == "sycl":
         pattern_key = "cuda_to_sycl"
         tgt_lookup_key = "sycl"
+    elif source_vendor == "nvidia" and params.target_backend == "cuda":
+        pattern_key = "cuda_to_cuda"
+        tgt_lookup_key = "cuda"
     elif source_vendor == "nvidia" and target_vendor == "amd":
         pattern_key = "cuda_to_hip"
         tgt_lookup_key = "hip"
@@ -2525,6 +2529,12 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
         pattern_key = "cuda_to_sycl"
         tgt_lookup_key = "sycl"
     elif source_vendor == "amd" and target_vendor == "nvidia":
+        pattern_key = "hip_to_cuda"
+        tgt_lookup_key = "cuda"
+    elif source_vendor == "amd" and params.target_backend == "hip":
+        pattern_key = "hip_self"
+        tgt_lookup_key = "hip"
+    elif source_vendor == "amd" and params.target_backend == "cuda":
         pattern_key = "hip_to_cuda"
         tgt_lookup_key = "cuda"
 
@@ -2583,13 +2593,24 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
             report += "| Vulkan matmul | Rewrite | AMD CM broken → must use DP4a (spv_dp4) |\n"
         if params.target_backend == "directx":
             report += "| DirectX matmul | Adapt | WaveActiveMatMul or DP4a fallback for AMD |\n"
-        if params.target_language == "c":
-            report += "| C99 host code | Adapt | Plain C structs, no C++ RAII. Use hip_runtime_api.h / dxc compiler for kernels |\n"
+        if params.target_backend == "vulkan":
+            report += "| Vulkan matmul | Rewrite | AMD CM broken → must use DP4a (spv_dp4) |\n"
+
+        # Language-agnostic host code note: look up JSON, fall back to generic
+        langs = _load_json(_TARGET_LANGUAGES_PATH)
+        lang_data = langs.get("languages", {}).get(params.target_language, {})
+        if lang_data:
+            lang_name = lang_data.get("name", params.target_language)
+            host_note = lang_data.get("host_language_note", "")
+        else:
+            lang_name = params.target_language.title()
+            host_note = f"Use C interop ({lang_name} can call C ABI) for {params.target_backend.upper()} API headers. Kernels remain in backend shader language (HLSL/SPIR-V/HIP C++)."
+        report += f"| {lang_name} host code | Adapt/Rewrite | {host_note} |\n"
     else:
         report += f"**No auto-migration pattern from {src_backend} → {tgt_backend}. This requires manual adaptation.**\n"
         report += "Read `kands://porting-patterns` for the full matrix.\n"
 
-    # Phase 8: Action plan
+    # Phase 8: Action plan — backend-aware, language-agnostic via TARGET_LANGUAGES.json
     report += f"""
 
 ---
@@ -2600,45 +2621,60 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
 
 1. **Build setup:** Read `kands://tk-tools` for compiler paths and flags
 """
-    # Determine compiler + cmake flags based on target_backend (explicit), not just toolkit
-    if params.target_backend == "directx":
-        compiler_example = f"dxc -T cs_6_8 -E main -spirv source.hlsl -Fo shader.dxil"
-        cmake_flags = f"-DCMAKE_BUILD_TYPE=Release -DDIRECTX12_ENABLE=1"
-        report += f"2. **CMake:** `cmake {cmake_flags}`\n3. **Shader compile:** `{compiler_example}`\n4. **Host compile:** `cl /std:c11 /O2 host.c`\n"
-    elif params.target_backend == "vulkan":
-        compiler_example = f"glslc shader.comp -o shader.spv"
-        cmake_flags = f"-DCMAKE_BUILD_TYPE=Release"
-        report += f"2. **CMake:** `cmake {cmake_flags}`\n3. **Shader compile:** `{compiler_example}`\n4. **Validate:** `spirv-val shader.spv`\n"
-    elif toolkit_key:
-        compiler_example = ""
-        if toolkit_key == "rocm":
-            compiler_example = f"hipcc --offload-arch={params.target_arch} -O3"
-            cmake_flags = f"-DCMAKE_HIP_ARCHITECTURES={params.target_arch} -DCMAKE_BUILD_TYPE=Release"
-        elif toolkit_key == "cuda":
-            compiler_example = f"nvcc --arch={params.target_arch} -O3"
-            cmake_flags = f"-DCMAKE_CUDA_ARCHITECTURES={params.target_arch} -DCMAKE_BUILD_TYPE=Release"
-        else:
-            cmake_flags = "-DCMAKE_BUILD_TYPE=Release"
-        report += f"2. **CMake:** `cmake {cmake_flags}`\n3. **Compile:** `{compiler_example} source.cu -o target`\n"
+    # Load language + backend metadata from TARGET_LANGUAGES.json (agnostic)
+    langs = _load_json(_TARGET_LANGUAGES_PATH)
+    lang_data = langs.get("languages", {}).get(params.target_language, {})
+    backend_info = langs.get("backend_compilers", {}).get(params.target_backend, {})
+    interop_info = langs.get("backend_interop_notes", {}).get(params.target_backend, "")
 
-    report += "4. **Parity testing:** Run CPU oracle + GPU output comparison (see `kands://diagnostics`)\n"
-    report += "5. **Performance:** Run `--perf-tracing`, then iterate using the sherlock-it loop (see `kands://diagnostics`)\n"
-    report += f"6. **Export:** Run `export_contribution(engine_name='...', arch='{params.target_arch}')` to share results\n"
-    report += "7. **Verify:** `ctest -R _parity` && `./engine --selftest`\n"
+    # Determine translate tool based on backend (deterministic, not hardcoded per language)
+    backend_translate = {
+        "directx": "Manually port CUDA kernels to HLSL — no auto-translator exists for D3D12. Use Phase 7 mapping table.",
+        "vulkan": "Manually port CUDA kernels to GLSL/SPIR-V — no direct auto-translator. Use Phase 7 mapping table.",
+        "sycl": "Copy + auto-translate with `dpct`",
+        "hip": "Copy + auto-translate with `hipify-perl`",
+        "cuda": "Copy + auto-translate with `nvcc` (source is already CUDA — may just need arch flag)",
+    }
+    translate_tool = backend_translate.get(params.target_backend, "See Phase 7 mapping table for manual transforms")
 
-    if params.target_backend == "directx":
-        translate_tool = "Manually port CUDA kernels to HLSL — no auto-translator exists for D3D12 compute. Use the Phase 7 mapping table."
-    elif params.target_backend == "vulkan":
-        translate_tool = "Manually port CUDA kernels to GLSL/SPIR-V — no direct auto-translator. Use Phase 7 mapping table."
-    elif params.target_backend == "hip" or (params.target_backend == "auto" and toolkit_key == "rocm"):
-        translate_tool = "Copy + auto-translate with `hipify-perl`"
-    elif params.target_backend == "sycl":
-        translate_tool = "Copy + auto-translate with `dpct`"
+    # Step 2: Shader compile (backend-specific)
+    step = 2
+    shader_cmd = backend_info.get("shader_cmd", "")
+    shader_compiler = backend_info.get("shader_compiler", "")
+    if shader_cmd and params.target_backend in ("directx", "vulkan", "hip", "cuda", "sycl"):
+        report += f"{step}. **Shader compile:** `{shader_cmd}` ({shader_compiler})\n"
+        step += 1
+
+    # Step 3: Host compile (language-agnostic via JSON)
+    if lang_data:
+        compiler_cmd = lang_data.get("compiler_cmd", "")
+        compiler_name = lang_data.get("compiler", "")
+        cmake_flags = lang_data.get("cmake_flags", "")
+        if compiler_cmd and compiler_cmd != "N/A":
+            report += f"{step}. **Host compile:** `{compiler_cmd}` ({compiler_name})\n"
+            step += 1
+        if cmake_flags and cmake_flags != "N/A":
+            report += f"{step}. **CMake:** `cmake {cmake_flags}`\n"
+            step += 1
     else:
-        translate_tool = "Copy + auto-translate with `hipify-perl` or `dpct`"
+        # Unknown language — generic fallback (handles bhaiLang, any made-up lang)
+        lang_display = params.target_language.title()
+        report += f"{step}. **Host compile:** Use {lang_display} compiler with C interop for `{params.target_backend}` headers\n"
+        step += 1
+
+    if interop_info:
+        report += f"{step}. **Backend interop:** {interop_info}\n"
+        step += 1
+
+    report += f"{step}. **Parity testing:** Run CPU oracle + GPU output comparison (see `kands://diagnostics`)\n"
+    step += 1
+    report += f"{step}. **Performance:** Run `--perf-tracing`, then iterate using the sherlock-it loop (see `kands://diagnostics`)\n"
+    step += 1
+    report += f"{step}. **Export:** Run `export_contribution(engine_name='...', arch='{params.target_arch}')` to share results\n"
+    step += 1
+    report += f"{step}. **Verify:** `ctest -R _parity` && run host binary with `--selftest` flag\n"
 
     report += f"""
-
 ### Loose mode (get it running first):
 
 1. **Get it compiling:** {translate_tool}
