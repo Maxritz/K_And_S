@@ -573,8 +573,14 @@ fp8), the operand width is a **design constraint, not an implementation detail**
 - **Enumerate the datatype pairs the target actually exposes** from the vendor's
   kernel-template library. That table is the real menu, and it is frequently wider or
   narrower than the manual implies: it is where a 4-bit matrix path that the assembly
-  generator cannot express will show up, and where a "supported" pair that exists only
-  on a later target family will be revealed as unavailable on yours.
+  generator does not cover for your target will show up, and where a pair that exists
+  only on a later target family will be revealed as unavailable on yours.
+- **A datatype in the generator's enum is not availability on your target.** One
+  generator listed 4-bit float and a packed 4xint8 type, which reads at first glance as
+  "4-bit is supported", but the 4-bit *float* matrix opcode was gated to a later target
+  family and the 4-bit *integer* datatype did not exist at all, so for this target the
+  answer was still no. Check the capability gate that the datatype is wired to, not the
+  datatype's presence.
 
 ---
 
