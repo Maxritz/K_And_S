@@ -2718,7 +2718,10 @@ export_contribution(engine_name="my-port", arch="{params.target_arch}", workload
     findings_dir = repo_dir / "findings"
     findings_dir.mkdir(parents=True, exist_ok=True)
     timestamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
-    report_file = findings_dir / f"porting-report-{timestamp}.md"
+    # Include target_language and target_backend in filename for deterministic naming
+    safe_lang = params.target_language.replace(" ", "-").lower() if params.target_language else "auto"
+    safe_backend = params.target_backend if params.target_backend else "auto"
+    report_file = findings_dir / f"porting-report-{safe_lang}-{safe_backend}-{timestamp}.md"
     try:
         report_file.write_text(report, encoding="utf-8")
         report += f"\n\n---\n**Report saved to:** `{report_file}`\n"
@@ -3520,7 +3523,9 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
         findings_dir = repo_dir / "findings"
         findings_dir.mkdir(parents=True, exist_ok=True)
         timestamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
-        report_file = findings_dir / f"porting-report-{timestamp}.md"
+        safe_lang = (params.target_language or "auto").replace(" ", "-").lower()
+        safe_backend = params.target_backend or "auto"
+        report_file = findings_dir / f"porting-report-{safe_lang}-{safe_backend}-{timestamp}.md"
         try:
             report_file.write_text(report, encoding="utf-8")
             report += f"\n\n---\n**Report saved to:** `{report_file}`\n"
