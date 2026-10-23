@@ -234,13 +234,13 @@ transfers.
 - **Do not assume the queue drains in order with your host code.** The host can
   finish submitting long before the device finishes executing, which is what makes
   the first row of the table above so misleading.
-- **Own every stream, or sync the device.** If part of the workload launches on the
-  default/null stream while the measurement synchronises only a private stream, the
-  timing returns before the work has finished and the path looks several times faster
-  than it is. Seen here: a plan engine launching an entire token plan on the null
-  stream while the shim synchronised its own, so a batched prompt path was measured
-  at 2.3 ms/token, which implied 2.3 TB/s of weight traffic. Validate by comparing
-  against a device-wide sync.
+- **Own every queue, or sync the device.** If part of the workload is submitted to the
+  default queue (the null stream in CUDA/HIP, the default command queue elsewhere) while
+  the measurement synchronises only a private one, the timing returns before the work has
+  finished and the path looks several times faster than it is. Seen here: an engine
+  submitting an entire token plan on the null stream while the shim synchronised its own,
+  so a batched path was measured at 2.3 ms/token, which implied 2.3 TB/s of weight
+  traffic and is therefore impossible. Validate by comparing against a device-wide sync.
 
 ### 6.2 Decompose, then ask which side the wall is on
 
@@ -528,8 +528,9 @@ weights, 25.6 G of them) on one card with a 634 GB/s measured ceiling:
 - **At T = 1, any wider operand is a loss.** Ternary packs to 2 bits. The narrowest
   matrix-core operand is 4 bits (`iu4`), then 8 (int8/fp8) and 16 (fp16/bf16). Doubling
   the weight bytes cannot be repaid by removing decode work when the kernel is already
-  at 76% of the achievable bandwidth. This holds for `dp4a`, `v_dot8_i32_iu4`, and every
-  WMMA spelling alike.
+  at 76% of the achievable bandwidth. This holds for every packed-dot instruction and
+  every matrix-core spelling alike (`dp4a`/`amd_mixed_dot`, `v_dot8_i32_iu4`, WMMA,
+  MFMA, `mma.sync`).
 - **At large T the matrix core wins**, because the weight read is amortised over the
   whole batch: the same 2x operand expansion is free when the memory bus sits at 0.7%
   and the compute is the wall.
@@ -558,10 +559,10 @@ fp8), the operand width is a **design constraint, not an implementation detail**
   any candidate instruction requires;
 - compute both ceiling terms before writing code: at T = 1 a wider operand can only
   lose, at large T it can only win;
-- and remember that a *load* instruction can change the layout for free
-  (`GLOBAL_LOAD_TR_B64/B128` load a 16x16 tile **and transpose** it into matrix-core
-  operand registers), which is what makes a hand-written matrix-core kernel viable at
-  all.
+- and remember that a *load* instruction can change the layout for free: many ISAs
+  provide a load-and-transpose that pulls a 16x16 tile straight into matrix-core
+  operand registers (on RDNA4: `GLOBAL_LOAD_TR_B64/B128`), which is what makes a
+  hand-written matrix-core kernel viable at all.
 
 ---
 
