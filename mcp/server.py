@@ -2653,7 +2653,7 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
         if compiler_cmd and compiler_cmd != "N/A":
             report += f"{step}. **Host compile:** `{compiler_cmd}` ({compiler_name})\n"
             step += 1
-        if cmake_flags and cmake_flags != "N/A":
+        if cmake_flags and not cmake_flags.startswith("N/A"):
             report += f"{step}. **CMake:** `cmake {cmake_flags}`\n"
             step += 1
     else:
