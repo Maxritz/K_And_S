@@ -286,8 +286,9 @@
       "wave_size": 32,
       "lds_kib": 128,
       "measured": {
-        "provenance": "RX 9070 XT (gfx1201), Windows, measured on-device; see PORTING-LESSONS.md section 9",
+        "provenance": "RX 9070 XT (gfx1201), Windows, measured on-device; see PORTING-LESSONS.md sections 9, 12, 13",
         "streaming_bandwidth_gb_s": 616,
+        "streaming_bandwidth_gb_s_tuned": 634,
         "cache_resident_bandwidth_gb_s": 1424,
         "lds_kib_usable_per_cu": 64,
         "compute_units_physical": 64,
@@ -295,7 +296,22 @@
         "runtime_unit_note": "the runtime multiprocessor count returns workgroup processors (WGP), not compute units: 32 WGP = 64 CU",
         "l2_mib_reported_by_runtime": 8,
         "wave_size_from_code_object": 32,
-        "wave_size_probe": "__ballot(1) returns 0xffffffff; code object reports wavefront_size 32"
+        "wave_size_probe": "__ballot(1) returns 0xffffffff; code object reports wavefront_size 32",
+        "wmma_probed": {
+          "note": "ISA-verified by compiling and disassembling the unwrapped code object, not from a table",
+          "works": ["f32_16x16x16_f16", "f32_16x16x16_bf16", "f32_16x16x16_fp8_fp8", "f32_16x16x16_bf8_bf8", "i32_16x16x16_iu8", "i32_16x16x16_iu4", "i32_16x16x32_iu4"],
+          "spelling": "gfx12 uses its own builtins with a _gfx12 suffix, eg __builtin_amdgcn_wmma_i32_16x16x16_iu4_w32_gfx12; gfx11 spellings and raw asm with gfx11 operand shapes are rejected",
+          "operand_shape": "iu4 takes scalar int operands on gfx12 (8 nibbles per lane per operand); gfx11 took V2i vectors",
+          "fp4": "absent",
+          "fp8": "exists only as WMMA; no scalar fp8 conversion (v_cvt_pk_fp8_f32 is rejected)",
+          "pipeline_rules": "ISA 7.12.1 needs >=1 independent VALU between WMMAs whose operands overlap the previous D; 7.12.2 fixes lane/vgpr/startPosn per element; 11.6.2 gives GLOBAL_LOAD_TR_B64/B128 load-and-transpose straight into operand registers",
+          "measured": "a naive 8-accumulator loop reached only 176 TOPS because it ignored the layout and hazard rules; rated dense int4 is 766 TOPS"
+        },
+        "operand_width_vs_density": {
+          "ternary_bits_per_weight_ideal": 1.585,
+          "packed_bits_per_weight_used": 2,
+          "rule": "for a memory-bound quantised matmul no wider operand can win at T=1 (dp4a 8 bits, fp8 8, iu4 4, fp16 16 against 2 packed); at batch T>=64 the weight read is amortised and compute binds instead, so matrix cores win"
+        }
       },
       "tensor_cores": false,
       "wmma": true,

@@ -234,6 +234,13 @@ transfers.
 - **Do not assume the queue drains in order with your host code.** The host can
   finish submitting long before the device finishes executing, which is what makes
   the first row of the table above so misleading.
+- **Own every stream, or sync the device.** If part of the workload launches on the
+  default/null stream while the measurement synchronises only a private stream, the
+  timing returns before the work has finished and the path looks several times faster
+  than it is. Seen here: a plan engine launching an entire token plan on the null
+  stream while the shim synchronised its own, so a batched prompt path was measured
+  at 2.3 ms/token, which implied 2.3 TB/s of weight traffic. Validate by comparing
+  against a device-wide sync.
 
 ### 6.2 Decompose, then ask which side the wall is on
 
@@ -361,6 +368,31 @@ trick unnecessary - the structure is now a tax, not an optimisation.**
 
 ---
 
+### 7.2 Probe the construct in your toolchain's spelling, then unwrap the container
+
+Two failure modes, both hit inside one investigation of one instruction family:
+
+- **The instruction existed; the spelling was the previous generation's.** RDNA4 has fp8,
+  bf16, f16, int8 and int4 WMMA, but gfx12 names them differently
+  (`__builtin_amdgcn_wmma_i32_16x16x16_iu4_w32_gfx12`) and changes the operand shapes
+  (scalar `int` operands for iu4 on gfx12, `V2i` vectors on gfx11). A probe built from
+  gfx11 spellings reported the whole family as "not encodable" while the builtins were
+  listed in the SDK's own table at
+  `lib/llvm/include/clang/Basic/BuiltinsAMDGPU.inc`. Read the compiler's table and the
+  target's per-instruction pages before concluding that an instruction is absent.
+- **Reading the artifact without unwrapping it hides everything.** `.hsaco` and `.cubin`
+  are clang offload bundles; disassembling the bundle reports no instructions at all,
+  which is easy to mistake for "the compiler emitted nothing". Extract the per-arch
+  payload first.
+
+And a third rule that generalises further: **compiling is not emitting, and emitting is not
+emitting efficiently.** Count the instructions *around* the one that matters, because
+twenty supporting instructions per matrix op caps the result at a fraction of the rated
+throughput whatever the operand width. Related: a single dependent accumulator chain
+measures the instruction's latency, not its throughput.
+
+---
+
 ## 8. Capture and replay: the semantics that bite
 
 Recording a command sequence once and replaying it as a single unit (CUDA/HIP
@@ -481,7 +513,59 @@ Before writing any kernel, answer these. Each "no" is a scoping risk.
 
 ---
 
-## 12. Tooling that enforces this
+## 12. Batch size decides the engine; measure the binding resource per batch
+
+A quantised matmul has two candidate engines: a scalar kernel over the densest packing,
+or a matrix-core kernel that needs wider operands. Which one wins is decided by the
+**batch size**, not by the instruction set. Measured on one ternary model (2-bit
+weights, 25.6 G of them) on one card with a 634 GB/s measured ceiling:
+
+| batch | binding resource | measured |
+|---|---|---|
+| T = 1 (decode) | **bytes**: 76% of the bandwidth ceiling | 481 GB/s, 14.2 ms/token |
+| T = 256 (prefill) | **compute**: 5.6 TOPS against ~20 scalar TFLOPS, memory at **0.7%** | weights read once, 4.6 GB/s, 220 tokens/s |
+
+- **At T = 1, any wider operand is a loss.** Ternary packs to 2 bits. The narrowest
+  matrix-core operand is 4 bits (`iu4`), then 8 (int8/fp8) and 16 (fp16/bf16). Doubling
+  the weight bytes cannot be repaid by removing decode work when the kernel is already
+  at 76% of the achievable bandwidth. This holds for `dp4a`, `v_dot8_i32_iu4`, and every
+  WMMA spelling alike.
+- **At large T the matrix core wins**, because the weight read is amortised over the
+  whole batch: the same 2x operand expansion is free when the memory bus sits at 0.7%
+  and the compute is the wall.
+- **So do not choose the engine once.** Measure bytes against MACs at the batch sizes
+  the engine actually runs, and expect the answer to flip somewhere around the point
+  where `batch x MACs / compute_rate` overtakes `bytes / bandwidth`.
+- **Corollary: batch and decode paths drift apart.** Here the *default* chunked GEMM on
+  the prefill path was a Kepler-era scalar core (sm_30, 63 registers, `kep3_core`) while
+  the decode kernel had been retuned, so the "efficient" path was the opposite of the
+  batched one at 36x per byte. Inventory the **default per path**, not the codebase as a
+  whole, and check which kernel a given path actually selects (here a single
+  environment variable chose between a 13 GB/s kernel and a 30 GB/s one).
+- Final-size sanity checks in both directions: at T = 1 the payload sets a hard ceiling
+  (`payload / bandwidth`), and at large T the compute does (`batch x MACs / rate`).
+  Whichever is larger is where to spend the effort, and they are usually not the same
+  resource.
+
+---
+
+## 13. Check the operand width before choosing an engine
+
+When a quantised format is the whole point of the engine (2-bit ternary, 4-bit int,
+fp8), the operand width is a **design constraint, not an implementation detail**:
+
+- measure the achievable bytes per weight in the packed form, and the widest operand
+  any candidate instruction requires;
+- compute both ceiling terms before writing code: at T = 1 a wider operand can only
+  lose, at large T it can only win;
+- and remember that a *load* instruction can change the layout for free
+  (`GLOBAL_LOAD_TR_B64/B128` load a 16x16 tile **and transpose** it into matrix-core
+  operand registers), which is what makes a hand-written matrix-core kernel viable at
+  all.
+
+---
+
+## 14. Tooling that enforces this
 
 Available in this MCP:
 
