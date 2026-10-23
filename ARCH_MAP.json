@@ -110,12 +110,14 @@
       "bf16_native": false,
       "fp8_native": false,
       "known_issues": [
-        "no rocWMMA in ROCm 7+; older dot4 (v_dot4_i32_i8) in hip_compat/intrinsics.hpp; falls back to F32 attention; Vulkan GL_KHR_cooperative_matrix broken on AMD drivers — use DP4a instead"
+        "no rocWMMA in ROCm 7+",
+        "older dot4 (v_dot4_i32_i8) in hip_compat/intrinsics.hpp",
+        "falls back to F32 attention"
       ],
       "vulkan": {
         "cooperative_matrix": false,
         "dp4a_alternative": "GL_KHR_shader_integer_dot_product (spv_dp4) for matmul",
-        "notes": "AMD Vulkan drivers do not support GL_KHR_cooperative_matrix. Matmul must use DP4a-style SPIR-V instructions instead."
+        "notes": "AMD Vulkan drivers do not support GL_KHR_cooperative_matrix. Matmul must use DP4a-style SPIR-V instructions instead.; Vulkan GL_KHR_cooperative_matrix broken on AMD drivers — use DP4a instead"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/",
       "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
@@ -133,12 +135,13 @@
       "bf16_native": true,
       "fp8_native": false,
       "known_issues": [
-        "rocWMMA required for WMMA path; community-validated; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "rocWMMA required for WMMA path",
+        "community-validated"
       ],
       "vulkan": {
         "cooperative_matrix": true,
         "dp4a_alternative": "Available as fallback for matmul",
-        "notes": "rocWMMA provides WMMA-like ops for HIP/CUDA. Vulkan path uses DP4a."
+        "notes": "rocWMMA provides WMMA-like ops for HIP/CUDA. Vulkan path uses DP4a.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/",
       "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
@@ -156,12 +159,13 @@
       "bf16_native": true,
       "fp8_native": false,
       "known_issues": [
-        "community-validated; same as gfx1100; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "community-validated",
+        "same as gfx1100"
       ],
       "vulkan": {
         "cooperative_matrix": true,
         "dp4a_alternative": "Available as fallback",
-        "notes": "Same as gfx1100; Vulkan CM working but unverified. Prefer DP4a for production."
+        "notes": "Same as gfx1100; Vulkan CM working but unverified. Prefer DP4a for production.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/"
     },
@@ -178,12 +182,14 @@
       "bf16_native": false,
       "fp8_native": false,
       "known_issues": [
-        "no WMMA; experimental; portable kernels only; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "no WMMA",
+        "experimental",
+        "portable kernels only"
       ],
       "vulkan": {
         "cooperative_matrix": false,
         "dp4a_alternative": "GL_KHR_shader_integer_dot_product (spv_dp4)",
-        "notes": "No WMMA support. Vulkan matmul must use DP4a-style SPIR-V instructions."
+        "notes": "No WMMA support. Vulkan matmul must use DP4a-style SPIR-V instructions.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/",
       "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
@@ -201,7 +207,9 @@
       "bf16_native": false,
       "fp8_native": false,
       "known_issues": [
-        "iGPU; no WMMA; opt-in portable kernels only"
+        "iGPU",
+        "no WMMA",
+        "opt-in portable kernels only"
       ],
       "isa_docs": "https://gpuopen.com/machine-readable-isa/"
     },
@@ -218,7 +226,9 @@
       "bf16_native": true,
       "fp8_native": false,
       "known_issues": [
-        "unified memory APU; experimental; code same as gfx1100"
+        "unified memory APU",
+        "experimental",
+        "code same as gfx1100"
       ],
       "isa_docs": "https://gpuopen.com/machine-readable-isa/"
     },
@@ -235,12 +245,14 @@
       "bf16_native": true,
       "fp8_native": false,
       "known_issues": [
-        "unified memory; experimental; code same as gfx1100; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "unified memory",
+        "experimental",
+        "code same as gfx1100"
       ],
       "vulkan": {
         "cooperative_matrix": true,
         "dp4a_alternative": "Available as fallback",
-        "notes": "Unified memory APU; same as gfx1100 Vulkan caveats."
+        "notes": "Unified memory APU; same as gfx1100 Vulkan caveats.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/"
     },
@@ -257,12 +269,13 @@
       "bf16_native": true,
       "fp8_native": false,
       "known_issues": [
-        "community-validated; portable kernels; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "community-validated",
+        "portable kernels"
       ],
       "vulkan": {
         "cooperative_matrix": false,
         "dp4a_alternative": "GL_KHR_shader_integer_dot_product (spv_dp4)",
-        "notes": "No WMMA support. Vulkan matmul must use DP4a-style SPIR-V instructions."
+        "notes": "No WMMA support. Vulkan matmul must use DP4a-style SPIR-V instructions.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/"
     },
@@ -279,12 +292,13 @@
       "bf16_native": true,
       "fp8_native": false,
       "known_issues": [
-        "builds validated; gfx1201 hipBLASLt table needed; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "builds validated",
+        "gfx1201 hipBLASLt table needed"
       ],
       "vulkan": {
         "cooperative_matrix": false,
         "dp4a_alternative": "GL_KHR_shader_integer_dot_product (spv_dp4)",
-        "notes": "No WMMA/rocWMMA. Vulkan matmul must use DP4a-style SPIR-V."
+        "notes": "No WMMA/rocWMMA. Vulkan matmul must use DP4a-style SPIR-V.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/",
       "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
@@ -302,12 +316,13 @@
       "bf16_native": true,
       "fp8_native": false,
       "known_issues": [
-        "wave64 → logical-32 half-wavefront compat layer in hip_compat/intrinsics.hpp; experimental; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "wave64 → logical-32 half-wavefront compat layer in hip_compat/intrinsics.hpp",
+        "experimental"
       ],
       "vulkan": {
         "cooperative_matrix": true,
         "dp4a_alternative": "Available as fallback",
-        "notes": "CDNA1 uses wave64 mode. Vulkan support via radv/AMDVLK; CM unverified, use DP4a."
+        "notes": "CDNA1 uses wave64 mode. Vulkan support via radv/AMDVLK; CM unverified, use DP4a.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/",
       "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
@@ -325,7 +340,10 @@
       "bf16_native": true,
       "fp8_native": false,
       "known_issues": [
-        "EU subgroups of 8/16/32; DPAS matrix instruction; no rocWMMA equivalent; uses IGA for disassembly"
+        "EU subgroups of 8/16/32",
+        "DPAS matrix instruction",
+        "no rocWMMA equivalent",
+        "uses IGA for disassembly"
       ],
       "isa_docs": "https://intel.github.io/pisa/",
       "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)"
@@ -343,7 +361,8 @@
       "bf16_native": true,
       "fp8_native": false,
       "known_issues": [
-        "Same as gen12_lp; uses DPAS for matrix ops"
+        "Same as gen12_lp",
+        "uses DPAS for matrix ops"
       ],
       "isa_docs": "https://intel.github.io/pisa/",
       "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)"
@@ -365,7 +384,6 @@
       "known_issues": [
         "Integrated GPU shares system memory bandwidth",
         "No dedicated VRAM — performance depends on DDR5 speed",
-        "Vulkan CooperativeMatrix extension requires Mesa 24.3+",
         "Use DPAS for matrix ops via oneAPI DPC++ (SYCL)",
         "Power/thermal constraints on laptop APUs"
       ],
@@ -374,7 +392,10 @@
         "sustained_perf_factor": 0.7
       },
       "isa_docs": "https://intel.github.io/pisa/",
-      "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)"
+      "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)",
+      "vulkan": {
+        "notes": "Vulkan CooperativeMatrix extension requires Mesa 24.3+"
+      }
     }
   }
 }
