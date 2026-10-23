@@ -29,6 +29,36 @@ Point K_and_S at any codebase. It will scan every `.cu`, `.hip`, `.comp`, `.hlsl
 ### Check Compatibility
 Before you start porting, see if your target architecture supports everything your source needs. Does your target have tensor cores? DP4a? Native BF16? Will Vulkan cooperative matrices work (they do not on AMD, use DP4a instead). K_and_S tells you upfront so you do not waste weeks on a dead end.
 
+### Verify the ISA — do not trust the table
+Capability tables lie. A real port was designed around `v_dot4_i32_i8`; that mnemonic has **no gfx12 encoding** and crashes the LLVM backend rather than failing at the assembler. Its replacement, `amd_mixed_dot`, compiles fine and emits `v_dot4_i32_iu8` — same hardware, different spelling.
+
+`probe_isa` compiles each candidate **for your actual target**, one translation unit per candidate so a single failure cannot mask the rest, and returns both the verdict and the disassembled mnemonics. That is the only reliable oracle for "does this instruction exist on this chip".
+
+### Build a function-to-function porting map
+`build_porting_map` reads your source and, for every kernel/device function, reports:
+
+- the constructs it uses (inline-asm mnemonics, warp intrinsics, barriers, local memory, id builtins)
+- the **substitution** for your target, with an explicit fidelity grade: `exact`, `portable`, `approximate`, `lossy`, `manual` or `drop`
+- a caveat where one applies (e.g. a matrix instruction that can only be reconstructed element-wise)
+
+It understands CUDA/HIP, SYCL, OpenCL, GLSL, HLSL and Metal, and it follows ISA constructs that hide inside `#define` macros — otherwise code built entirely from an unsupported instruction reports as clean.
+
+It also emits the **extension-to-extension file plan** for the ported tree, so you know which files are rewritten and which are copied:
+
+| source | → HIP | → CUDA | → SYCL | → Vulkan | → DirectX |
+|---|---|---|---|---|---|
+| `.cu` (CUDA) | `.hip` | `.cu` | `.cpp` | `.comp` | `.hlsl` |
+| `.cl` (OpenCL) | `.cpp` | `.cu` | `.cpp` | `.comp` | `.hlsl` |
+| `.comp` (GLSL) | `.cpp` | `.cu` | `.cpp` | `.comp` (copy) | `.hlsl` |
+| `.hlsl` | `.cpp` | `.cu` | `.cpp` | `.comp` | `.hlsl` (copy) |
+| `.metal` | `.cpp` | `.cu` | `.cpp` | `.comp` | `.hlsl` |
+| SYCL `.cpp` | `.cpp` | `.cu` | `.cpp` (copy) | `.comp` | `.hlsl` |
+
+`verify_porting_map` then closes the loop: it probes every mapped *replacement* on the real target and downgrades anything that does not encode.
+
+### Gate the build
+`scan_residual_asm` finds live `asm("…")` strings that still name a foreign mnemonic (comments are ignored, so no false positives), and `build_module` deletes the output before compiling, then reports size plus the exported kernel symbols compared against what you expect. A module that compiles but lacks a kernel the runtime calls is not a successful build — and a stale artifact must never look like a fresh one.
+
 ### Find Installed Toolchains
 Instead of reading docs and guessing where hipcc or nvcc lives on your machine, K_and_S checks at runtime. It looks in your PATH, checks your environment variables (ROCM_PATH, CUDA_PATH, VULKAN_SDK, ONEAPI_ROOT), and scans common install locations. It even detects Strawberry Perl, which you need for some build scripts alongside MSVC.
 
@@ -142,16 +172,35 @@ estimate_performance(arch="gfx1201", workload="flash_attn", seq_len=8192)
 # 4. Check a common idea before implementing
 reject_common_pattern("hipify-perl handles everything", arch="gfx1201")
 
-# 5. Port the full repo
+# 5. Verify every instruction the port depends on — before designing anything
+probe_isa(target="gfx1201", candidates=[
+    {"name": "raw v_dot4",     "stmt": 'asm("v_dot4_i32_i8 %0,%1,%2,%0;" : "+r"(acc) : "r"(a),"r"(b));'},
+    {"name": "amd_mixed_dot",  "stmt": "acc = amd_mixed_dot(ca, cb, acc, false);"},
+])
+# -> raw v_dot4 FAIL (no gfx12 encoding); amd_mixed_dot OK (emits v_dot4_i32_iu8)
+
+# 6. Build the function-to-function map from the source
+build_porting_map(files=[...], source_arch="sm_80", target_arch="gfx1201")
+# -> per function: role, constructs, target substitution, fidelity grade
+
+# 7. Prove the map instead of trusting it
+verify_porting_map(files=[...], target_arch="gfx1201")
+
+# 8. Gate the build
+scan_residual_asm(files=[...], backend="hip")
+build_module(sources=[...], target="gfx1201", out="engine.hsaco",
+             expected_symbols=["k_g4", "k_rmsw"])
+
+# 9. Port the full repo
 autonomous_port(repo_path="/path/to/kernel/code", source_arch="sm_80", target_arch="gfx1201")
 
-# 6. Verify correctness after each change
+# 10. Verify correctness after each change
 verify_numerical_equivalence(arch="gfx1201", workload="gemm", source_values=[...], target_values=[...])
 
-# 7. Record what you learned
+# 11. Record what you learned
 record_performance(arch="gfx1201", workload="gemm", tok_per_s=42500.0, notes="Used DPP shuffle, wave32")
 
-# 8. Save as a template for next time
+# 12. Save as a template for next time
 export_contribution(engine_name="MyEngine", arch="gfx1201", workload="gemm")
 ```
 
@@ -170,6 +219,22 @@ K_and_S follows an eight phase methodology so you never miss a step:
 **Phase 6**: Numerical equivalence verification against CPU oracle
 **Phase 7**: Performance optimization loop (declare, trace, dissect, hypothesize, experiment, verify, record)
 **Phase 8**: Share and contribute your findings back
+
+---
+
+## Field Notes: `kands://porting-lessons`
+
+`PORTING-LESSONS.md` is a resource distilled from an end-to-end port of a ternary-quantised LLM engine from CUDA to RDNA4. Read it before starting any port. It is deliberately blunt about what failed:
+
+- **Nine gates** that must exist before the first edit (probe the ISA, scan for residual foreign asm, delete artifacts, assert the symbol inventory, run the model)
+- **The ISA verification protocol**, including the measured table showing that a mnemonic name is not a capability — `v_dot4_i32_i8` fails while `amd_mixed_dot` emits `v_dot4_i32_iu8`
+- **Six ways a source rewrite silently fails**: literal mismatch, prefix mismatch, terminator mismatch, cross-line regex, whole-line replacement, ordering
+- **Two structural traps**: `__launch_bounds__(N)` corrupting every signature scan, and ISA constructs hiding inside `#define` macros
+- **Shim conformance**: a drop-in replacement must match *behavioural* contracts (bytes vs str, 0-d device views, strided copies, argument marshalling)
+- **A performance method** that separates host launch, queue wait, device execution and sync — and the finding that 331 launches/token cost more than the arithmetic ever did
+- **An engine-class checklist** for ninfer/deepinfer/llama.cpp-style ports: what already runs on the target, what is genuinely custom, which runtime machinery must be replaced, which named libraries need call-level answers, and how to establish the numerical contract
+
+Every claim in it is tied to a measurement that was taken, not to advice that was read.
 
 ---
 

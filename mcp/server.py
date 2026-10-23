@@ -373,6 +373,7 @@ RES_MODEL_FORMATS = "kands://model-formats"
 RES_PORTING_PATTERNS = "kands://porting-patterns"
 RES_PORTING_STRATEGIES = "kands://porting-strategies"
 RES_DIAGNOSTICS = "kands://diagnostics"
+RES_LESSONS = "kands://porting-lessons"
 RES_DOX_STYLE = "kands://dox-style"
 RES_GOAL = "kands://goal"
 RES_STATUS = "kands://status"
@@ -480,6 +481,14 @@ def _list_resources() -> list[mcp_types.Resource]:
             uri=RES_METHOD,
             name="Porting Methodology",
             description="Phase 0-7 porting and optimization methodology including instrumentation",
+            mimeType="text/markdown",
+        ),
+        mcp_types.Resource(
+            uri=RES_LESSONS,
+            name="Porting Lessons (field-derived)",
+            description="Gates, ISA-verification protocol, transformation traps, shim conformance, "
+                        "correctness and performance method, and an engine-class checklist for "
+                        "ninfer/deepinfer/llama.cpp-style ports. Read this before starting a port.",
             mimeType="text/markdown",
         ),
         mcp_types.Resource(
@@ -598,6 +607,12 @@ def _read_resource(uri: str) -> str:
         if _METHOD_PATH.exists():
             return _METHOD_PATH.read_text(encoding="utf-8")
         return "# Porting Methodology\n\n(Method file not found)"
+
+    if uri == RES_LESSONS:
+        p = _KANDS_ROOT / "PORTING-LESSONS.md"
+        if p.exists():
+            return p.read_text(encoding="utf-8")
+        return "# Porting Lessons\n\n(PORTING-LESSONS.md not found)"
 
     if uri == RES_TEMPLATE:
         if _TEMPLATE_PATH.exists():
@@ -3209,6 +3224,32 @@ def _make_read_resource_handler():
     return _handler
 
 
+# ── ISA probing / build verification ────────────────────────
+# Vendor-agnostic probe/build/verify helpers live in isa_tools so they can be
+# unit-tested and reused outside this server. Nothing here is HIP-specific.
+# Imported as top-level modules: this server runs as `python -m server`, so
+# relative imports would break.
+import isa_tools  # noqa: E402
+import porting_map  # noqa: E402
+
+_probe_instruction = isa_tools.probe_instruction
+_probe_many = isa_tools.probe_many
+_scan_residual_asm = isa_tools.scan_residual_asm
+_build_module = isa_tools.build_module
+_module_symbols = isa_tools.module_symbols
+_diff_symbols = isa_tools.diff_symbols
+_capability_report = isa_tools.capability_report
+_FOREIGN_MNEMONICS = isa_tools.FOREIGN_MNEMONICS
+
+_build_porting_map = porting_map.build_map
+_render_porting_map = porting_map.render_markdown
+_lookup_construct = porting_map.lookup
+_verify_porting_map = porting_map.verify
+_pm_probe_candidates = porting_map.probe_candidates
+_pm_unresolved = porting_map.unresolved
+_PM_CONSTRUCTS = porting_map.CONSTRUCTS
+
+
 def _tools() -> list[mcp_types.Tool]:
     """All available MCP tools."""
     return [
@@ -3611,6 +3652,114 @@ def _tools() -> list[mcp_types.Tool]:
                     "strip_perf": {"type": "integer", "description": "0=keep, 1=comment-out, 2=remove", "default": 0},
                 },
                 "required": [],
+            },
+        ),
+        mcp_types.Tool(
+            name="capability_report",
+            description="Report what THIS host can actually build for a target (compiler, root, disassembler, supported backends). Use before planning any port: probes discovery instead of assuming a toolchain exists. Vendor-agnostic (hip/cuda/sycl).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "target": {"type": "string", "description": "Target arch id, e.g. 'gfx1201', 'sm_80', 'spir64'"},
+                    "backend": {"type": "string", "description": "hip/cuda/sycl/auto (auto infers from target)", "default": "auto"},
+                },
+                "required": ["target"],
+            },
+        ),
+        mcp_types.Tool(
+            name="probe_isa",
+            description="Compile one or more ISA candidates FOR THE TARGET ARCH and report which actually encode. Each candidate gets its own translation unit so one failure cannot mask the others. This is the only reliable oracle for 'does this instruction exist on this chip' — docs and capability tables lie. Returns per-candidate ok/error plus the disassembled mnemonics.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "target": {"type": "string", "description": "Target arch id, e.g. 'gfx1201', 'sm_80'"},
+                    "candidates": {
+                        "type": "array",
+                        "description": "List of {name, stmt} objects. stmt is the C/C++ statement to test.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "stmt": {"type": "string"},
+                                "prelude": {"type": "string"},
+                            },
+                            "required": ["stmt"],
+                        },
+                    },
+                    "backend": {"type": "string", "default": "auto"},
+                },
+                "required": ["target", "candidates"],
+            },
+        ),
+        mcp_types.Tool(
+            name="scan_residual_asm",
+            description="Find live inline-asm strings that name a foreign/unsupported mnemonic (e.g. NVIDIA PTX left in an AMD port, or AMD mnemonics in a CUDA port). Only matches asm(\"...\") string literals, so comments do not false-positive. Run this as a hard gate before every build.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "files": {"type": "array", "items": {"type": "string"}, "description": "Files to scan"},
+                    "backend": {"type": "string", "description": "Selects the default forbidden-mnemonic set", "default": "hip"},
+                    "mnemonics": {"type": "array", "items": {"type": "string"}, "description": "Override the forbidden set"},
+                },
+                "required": ["files"],
+            },
+        ),
+        mcp_types.Tool(
+            name="build_module",
+            description="Build a device module for a target: deletes the output first (a stale artifact must never look like success), compiles the concatenated sources, then reports size and exported kernel symbols. Optionally diffs symbols against an expected list.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "sources": {"type": "array", "items": {"type": "string"}, "description": "Source files, in the runtime's own concatenation order"},
+                    "target": {"type": "string", "description": "Target arch id"},
+                    "out": {"type": "string", "description": "Output module path"},
+                    "backend": {"type": "string", "default": "auto"},
+                    "includes": {"type": "array", "items": {"type": "string"}},
+                    "flags": {"type": "array", "items": {"type": "string"}},
+                    "concatenate": {"type": "boolean", "default": True},
+                    "expected_symbols": {"type": "array", "items": {"type": "string"}, "description": "If given, report missing/unexpected kernel symbols"},
+                },
+                "required": ["sources", "target", "out"],
+            },
+        ),
+        mcp_types.Tool(
+            name="build_porting_map",
+            description="Read a source tree and emit a function-to-function porting map for a target: every kernel/device function with its role, the constructs it uses (inline asm mnemonics, warp intrinsics, ISA features), and the target-specific substitution with an explicit fidelity grade (exact/portable/approximate/lossy/manual/drop). ISA constructs inside macros are attributed to the functions that call them. Answers 'what do I replace this with on this chip' from the source, not from memory.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "files": {"type": "array", "items": {"type": "string"}, "description": "Source files to analyse"},
+                    "source_arch": {"type": "string", "description": "Origin arch id, e.g. 'sm_80'"},
+                    "target_arch": {"type": "string", "description": "Destination arch id, e.g. 'gfx1201'"},
+                    "format": {"type": "string", "enum": ["markdown", "json", "both"], "default": "both"},
+                },
+                "required": ["files", "target_arch"],
+            },
+        ),
+        mcp_types.Tool(
+            name="lookup_construct",
+            description="What should one source construct become on a target arch? Returns the replacement, its fidelity grade and any caveat (e.g. a raw instruction that has no encoding on this chip). Use this before writing any replacement by hand.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "construct": {"type": "string", "description": "Construct id, e.g. 'mma.sync', 'dp4a', 'shfl_sync', or any asm mnemonic"},
+                    "target_arch": {"type": "string", "description": "Target arch id"},
+                },
+                "required": ["construct", "target_arch"],
+            },
+        ),
+        mcp_types.Tool(
+            name="verify_porting_map",
+            description="Close the loop: take a porting map, PROBE every mapped replacement on the real target with the actual compiler, and fold the results back in. Constructs whose replacement does not encode are downgraded to 'manual'. Distinguishes probing the replacement (correct) from probing the source instruction (which would wrongly condemn portable mappings like bar.sync -> __syncthreads).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "files": {"type": "array", "items": {"type": "string"}},
+                    "target_arch": {"type": "string"},
+                    "source_arch": {"type": "string", "default": "auto"},
+                    "backend": {"type": "string", "default": "auto"},
+                },
+                "required": ["files", "target_arch"],
             },
         ),
     ]
@@ -4407,6 +4556,180 @@ gh pr view --web
         report += f"5. `record_performance(arch=\"{params.arch}\", workload=\"{params.kernel_type}\")`\\n"
 
         results.append(mcp_types.TextContent(type="text", text=report))
+
+    elif name == "capability_report":
+        cap = _capability_report(arguments.get("target", ""),
+                                 arguments.get("backend", "auto"))
+        lines = [f"# Capability report — `{cap['target']}` ({cap['backend']})\n",
+                 "| item | value |", "|---|---|"]
+        for k in ("supported_backend", "compiler", "root", "objdump"):
+            lines.append(f"| {k} | `{cap.get(k)}` |")
+        lines.append(f"| known_backends | {', '.join(cap.get('known_backends', []))} |")
+        if not cap.get("compiler"):
+            lines.append("\n**No compiler found.** Set the backend root env var "
+                         "(ROCM_PATH / CUDA_PATH / ONEAPI_ROOT) before planning a port.")
+        lines.append("\nNext: `probe_isa` every instruction the port depends on, "
+                     "then `build_module` with `expected_symbols`.")
+        results.append(mcp_types.TextContent(type="text", text="\n".join(lines)))
+
+    elif name == "probe_isa":
+        target = arguments.get("target", "")
+        cands = arguments.get("candidates", []) or []
+        if not cands:
+            results.append(mcp_types.TextContent(
+                type="text", text="Error: candidates[] is required"))
+        else:
+            rows = _probe_many(target, cands, backend=arguments.get("backend", "auto"))
+            md = [f"# ISA probe — target `{target}`\n",
+                  "| candidate | result | detail |", "|---|---|---|"]
+            for r in rows:
+                mark = "OK" if r["ok"] else "FAIL"
+                detail = (", ".join(r["mnemonics"][:8]) if r["ok"]
+                          else r["error"][:160].replace("|", "/"))
+                md.append(f"| `{r['candidate']}` | **{mark}** | {detail} |")
+            md.append(f"\n**{sum(1 for r in rows if r['ok'])}/{len(rows)} "
+                      f"candidates encode on `{target}`.**")
+            if any(not r["ok"] for r in rows):
+                md.append("\nRejected candidates must not appear in the generated "
+                          "source: substitute a portable fallback and re-probe.")
+            results.append(mcp_types.TextContent(type="text", text="\n".join(md)))
+            results.append(mcp_types.TextContent(type="text", text=json.dumps(rows, indent=2)))
+
+    elif name == "scan_residual_asm":
+        files = arguments.get("files", []) or []
+        hits = _scan_residual_asm(files, arguments.get("mnemonics"),
+                                  backend=arguments.get("backend", "hip"))
+        if not hits:
+            results.append(mcp_types.TextContent(
+                type="text",
+                text=f"No residual foreign asm in {len(files)} file(s). Gate passes."))
+        else:
+            md = [f"# Residual foreign asm — {len(hits)} hit(s)\n",
+                  "Live `asm(\"...\")` string literals, not comments; the target "
+                  "assembler will reject them.\n",
+                  "| file | line | text |", "|---|---|---|"]
+            for h in hits[:80]:
+                md.append(f"| `{Path(h['file']).name}` | {h['line']} | `{h['text'][:120]}` |")
+            if len(hits) > 80:
+                md.append(f"\n... and {len(hits) - 80} more")
+            results.append(mcp_types.TextContent(type="text", text="\n".join(md)))
+            results.append(mcp_types.TextContent(type="text", text=json.dumps(hits, indent=2)))
+
+    elif name == "build_module":
+        sources = arguments.get("sources", []) or []
+        target = arguments.get("target", "")
+        out = arguments.get("out", "")
+        if not sources or not target or not out:
+            results.append(mcp_types.TextContent(
+                type="text", text="Error: sources[], target and out are required"))
+        else:
+            res = _build_module(sources, target, out,
+                                backend=arguments.get("backend", "auto"),
+                                includes=arguments.get("includes"),
+                                flags=arguments.get("flags"),
+                                concatenate=arguments.get("concatenate", True))
+            md = [f"# Build — `{Path(out).name}` ({res['backend']}/{target})\n"]
+            if res["ok"]:
+                md.append(f"- result: **OK**, {res['size']:,} bytes")
+                md.append(f"- exported kernel symbols: {len(res['symbols'])}")
+                expected = arguments.get("expected_symbols")
+                if expected:
+                    d = _diff_symbols(res["symbols"], expected)
+                    md.append(f"- present: {len(d['present'])}/{len(expected)}")
+                    if d["missing"]:
+                        md.append(f"- **missing: {', '.join(d['missing'])}**")
+                    others = [s for s in d["unexpected"] if not s.startswith("_Z")]
+                    if others:
+                        md.append(f"- other kernels in module ({len(others)}): "
+                                  f"{', '.join(others[:6])}"
+                                  + (" ..." if len(others) > 6 else ""))
+                    if d["missing"]:
+                        md.append("\nA module that builds but lacks the expected "
+                                  "symbols cannot serve the call that needs them.")
+            else:
+                md.append(f"- result: **FAIL** (rc={res['rc']})")
+                for e in res["errors"][:12]:
+                    md.append(f"- {e}")
+                md.append("\nThe output was deleted before the build, so any artifact "
+                          "now present is from this attempt only.")
+            results.append(mcp_types.TextContent(type="text", text="\n".join(md)))
+            results.append(mcp_types.TextContent(type="text", text=json.dumps(res, indent=2)))
+
+    elif name == "build_porting_map":
+        files = arguments.get("files", []) or []
+        target = arguments.get("target_arch", "")
+        source = arguments.get("source_arch", "auto")
+        fmt = arguments.get("format", "both")
+        if not files or not target:
+            results.append(mcp_types.TextContent(
+                type="text", text="Error: files[] and target_arch are required"))
+        else:
+            m = _build_porting_map(files, source, target)
+            if fmt in ("markdown", "both"):
+                results.append(mcp_types.TextContent(
+                    type="text", text=_render_porting_map(m)))
+            if fmt in ("json", "both"):
+                slim = {k: v for k, v in m.items() if k != "functions"}
+                results.append(mcp_types.TextContent(
+                    type="text", text=json.dumps(slim, indent=2)))
+                results.append(mcp_types.TextContent(
+                    type="text", text=json.dumps(m["functions"], indent=2)))
+
+    elif name == "lookup_construct":
+        r = _lookup_construct(arguments.get("construct", ""),
+                              arguments.get("target_arch", ""))
+        if not r["known"]:
+            results.append(mcp_types.TextContent(
+                type="text",
+                text=(f"`{r['construct']}` is not in the construct table "
+                      f"(family `{r['target_family']}`).\n\n"
+                      "Probe it with `probe_isa` on the target before using it: "
+                      "an unknown construct is an unverified assumption.")))
+        else:
+            results.append(mcp_types.TextContent(
+                type="text",
+                text=(f"# `{r['construct']}` → `{r['target_arch']}` "
+                      f"({r['target_family']})\n\n"
+                      f"- role: {r['role']}\n"
+                      f"- use: **{r['use']}**\n"
+                      f"- fidelity: **{r['grade']}**\n"
+                      + (f"- note: {r['note']}\n" if r.get("note") else ""))))
+
+    elif name == "verify_porting_map":
+        files = arguments.get("files", []) or []
+        target = arguments.get("target_arch", "")
+        if not files or not target:
+            results.append(mcp_types.TextContent(
+                type="text", text="Error: files[] and target_arch are required"))
+        else:
+            m = _build_porting_map(files, arguments.get("source_arch", "auto"), target)
+            cands = _pm_probe_candidates(m["constructs_used"])
+            rows = _probe_many(target, cands, backend=arguments.get("backend", "auto"))
+            probes = {r["candidate"]: r["ok"] for r in rows}
+            v = _verify_porting_map(m, probes)
+            md = [f"# Verified porting map — `{target}`\n",
+                  f"Probed {len(rows)} mapped replacement(s) with the real compiler.\n",
+                  "| construct | replacement encodes |", "|---|---|"]
+            for r in rows:
+                md.append(f"| `{r['candidate']}` | {'**yes**' if r['ok'] else '**NO**'} |")
+            md.append("\n## Grade changes\n")
+            if not v["changes"]:
+                md.append("None — every predicted mapping encoded as expected.")
+            for c in v["changes"]:
+                md.append(f"- `{c['construct']}`: {c['was']} → {c['now']} ({c['reason']})")
+            md.append("\n## Fidelity after verification\n")
+            for g, n in v["fidelity"].items():
+                md.append(f"- {g}: {n}")
+            bad = _pm_unresolved(m)
+            if bad:
+                md.append("\n## Still needs a human\n")
+                md.append("| function | role | fidelity | constructs | file:line |")
+                md.append("|---|---|---|---|---|")
+                for f in bad:
+                    md.append(f"| `{f['name']}` | {f['role']} | **{f['fidelity']}** | "
+                              f"{', '.join(f['constructs']) or '—'} | "
+                              f"`{Path(f['file']).name}:{f['line']}` |")
+            results.append(mcp_types.TextContent(type="text", text="\n".join(md)))
 
     return results
 
