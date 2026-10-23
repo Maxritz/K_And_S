@@ -2146,20 +2146,189 @@ def _infer_project_type(root: Path) -> str:
     return "compute"  # Default fallback
 
 
+def _detect_local_gpu_arch(arch_map: dict) -> str | None:
+    """Dynamically detect the local GPU architecture by querying system tools.
+
+    No hardcoded model→arch mappings. Instead:
+    - NVIDIA: parse compute_cap directly from nvidia-smi (e.g. "8.9" → "sm_89")
+    - AMD/Intel: parse GPU model name from vulkaninfo/hipInfo, then match
+      against the 'name' field in ARCH_MAP entries to find the arch key.
+
+    Returns the arch ID (e.g. 'gfx1201', 'sm_80') or None.
+    """
+    import subprocess
+    import os as _os
+    import re as _re
+
+    entries = arch_map.get("entries", {})
+
+    # 1. NVIDIA: nvidia-smi directly reports compute capability → SM arch
+    try:
+        r = subprocess.run(['nvidia-smi', '--query-gpu=compute_cap',
+                           '--format=csv,noheader'], capture_output=True, text=True, timeout=5)
+        if r.returncode == 0 and r.stdout.strip():
+            cap = r.stdout.strip().split('\n')[0]
+            if _re.match(r'^\d+\.\d+$', cap):
+                major, minor = cap.split('.')
+                return f"sm_{major}{minor}"
+    except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+        pass
+
+    # 2. Cross-platform: try vulkaninfo (detects AMD/NVIDIA/Intel)
+    gpu_model = None
+    for vulkan_cmd in (['vulkaninfo'],):
+        try:
+            r = subprocess.run(vulkan_cmd, capture_output=True, text=True, timeout=10)
+            if r.stdout:
+                output = r.stdout
+                # Parse deviceName from VkPhysicalDeviceProperties
+                for line in output.split('\n'):
+                    if 'deviceName' in line.lower() and '=' in line:
+                        gpu_model = line.split('=')[1].strip()
+                        break
+                    if 'gpu id' in line.lower():
+                        # Format: GPU id = 0 (AMD Radeon RX 9070 XT)
+                        m = _re.search(r'\(([^)]+)\)', line)
+                        if m:
+                            gpu_model = m.group(1).strip()
+                            break
+                break  # Got output, don't try more tools
+        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+            pass
+
+    # 3. AMD on Windows: try hipInfo (pip-installed via PyTorch HIP)
+    if not gpu_model:
+        for tool in ('hipInfo', 'hipinfo'):
+            try:
+                r = subprocess.run([tool], capture_output=True, text=True, timeout=5)
+                if r.stdout:
+                    for line in r.stdout.split('\n'):
+                        if 'Name:' in line:
+                            gpu_model = line.split('Name:')[1].strip()
+                            break
+                    if gpu_model:
+                        break
+            except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+                pass
+
+    # 4. AMD: try rocm-smi (Linux / ROCm env)
+    if not gpu_model:
+        for tool in ('rocm-smi',):
+            try:
+                r = subprocess.run([tool, '--showproductname'], capture_output=True, text=True, timeout=5)
+                if r.stdout:
+                    for line in r.stdout.split('\n'):
+                        if 'Card model' in line or 'Card series' in line:
+                            gpu_model = line.split('=')[1].strip()
+                            break
+            except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+                pass
+
+    # ── Match detected GPU model against ARCH_MAP entries ──────────
+    if gpu_model:
+        gpu_lower = gpu_model.lower()
+        # Collect all matching arches (first series digit match), then pick best
+        amd_matches = []
+        nv_matches = []
+        for arch_id, info in entries.items():
+            name = info.get("name", "").lower()
+            vendor = info.get("vendor", "NVIDIA")
+            # AMD: match by model series pattern (RX 9xxx, RX 7xxx, RX 6xxx, etc.)
+            if vendor == "AMD":
+                model_match = _re.search(r'rx\s*(\d)', gpu_lower)
+                name_match = _re.search(r'rx\s*(\d)', name)
+                if model_match and name_match and model_match.group(1) == name_match.group(1):
+                    gpu_series = _re.search(r'rx\s*(\d{4})', gpu_lower)
+                    name_series = _re.search(r'rx\s*(\d{4})', name)
+                    if gpu_series and name_series and gpu_series.group(1)[:2] == name_series.group(1)[:2]:
+                        # Score: exact model number match > series match > generation match
+                        score = 10
+                        if gpu_series and gpu_series.group(1) in name: score += 100
+                        amd_matches.append((arch_id, score))
+            # NVIDIA: match by model series
+            if vendor == "NVIDIA":
+                nv_match = _re.search(r'rtx\s*(\d)', gpu_lower)
+                nv_name_match = _re.search(r'rtx\s*(\d)', name)
+                if nv_match and nv_name_match and nv_match.group(1) == nv_name_match.group(1):
+                    score = 10
+                    gpu_series = _re.search(r'rtx\s*(\d{4})', gpu_lower)
+                    if gpu_series and gpu_series.group(1) in name: score += 100
+                    nv_matches.append((arch_id, score))
+        # Return highest-scoring match (exact model > series > generation)
+        amd_matches.sort(key=lambda x: x[1], reverse=True)
+        if amd_matches:
+            return amd_matches[0][0]
+        nv_matches.sort(key=lambda x: x[1], reverse=True)
+        if nv_matches:
+            return nv_matches[0][0]
+
+    # ── Fallback: Env var hints (ROCM_PATH, CUDA_PATH) ─────────────
+    rocm_path = _os.environ.get("ROCM_PATH", "")
+    if rocm_path:
+        for a in ('gfx1201','gfx1200','gfx1151','gfx1150','gfx1103','gfx1102','gfx1101','gfx1100','gfx1031','gfx1030','gfx908'):
+            if a in rocm_path:
+                return a
+
+    cuda_path = _os.environ.get("CUDA_PATH", "")
+    if cuda_path:
+        ver_match = _re.search(r'v(\d+)\.(\d+)', cuda_path)
+        if ver_match:
+            major = int(ver_match.group(1))
+            if major >= 13: return 'sm_90'
+            if major >= 12: return 'sm_89'
+            if major >= 11: return 'sm_80'
+            return 'sm_80'
+
+    return None  # Could not detect local GPU
+
+
 def _suggest_target_arch(source_arch: str, arch_map: dict) -> str:
-    """Suggest a target arch based on source vendor and common porting paths."""
+    """Suggest a target arch based on local device detection.
+
+    Priority:
+    1. Detect local GPU via rocm-smi/nvidia-smi (dynamic, no hardcoding)
+    2. Cross-vendor fallback (NVIDIA source → AMD target, and vice versa)
+    """
     entries = arch_map.get("entries", {})
     source_info = entries.get(source_arch, {})
     source_vendor = source_info.get("vendor", "NVIDIA")
 
-    # Cross-vendor suggestions
+    # 1. Try detecting the local GPU
+    local_arch = _detect_local_gpu_arch(arch_map)
+    if local_arch:
+        return local_arch
+
+    # 2. Cross-vendor fallback: pick newest arch from the *other* vendor
+    #    (No hardcoded model names — just iterate ARCH_MAP entries by vendor)
+    vendor_map = {}
+    for arch_id, info in entries.items():
+        vendor = info.get("vendor", "UNKNOWN")
+        # Try to extract a generation ordering from the name field
+        name = info.get("name", "")
+        gen_num = 0
+        for token in name.split():
+            if token.startswith("RDNA"):
+                try: gen_num = int(token[4:])
+                except ValueError: pass
+            elif token.startswith("sm"):
+                try: gen_num = int(token[2:])
+                except ValueError: pass
+            elif token.startswith("gfx"):
+                try: gen_num = int(token[3:])
+                except ValueError: pass
+        vendor_map.setdefault(vendor, []).append((arch_id, gen_num, name))
+
     if source_vendor == "NVIDIA":
-        return "gfx1201"  # RDNA4 (common porting target)
+        # Source is NVIDIA — suggest best AMD arch
+        amd_list = sorted(vendor_map.get("AMD", []), key=lambda x: x[1], reverse=True)
+        if amd_list:
+            return amd_list[0][0]
     elif source_vendor == "AMD":
-        return "sm_89"  # Ada Lovelace
-    elif source_vendor == "Intel":
-        return "gfx1201"
-    return "gfx1201"
+        nv_list = sorted(vendor_map.get("NVIDIA", []), key=lambda x: x[1], reverse=True)
+        if nv_list:
+            return nv_list[0][0]
+
+    return source_arch  # Same vendor as fallback
 
 
 def _infer_target_language(source_files: list, project_type: str) -> str:
@@ -2239,6 +2408,21 @@ async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
     if not target_info:
         return f"Error: target arch '{params.target_arch}' not found in ARCH_MAP.json"
 
+    # ── Scan source for CUDA constructs (from git source, not hardcoded) ──
+    import re as _re
+    _cuda_constructs = {"wmma": False, "mma": False, "nvrtc": False, "cudaGraph": False,
+                        "cudaMallocManaged": False, "__syncthreads": False,
+                        "tensor_core": False}
+    for f in root.rglob("*.cu"):
+        try:
+            _txt = f.read_text(errors="replace")
+            for k in _cuda_constructs:
+                _cuda_constructs[k] = _cuda_constructs[k] or (k in _txt)
+        except Exception:
+            pass
+    _used_constructs = [k for k, v in _cuda_constructs.items() if v]
+    _manual_count = len([c for c in _used_constructs if c in ("wmma", "mma", "tensor_core", "nvrtc", "cudaGraph")])
+
     report = f"""# Autonomous Porting Report
 
 **Date/time:** {now.strftime('%Y-%m-%d %H:%M UTC')}
@@ -2262,13 +2446,12 @@ async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
 - **Repo:** `{params.repo_path.split('/')[-1]}` (cloned at `{params.repo_path}`)
 - **Kernels found:** {len(gpu_kernels)} GPU kernels
 - **Source language:** CUDA C++ (.cu files)
-- **Dependencies:** None (standalone tutorial)
-- **Backend:** CUDA (NVIDIA sm_80)
+- **CUDA constructs used in source:** {', '.join(_used_constructs) if _used_constructs else 'basic element-wise ops'}
+- **Manual constructs (wmma/mma/nvrtc/cudaGraph in code):** {_manual_count}
 
 ### 2. Target Feasibility
-- **Source features:** Simple vector addition (no WMMA, no tensor cores, no graphs)
-- **Risk level:** **LOW** — trivially portable to any backend
-- **Manual constructs:** 0 (no wmma/mma/nvrtc/cudaGraph detected)
+- **Source arch supports:** {', '.join(k for k,v in source_info.items() if v is True and k in ('wmma','tensor_cores','dot4','dot8','bf16_native','fp8_native')) or 'basic compute'}
+- **Source code uses:** {', '.join(_used_constructs) or 'basic element-wise ops'}
 
 ### 3. Should We Port? (Value Check)
 | Question | Answer |
