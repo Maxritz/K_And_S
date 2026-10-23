@@ -1,5 +1,6 @@
 <img width="960" height="410" alt="image" src="https://github.com/user-attachments/assets/8471da74-e628-4a74-b92d-b647e532d95d" />
-# K_and_S
+Kernels & Shaders
+One kernel. Many architectures. Endless debugging.
 
 **K_and_S** (Kernels and Shaders) is an MCP server that helps you port GPU kernels and shaders across different hardware vendors and APIs. Instead of guessing how to translate a CUDA kernel to HIP for AMD, or how to get the best performance out of RDNA on Vulkan, K_and_S gives you the knowledge, patterns, and tools to do it properly.
 
