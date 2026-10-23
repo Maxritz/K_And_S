@@ -566,7 +566,47 @@ fp8), the operand width is a **design constraint, not an implementation detail**
 
 ---
 
-## 14. Tooling that enforces this
+## 14. Get target facts from the vendor's source tree, not only the vendor's manual
+
+Manuals and capability tables are the weakest sources; the compiler's own tests and the
+vendor's tuned kernels are the strongest. Ranked by what actually settled questions:
+
+1. **The compiler's test suite and intrinsic table.** A builtin's exact signature is stated
+   in the compiler's generated builtin table and, better, exercised in a test that calls it.
+   Here the manual implied one operand shape for the 4-bit matrix op; the compiler's own
+   test showed the 16-deep form takes a **scalar** operand while the 32-deep form and the
+   8-bit form take a **2-wide vector**, each with a leading sign flag and a trailing clamp
+   flag. A probe compiled against the wrong shape reports the whole instruction family as
+   unavailable, which is a false negative that costs days.
+2. **The backend's code-generation tests.** These pin the emitted instruction and its
+   register operands: the accumulator is always eight registers, and the operand width
+   differs per variant (one register for the 16-deep 4-bit form, two for the 32-deep form
+   and for the 8-bit form). That plus the modifier syntax is the difference between a
+   kernel that encodes and one that silently computes nonsense.
+3. **The vendor's own higher-level library wrappers.** The vendor's matrix-op header in its
+   kernel library shows the call as the vendor writes it, including which sign flags are
+   set for integer data and how the packed 4-bit type is bit-cast into the builtin.
+4. **The vendor's tuned kernel definitions.** These are the only source that says which
+   shapes actually win in practice. A census over the whole tuned set for the target told
+   us that every tuned GEMM used the 16-deep matrix instruction with a 128x128 tile and a
+   K depth of 32 or 64, and that the set contained **no 4-bit kernel at all**, so there was
+   nothing to copy for this job. A census beats any single example.
+5. **The tuned device code itself.** Modern ROCm ships per-architecture device code in
+   packed archives that can be unpacked and disassembled. One real inner loop showed the
+   operand marshalling (a byte-swizzle permute plus a half-word shared-memory load), the
+   pipeline waits, and that the compiler emits dual-issued instruction pairs there. That is
+   executable ground truth, and it is the same tier as the device artifact rule in
+   section 7: the binary is the specification.
+6. **The manual** for rules that no code states explicitly, such as the pipeline spacing
+   between matrix ops and the load-with-transpose operations, while distrusting its tables.
+   This one was mangled badly enough that a layout read straight from it would have been
+   wrong.
+
+Corollary: an instruction that a manual lists but a compiler rejects is usually a spelling
+or signature problem, not a missing instruction. Check the compiler's table before
+concluding that a feature is absent.
+
+## 15. Tooling that enforces this
 
 Available in this MCP:
 
