@@ -3720,6 +3720,7 @@ gh pr view --web
         arch_map = _load_json(_ARCH_MAP_PATH)
         idea = params.common_idea.lower()
         arch_id = params.arch
+        now = datetime.now(timezone.utc)
 
         report = "# Reject Common Pattern\\n\\n"
         report += f"**Examining:** \"{params.common_idea}\"\\n"
@@ -3797,6 +3798,7 @@ gh pr view --web
         arch_map = _load_json(_ARCH_MAP_PATH)
         arch_info = arch_map.get("entries", {}).get(params.arch, {})
         vendor = arch_info.get("vendor", "unknown")
+        now = datetime.now(timezone.utc)
 
         report = "# Radical Experiment Plan\\n\\n"
         report += f"**Arch:** `{params.arch}` ({arch_info.get('name', 'unknown')})\\n"
