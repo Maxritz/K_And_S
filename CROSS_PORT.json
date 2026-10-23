@@ -1,0 +1,236 @@
+{
+  "description": "Cross-language porting matrix for GPU compute engines. Maps constructs, types, memory patterns, and ABI boundaries between C++, Python, Rust, and other languages.",
+
+  "languages": {
+
+    "cpp": {
+      "name": "C++20",
+      "compiler": ["MSVC cl.exe", "GCC g++", "Clang clang++", "NVCC nvcc", "HIPPED hipcc"],
+      "gpu_backends": ["CUDA (.cu)", "HIP (.cu/.hip)", "Vulkan SPIR-V (.comp)", "Metal (.metal)", "OpenCL (.cl)", "oneAPI/SYCL (.cpp)"],
+      "numeric_types": {
+        "f16": "half (CUDA/HIP), _Float16 (C23), std::float16_t (C++23)",
+        "bf16": "__nv_bfloat16 (CUDA), __hip_bfloat16 (HIP), std::bfloat16_t (C++23) — NO native on RDNA2, EMULATE on gfx1030",
+        "fp8": "__nv_fp8 (CUDA 11.8+) — NVIDIA only, no AMD equivalent",
+        "f32": "float (IEEE 754 binary32)",
+        "f64": "double (IEEE 754 binary64)",
+        "i8": "int8_t",
+        "i32": "int32_t",
+        "i64": "int64_t",
+        "bool": "bool"
+      },
+      "memory": {
+        "cuda_malloc": "cudaMalloc / cudaMallocManaged (managed memory)",
+        "cuda_free": "cudaFree / cudaFreeAsync (stream-ordered)",
+        "cuda_memcpy": "cudaMemcpy / cudaMemcpyAsync",
+        "hip_malloc": "hipMalloc / hipMallocManaged",
+        "hip_free": "hipFree",
+        "hip_memcpy": "hipMemcpy / hipMemcpyAsync",
+        "host_malloc": "cudaHostAlloc (pinned) / hipHostMalloc",
+        "mmap": "VirtualAlloc (Windows) / mmap(MAP_SHARED) (Linux)",
+        "file_mapping": "CreateFileMapping (Windows) / mmap(mmap) (Linux)"
+      },
+      "kernel_dispatch": {
+        "cuda_launch": "kernel<<<grid, block, shared_mem, stream>>>(args)",
+        "hip_launch": "hipLaunchKernelGGL(kernel, grid, block, shared_mem, stream, args)",
+        "cuda_graph": "cudaGraphInstantiate / cudaGraphLaunch (Phase 2 in Maya)",
+        "hip_graph": "hipGraphInstantiate / hipGraphLaunch"
+      },
+      "abi_boundary": "extern \"C\" — no name mangling, C calling convention. Use for Python ctypes / Rust FFI.",
+      "strict_notes": "All GPU kernels compile as CUDA or HIP language. C++ host code uses MSVC or GCC/Clang. Must use --fmad=false / -ffp-contract=off for bit-exact parity. Windows needs Windows SDK paths."
+    },
+
+    "python": {
+      "name": "Python 3.10+",
+      "compiler": ["CPython", "PyPy (JIT)"],
+      "gpu_backends": ["PyCUDA", "PyTorch tensors", "Numpy", "CuPy", "Numba CUDA", "OpenVINO"],
+      "numeric_types": {
+        "f16": "numpy.float16 — NOTE: no arithmetic, must cast to f32",
+        "bf16": "ml_dtypes.bfloat16 — third-party, no native numpy support",
+        "fp8": "ml_dtypes.float8_e4m3fn / float8_e5m2",
+        "f32": "float (Python) / numpy.float32",
+        "f64": "float (Python) / numpy.float64",
+        "i8": "numpy.int8",
+        "i32": "int (Python) / numpy.int32",
+        "i64": "int (Python, arbitrary precision) / numpy.int64",
+        "bool": "bool"
+      },
+      "memory": {
+        "cuda_malloc": "pycuda.driver.mem_alloc / cupy.ndarray",
+        "cuda_free": "obj.gpudata.free() / cupy.ndarray goes out of scope",
+        "cuda_memcpy": "pycuda.driver.memcpy_htod / dtod / dtoh",
+        "managed_memory": "pycuda.driver.managed_allocator / cupy.asarray",
+        "mmap": "mmap.mmap() — cross-platform"
+      },
+      "kernel_dispatch": {
+        "pycuda": "mod.__getattr__(name)(block, grid, stream)(*args)",
+        "pycuda_graph": "pycuda.driver.Graph + GraphExec",
+        "numba_cuda": "@cuda.jit kernel[grid, block, stream](args)",
+        "cupy_raw": "cupy.RawKernel(kernel_code, name)(grid, block, args)",
+        "torch_custom_op": "torch.autograd.Function — registers C++ backend via pybind11"
+      },
+      "abi_boundary": "ctypes — load C++ shared library, call extern \"C\" functions. Or pybind11 for richer bindings.",
+      "strict_notes": "Python floats are f64 by default — MUST cast to f32 for parity. No control over FMA contraction (must use numpy.seterr + careful). No GPU memory management API — relies on GC or explicit free().",
+
+      "porting_from_cpp": {
+        "cuda_malloc": "Use pycuda.driver.mem_alloc(N) or cupy.ndarray(shape, dtype)",
+        "cuda_free": "Call .gpudata.free() explicitly, or let GC handle it",
+        "cuda_memcpy_htod": "pycuda.driver.memcpy_htod(gpu_buf, host_array)",
+        "cuda_memcpy_dtoh": "pycuda.driver.memcpy_dtoh(host_array, gpu_buf)",
+        "cuda_stream_create": "pycuda.driver.Stream()",
+        "cuda_event_create": "pycuda.driver.Event()",
+        "cuda_event_elapsed": "event.elapsed_time(start, end) — returns ms",
+        "cuda_kernel_launch": "kernel_func = mod.get_function('name'); kernel_func(args, block=(x,y,z), grid=(x,y,z), stream=stream)",
+        "cuda_graph": "Not directly supported — use pycuda.driver.Graph (limited)",
+        "cuda_set_device": "pycuda.driver.device(dev_id).make_context()",
+        "extern_C": "Load .dll/.so via ctypes.CDLL — bind extern \"C\" function name"
+      },
+
+      "porting_to_cpp": {
+        "tensor_ops": "Use ggml/s2_gemv kernels directly — no numpy equivalent",
+        "managed_memory": "cudaMallocManaged — but note: on AMD, hipMallocManaged may fall back to staging",
+        "autograd": "Must implement backward pass manually in C++ kernels",
+        "dtype": "Python float → C++ float (f32). Python int → C++ int64_t. numpy types map to C++ int types via ctypes",
+        "framework_extraction": "To port Python/Torch/Triton kernels to standalone C++ without Torch runtime: 1) Use `triton.compile()` to get PTX/AMDGCN binary. 2) Disassemble to LLVM IR. 3) Extract kernel body as CUDA/HIP C++ intrinsics. 4) Wrap in extern \"C\" for C++ linkage. 5) Link against raw CUDA/HIP runtime (no Python deps)."
+      },
+
+      "framework_extraction": {
+        "torch_to_cpp": {
+          "description": "Extract CUDA/HIP kernels from PyTorch/TorchInductor generated code",
+          "steps": [
+            "Run `torch.compile(..., mode='reduce-overhead')` to generate Triton/CUDA kernels",
+            "Find generated kernels in `~/.triton/cache/` or `/tmp/tmp*/`",
+            "Extract kernel body → write as standalone .cu/.hip file",
+            "Replace torch.tensor args with raw float*/void* pointers",
+            "Replace torch.cuda.Stream with cudaStream_t / hipStream_t",
+            "Compile standalone with nvcc/hipcc — no torch dependency"
+          ],
+          "gotchas": [
+            "torch.compile inserts CUDA graphs for some kernels — extract individual kernels",
+            "Generated Triton code uses tl.* — map to CUDA intrinsics manually",
+            "Autograd backward must be re-implemented as separate kernel"
+          ]
+        },
+        "triton_to_hip_cpp": {
+          "description": "Extract standalone HIP C++ from Triton kernels",
+          "steps": [
+            "Compile Triton kernel: `triton.compile(fn, target=GPUTarget('hip', 'gfx1201', 64))`",
+            "Inspect generated AMDGCN assembly: `llvm-objdump -d kernel.hsaco`",
+            "Map AMDGCN instructions to HIP intrinsics (v_mad_mix_f32 → __builtin_amdgcn_fma_mix_f32, etc.)",
+            "Create standalone .cpp file with `__global__` kernels using HIP intrinsics",
+            "Compile with `hipcc --offload-arch=gfx1201 -O3 standalone.cpp -o libkernel.so`"
+          ],
+          "tools": ["triton-opt", "llvm-objdump", "roc-clang"],
+          "note": "Triton→HIP via upstream `third_party/amd` backend (2025+). See triton-lang/triton/issues for coverage."
+        }
+      }
+    },
+
+    "rust": {
+      "name": "Rust 1.80+",
+      "compiler": ["rustc", "cargo"],
+      "gpu_backends": ["rust-cuda (.cu→.ptx)", "cuda-runtime-sys (FFI)", "vulkano (Vulkan compute)", "wgpu (GPU compute)", "opencl (ocl)"],
+      "numeric_types": {
+        "f16": "half::f16 (third-party crate)",
+        "bf16": "bfloat16 (third-party crate, no native support)",
+        "fp8": "No standard crate — use raw u8 + manual bit manipulation",
+        "f32": "f32 (native)",
+        "f64": "f64 (native)",
+        "i8": "i8",
+        "i32": "i32",
+        "i64": "i64",
+        "bool": "bool"
+      },
+      "memory": {
+        "cuda_malloc": "cuda_runtime::malloc or cuda::memory::Global",
+        "cuda_free": "drop(global) or cuda_runtime::free",
+        "cuda_memcpy": "cuda_runtime::memcpy or global.copy_to(HostSlice)",
+        "managed_memory": "cuda_runtime::memory::Managed"
+      },
+      "kernel_dispatch": {
+        "rust_cuda": "ptx crate + #[kernel] / launch!(kernel, grid, block, args)",
+        "cuda_ffi": "cuda_runtime_sys::cudaLaunchKernel(config, args_ptr)",
+        "vulkano": "command_buffer.dispatch(&pipeline, &descriptor_set)"
+      },
+      "abi_boundary": "extern \"C\" block — declare extern functions from C++/.dll/.so. Use bindgen to auto-generate bindings.",
+      "strict_notes": "No official ROCm/HIP bindings — must use FFI or write custom HIP shim. rust-cuda targets NVIDIA only (PTX path). For AMD, link against libhip and call hip* FFI functions.",
+
+      "porting_from_cpp": {
+        "cuda_malloc": "cuda_runtime::memory::Global::new(N) or cuda_runtime::malloc(N) — returns DevicePointer",
+        "cuda_free": "implicit via Drop, or cuda_runtime::free(ptr)",
+        "cuda_memcpy_htod": "device_buffer.copy_from(&host_slice) or cudaMemcpyHostToDevice via FFI",
+        "cuda_memcpy_dtoh": "host_buffer.copy_from(&device_slice) or cudaMemcpyDeviceToHost",
+        "cuda_stream_create": "cuda_runtime::stream::Stream::new()",
+        "cuda_event_create": "cuda_runtime::event::Event::new()",
+        "cuda_kernel_launch": "kernel.launch(grid, block, shared_mem, stream)(args) — via cuda-runtime-sys FFI",
+        "extern_C_to_Rust": "extern \"C\" { fn cudaMalloc(...); } — wrap in safe Rust types",
+        "struct_layout": "repr(C) on structs passed to GPU kernels — must match C++ layout"
+      },
+
+      "porting_to_cpp": {
+        "ownership": "Rust owns its memory; map to C++ via RAII or explicit free",
+        "error_handling": "Rust Result<T> → C++ optional<T> or expected<T, E> (C++23)",
+        "lifetimes": "No equivalent in C++ — must document ownership rules in comments",
+        "zero_cost_abstraction": "Rust iterators → C++ templates; verify compiler inlines"
+      }
+    },
+
+    "cuda_pty": {
+      "name": "PTX (virtual ISA)",
+      "compiler": "nvcc --ptx or ptxas",
+      "description": "Virtual assembly. Stable across NVIDIA GPU generations. JIT-compiled to native SASS by the driver.",
+      "porting_notes": "PTX is the most portable target on NVIDIA — emit PTX instead of cubin for forward-compatibility. --ptxas-options=-v shows register usage."
+    },
+
+    "hip_isa": {
+      "name": "HIP (AMD/NVIDIA)",
+      "compiler": "hipcc / clang++ --target=hip",
+      "description": "Single-source C++ for AMD and NVIDIA. Uses ROCm for AMD, can target NVIDIA via hipNVCC backend.",
+      "porting_notes": "HIP headers via hip_compat/ shim. __HIP__ macro selects HIP paths. roc-clang generates code objects for gfx targets."
+    },
+
+    "spirv": {
+      "name": "SPIR-V (Vulkan/OpenCL)",
+      "compiler": "glslangValidator (GLSL→SPIR-V), SPIRV-Reflect (introspection)",
+      "description": "Standard intermediate representation for Vulkan and OpenCL. Cross-vendor.",
+      "porting_notes": "No compute engine currently uses Vulkan (Maya is CUDA/HIP only), but SPIR-V is the portable option for multi-vendor GPU compute. Requires Vulkan loader + driver."
+    }
+  },
+
+  "cross_port_matrix": {
+    "description": "Quick reference: how to translate between language constructs",
+
+    "C++": {
+      "to_Python": "Use ctypes to call extern \"C\" functions. Use pycuda for GPU kernels. Cast numpy arrays to raw pointers via .ctypes.",
+      "to_Rust": "Keep extern \"C\" interface, use bindgen to generate Rust FFI. Wrap in safe Rust types."
+    },
+
+    "Python": {
+      "to_C++": "Use pybind11 to embed Python in C++, or rewrite kernels as extern \"C\" and call via ctypes.",
+      "to_Rust": "Use pyo3 for Rust extension modules, or rewrite as Rust binary calling CUDA FFI."
+    },
+
+    "Rust": {
+      "to_C++": "extern \"C\" interface. Use #[no_mangle] on export functions.",
+      "to_Python": "Use pyo3/maturin for Python extension, or call Python via PyO3."
+    }
+  },
+
+  "porting_checklist_template": {
+    "strict": [
+      "1. Map all numeric types (f32/f16/bf16/fp8/i8) — verify no precision loss",
+      "2. Map memory management (malloc/free ↔ RAII ↔ GC ↔ ownership)",
+      "3. Map kernel dispatch (<<<>>> ↔ numba @cuda.jit ↔ launch!)",
+      "4. Verify ABI boundary — extern \"C\" must match name mangling",
+      "5. Verify struct layout — repr(C) in Rust, #pragma pack in C++",
+      "6. Map FMA contraction behavior — Rust f32::mul_add vs C++ fma() vs numpy default",
+      "7. Map rounding mode — nearest-even is default, but CUDA has __fmul_rn",
+      "8. Verify parity test passes before performance work"
+    ],
+    "loose": [
+      "1. Verify types map (f32 → f32, f16 → float16, etc.)",
+      "2. Verify memory management strategy matches (manual ↔ GC ↔ Drop)",
+      "3. Add TODO(kands:strict-review) for uncertain paths",
+      "4. Get it running, optimize later"
+    ]
+  }
+}

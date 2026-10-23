@@ -1,0 +1,366 @@
+{
+  "description": "GPU architecture capability matrix.  Each entry is the MINIMUM set of features a GPU must have for an engine's kernels to compile (or to dispatch correctly).  Used to decide which arch-specific code paths to add.",
+  "fields": {
+    "name":       "Human-readable GPU name",
+    "vendor":     "NVIDIA|AMD|Intel|Apple",
+    "vendor_id":  "gfx1030|sm_80|adln_g|apple_m2",
+    "wave_size":  "Wavefront/warp size in threads (32 for NVIDIA/curry, 32/64 for AMD RDNA/CDNA, 32 for Intel)",
+    "lds_kib":    "Local data share / shared memory per CU in KiB",
+    "tensor_cores": "bool: does this arch have tensor cores/MMA units",
+    "wmma":       "bool: does this arch support Wave Matrix Multiply-Accumulate",
+    "dot4":       "bool: does this arch have native int8 dot-product instruction",
+    "dot8":       "bool: does this arch have native int8 dot-product-8 instruction",
+    "bf16_native": "bool: native bf16 math (no emulation)",
+    "fp8_native":  "bool: native FP8 format support",
+    "known_issues": ["array of strings"]
+  },
+
+  "entries": {
+
+    "sm_75": {
+      "name": "Turing (RTX 20 series)",
+      "vendor": "NVIDIA",
+      "vendor_id": "sm_75",
+      "wave_size": 32,
+      "lds_kib": 64,
+      "tensor_cores": true,
+      "wmma": true,
+      "dot4": true,
+      "dot8": false,
+      "bf16_native": false,
+      "fp8_native": false,
+      "known_issues": ["tf32 MMA falls back to fp32 FMA; no bf16 compute"],
+      "isa_docs": "https://docs.nvidia.com/cuda/parallel-thread-execution/",
+      "isa_disassembler": "nvdisasm (bundled with CUDA toolkit)"
+    },
+
+    "sm_80": {
+      "name": "Ampere (RTX 30 series)",
+      "vendor": "NVIDIA",
+      "vendor_id": "sm_80",
+      "wave_size": 32,
+      "lds_kib": 164,
+      "tensor_cores": true,
+      "wmma": true,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": false,
+      "known_issues": [],
+      "isa_docs": "https://docs.nvidia.com/cuda/parallel-thread-execution/",
+      "isa_disassembler": "nvdisasm (bundled with CUDA toolkit)"
+    },
+
+    "sm_86": {
+      "name": "Ampere mobile (RTX 30 series low-power)",
+      "vendor": "NVIDIA",
+      "vendor_id": "sm_86",
+      "wave_size": 32,
+      "lds_kib": 164,
+      "tensor_cores": true,
+      "wmma": true,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": false,
+      "known_issues": []
+    },
+
+    "sm_89": {
+      "name": "Ada Lovelace (RTX 40 series)",
+      "vendor": "NVIDIA",
+      "vendor_id": "sm_89",
+      "wave_size": 128,
+      "lds_kib": 164,
+      "tensor_cores": true,
+      "wmma": true,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": false,
+      "known_issues": [],
+      "isa_docs": "https://docs.nvidia.com/cuda/parallel-thread-execution/",
+      "isa_disassembler": "nvdisasm (bundled with CUDA toolkit)"
+    },
+
+    "sm_120": {
+      "name": "Turing-next (RTX 50 series)",
+      "vendor": "NVIDIA",
+      "vendor_id": "sm_120",
+      "wave_size": 128,
+      "lds_kib": 164,
+      "tensor_cores": true,
+      "wmma": true,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": true,
+      "known_issues": [],
+      "isa_docs": "https://docs.nvidia.com/cuda/parallel-thread-execution/",
+      "isa_disassembler": "nvdisasm (bundled with CUDA toolkit)"
+    },
+
+    "gfx1030": {
+      "name": "RDNA2 (RX 6800/6900, Radeon PRO W6800)",
+      "vendor": "AMD",
+      "vendor_id": "gfx1030",
+      "wave_size": 32,
+      "lds_kib": 64,
+      "tensor_cores": false,
+      "wmma": false,
+      "dot4": true,
+      "dot8": false,
+      "bf16_native": false,
+      "fp8_native": false,
+      "known_issues": ["no rocWMMA in ROCm 7+; older dot4 (v_dot4_i32_i8) in hip_compat/intrinsics.hpp; falls back to F32 attention; Vulkan GL_KHR_cooperative_matrix broken on AMD drivers — use DP4a instead"],
+      "vulkan": {
+        "cooperative_matrix": false,
+        "dp4a_alternative": "GL_KHR_shader_integer_dot_product (spv_dp4) for matmul",
+        "notes": "AMD Vulkan drivers do not support GL_KHR_cooperative_matrix. Matmul must use DP4a-style SPIR-V instructions instead."
+      },
+      "isa_docs": "https://gpuopen.com/machine-readable-isa/",
+      "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
+    },
+
+    "gfx1100": {
+      "name": "RDNA3 (RX 7900 XT/XTX, Radeon PRO)",
+      "vendor": "AMD",
+      "vendor_id": "gfx1100",
+      "wave_size": 32,
+      "lds_kib": 64,
+      "tensor_cores": false,
+      "wmma": true,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": false,
+      "known_issues": ["rocWMMA required for WMMA path; community-validated; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"],
+      "vulkan": {
+        "cooperative_matrix": true,
+        "dp4a_alternative": "Available as fallback for matmul",
+        "notes": "rocWMMA provides WMMA-like ops for HIP/CUDA. Vulkan path uses DP4a."
+      },
+      "isa_docs": "https://gpuopen.com/machine-readable-isa/",
+      "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
+    },
+
+    "gfx1101": {
+      "name": "RDNA3 (RX 7800 XT)",
+      "vendor": "AMD",
+      "vendor_id": "gfx1101",
+      "wave_size": 32,
+      "lds_kib": 64,
+      "tensor_cores": false,
+      "wmma": true,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": false,
+      "known_issues": ["community-validated; same as gfx1100; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"],
+      "vulkan": {
+        "cooperative_matrix": true,
+        "dp4a_alternative": "Available as fallback",
+        "notes": "Same as gfx1100; Vulkan CM working but unverified. Prefer DP4a for production."
+      }
+    },
+
+    "gfx1102": {
+      "name": "RDNA3 (RX 7600)",
+      "vendor": "AMD",
+      "vendor_id": "gfx1102",
+      "wave_size": 32,
+      "lds_kib": 64,
+      "tensor_cores": false,
+      "wmma": false,
+      "dot4": true,
+      "dot8": false,
+      "bf16_native": false,
+      "fp8_native": false,
+      "known_issues": ["no WMMA; experimental; portable kernels only; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"],
+      "vulkan": {
+        "cooperative_matrix": false,
+        "dp4a_alternative": "GL_KHR_shader_integer_dot_product (spv_dp4)",
+        "notes": "No WMMA support. Vulkan matmul must use DP4a-style SPIR-V instructions."
+      },
+      "isa_docs": "https://gpuopen.com/machine-readable-isa/",
+      "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
+    },
+
+    "gfx1103": {
+      "name": "RDNA3 (Radeon 780M iGPU)",
+      "vendor": "AMD",
+      "vendor_id": "gfx1103",
+      "wave_size": 32,
+      "lds_kib": 64,
+      "tensor_cores": false,
+      "wmma": false,
+      "dot4": true,
+      "dot8": false,
+      "bf16_native": false,
+      "fp8_native": false,
+      "known_issues": ["iGPU; no WMMA; opt-in portable kernels only"]
+    },
+
+    "gfx1150": {
+      "name": "RDNA3.5 (Strix Halo / Gorgon Halo, Radeon 8060S)",
+      "vendor": "AMD",
+      "vendor_id": "gfx1150",
+      "wave_size": 32,
+      "lds_kib": 64,
+      "tensor_cores": false,
+      "wmma": true,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": false,
+      "known_issues": ["unified memory APU; experimental; code same as gfx1100"]
+    },
+
+    "gfx1151": {
+      "name": "RDNA3.5 (Ryzen AI Max / Strix Halo)",
+      "vendor": "AMD",
+      "vendor_id": "gfx1151",
+      "wave_size": 32,
+      "lds_kib": 64,
+      "tensor_cores": false,
+      "wmma": true,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": false,
+      "known_issues": ["unified memory; experimental; code same as gfx1100; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"],
+      "vulkan": {
+        "cooperative_matrix": true,
+        "dp4a_alternative": "Available as fallback",
+        "notes": "Unified memory APU; same as gfx1100 Vulkan caveats."
+      }
+    },
+
+    "gfx1200": {
+      "name": "RDNA4 (RX 9060 XT)",
+      "vendor": "AMD",
+      "vendor_id": "gfx1200",
+      "wave_size": 32,
+      "lds_kib": 128,
+      "tensor_cores": false,
+      "wmma": false,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": false,
+      "known_issues": ["community-validated; no rocWMMA; portable kernels; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"],
+      "vulkan": {
+        "cooperative_matrix": false,
+        "dp4a_alternative": "GL_KHR_shader_integer_dot_product (spv_dp4)",
+        "notes": "No WMMA support. Vulkan matmul must use DP4a-style SPIR-V instructions."
+      }
+    },
+
+    "gfx1201": {
+      "name": "RDNA4 (RX 9070 / 9070 XT / AI PRO R9700)",
+      "vendor": "AMD",
+      "vendor_id": "gfx1201",
+      "wave_size": 32,
+      "lds_kib": 128,
+      "tensor_cores": false,
+      "wmma": false,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": false,
+      "known_issues": ["no rocWMMA; builds validated; gfx1201 hipBLASLt table needed; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"],
+      "vulkan": {
+        "cooperative_matrix": false,
+        "dp4a_alternative": "GL_KHR_shader_integer_dot_product (spv_dp4)",
+        "notes": "No WMMA/rocWMMA. Vulkan matmul must use DP4a-style SPIR-V."
+      },
+      "isa_docs": "https://gpuopen.com/machine-readable-isa/",
+      "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
+    },
+
+    "gfx908": {
+      "name": "CDNA1 (AMD Instinct MI100)",
+      "vendor": "AMD",
+      "vendor_id": "gfx908",
+      "wave_size": 64,
+      "lds_kib": 128,
+      "tensor_cores": false,
+      "wmma": true,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": false,
+      "known_issues": ["wave64 → logical-32 half-wavefront compat layer in hip_compat/intrinsics.hpp; experimental; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"],
+      "vulkan": {
+        "cooperative_matrix": true,
+        "dp4a_alternative": "Available as fallback",
+        "notes": "CDNA1 uses wave64 mode. Vulkan support via radv/AMDVLK; CM unverified, use DP4a."
+      },
+      "isa_docs": "https://gpuopen.com/machine-readable-isa/",
+      "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
+    },
+
+    "gen12_lp": {
+      "name": "Intel Arc A-Series (GEN12+)",
+      "vendor": "Intel",
+      "vendor_id": "gen12_lp",
+      "wave_size": 8,
+      "lds_kib": 64,
+      "tensor_cores": false,
+      "wmma": true,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": false,
+      "known_issues": ["EU subgroups of 8/16/32; DPAS matrix instruction; no rocWMMA equivalent; uses IGA for disassembly"],
+      "isa_docs": "https://intel.github.io/pisa/",
+      "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)"
+    },
+
+    "gen12_hp": {
+      "name": "Intel Data Center Flex (GEN12 HPC)",
+      "vendor": "Intel",
+      "vendor_id": "gen12_hp",
+      "wave_size": 8,
+      "lds_kib": 64,
+      "tensor_cores": false,
+      "wmma": true,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": false,
+      "known_issues": ["Same as gen12_lp; uses DPAS for matrix ops"],
+      "isa_docs": "https://intel.github.io/pisa/",
+      "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)"
+    },
+
+    "meteor_lake": {
+      "name": "Intel Core Ultra (Meteor Lake) iGPU",
+      "vendor": "Intel",
+      "vendor_id": "meteor_lake",
+      "wave_size": 16,
+      "lds_kib": 128,
+      "tensor_cores": false,
+      "wmma": false,
+      "dot4": true,
+      "dot8": false,
+      "bf16_native": true,
+      "fp8_native": false,
+      "compute_units": 8,
+      "eu_count": 128,
+      "known_issues": [
+        "Integrated GPU shares system memory bandwidth",
+        "No dedicated VRAM — performance depends on DDR5 speed",
+        "Vulkan CooperativeMatrix extension requires Mesa 24.3+",
+        "Use DPAS for matrix ops via oneAPI DPC++ (SYCL)",
+        "Power/thermal constraints on laptop APUs"
+      ],
+      "perf_limits": {
+        "max_package_watts": 28,
+        "sustained_perf_factor": 0.7
+      },
+      "isa_docs": "https://intel.github.io/pisa/",
+      "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)"
+    }
+  }
+}

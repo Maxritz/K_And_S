@@ -1,0 +1,530 @@
+{
+  "description": "Theoretical performance estimates and web-search references for GPU compute workloads. Used by estimate_performance() and search_benchmarks() tools.",
+  "last_updated": "2026-10-23T00:00:00Z",
+
+  "hardware_theoretical": {
+    "description": "Theoretical peak performance per architecture for common LLM workloads. Derived from vendor specs (CU count × clock × ops/cycle).",
+    "notes": "Real-world performance is 10-50% of theoretical due to memory bandwidth limits. Use as a ceiling estimate, not a target.",
+
+    "sm_75": {
+      "name": "Turing (RTX 2080 Ti class)",
+      "vendor": "NVIDIA",
+      "compute_units": 68,
+      "base_clock_mhz": 1350,
+      "boost_clock_mhz": 1635,
+      "fp32_peak_gflops": 13.4,
+      "fp16_peak_gflops": 26.9,
+      "tensor_core_peak_tflops": 265,
+      "memory_bandwidth_gb_s": 616,
+      "l2_cache_mb": 6,
+      "workload_estimates": {
+        "fp32_gemm_4096": "12.8 GFLOPS (88% efficiency at 1M params)",
+        "fp16_gemm_4096": "25.8 GFLOPS (96% efficiency at 1M params)",
+        "flash_attn_4096": "6.2 ms/token (memory-bound)",
+        "q4_0_dequant": "380 GB/s effective (64% of peak bandwidth)"
+      }
+    },
+
+    "sm_80": {
+      "name": "Ampere (RTX 3090 class)",
+      "vendor": "NVIDIA",
+      "compute_units": 82,
+      "base_clock_mhz": 1400,
+      "boost_clock_mhz": 1700,
+      "fp32_peak_gflops": 35.6,
+      "fp16_peak_gflops": 71.2,
+      "tensor_core_peak_tflops": 142,
+      "memory_bandwidth_gb_s": 1008,
+      "l2_cache_mb": 40,
+      "workload_estimates": {
+        "fp32_gemm_4096": "34.1 GFLOPS (96% efficiency at 1M params)",
+        "fp16_gemm_4096": "68.7 GFLOPS (96% efficiency, tc=1.5)",
+        "flash_attn_4096": "2.8 ms/token (tensor core path)",
+        "q4_0_dequant": "950 GB/s effective (94% of peak bandwidth)"
+      }
+    },
+
+    "gfx908": {
+      "name": "CDNA1 (MI100)",
+      "vendor": "AMD",
+      "compute_units": 120,
+      "base_clock_mhz": 1535,
+      "fp32_peak_gflops": 29.9,
+      "fp16_peak_gflops": 119.6,
+      "matrix_core_peak_tflops": 239.3,
+      "memory_bandwidth_gb_s": 1277,
+      "l2_cache_mb": 128,
+      "workload_estimates": {
+        "fp32_gemm_4096": "28.4 GFLOPS (95% efficiency at 1M params)",
+        "fp16_gemm_4096": "113.2 GFLOOPS (95% efficiency via matrix cores)",
+        "flash_attn_4096": "4.4 ms/token",
+        "dot4_dequant": "1100 GB/s effective (86% of peak)"
+      }
+    },
+
+    "gfx1030": {
+      "name": "RDNA2 (RX 6900 XT class)",
+      "vendor": "AMD",
+      "compute_units": 80,
+      "base_clock_mhz": 1825,
+      "boost_clock_mhz": 2250,
+      "fp32_peak_gflops": 16.2,
+      "fp16_peak_gflops": 32.4,
+      "tensor_cores": false,
+      "matrix_core_peak_tflops": null,
+      "memory_bandwidth_gb_s": 960,
+      "l2_cache_mb": 4,
+      "workload_estimates": {
+        "fp32_gemm_4096": "15.4 GFLOPS (95% efficiency at 1M params)",
+        "fp16_gemm_4096": "30.8 GFLOPS (95% efficiency via f16 instructions)",
+        "flash_attn_4096": "8.3 ms/token (F32 fallback, no WMMA)",
+        "dot4_i8_dequant": "880 GB/s effective (92% of peak)",
+        "bf16_fallback": "F32 path: 1.5x slower than bf16-native"
+      },
+      "known_bottlenecks": [
+        "No WMMA/rocWMMA → attention uses slow F32 path",
+        "Older dot4 (v_dot4_i32_i8) ~30% slower than RDNA3 packed dot4",
+        "LDS only 64KiB → shared memory limited"
+      ]
+    },
+
+    "gfx1100": {
+      "name": "RDNA3 (RX 7900 XTX class)",
+      "vendor": "AMD",
+      "compute_units": 96,
+      "base_clock_mhz": 1855,
+      "boost_clock_mhz": 2500,
+      "fp32_peak_gflops": 17.7,
+      "fp16_peak_gflops": 35.4,
+      "wmma_peak_tflops": 70.8,
+      "memory_bandwidth_gb_s": 960,
+      "l2_cache_mb": 96,
+      "workload_estimates": {
+        "fp32_gemm_4096": "16.8 GFLOPS (95% efficiency)",
+        "fp16_gemm_4096": "33.6 GFLOPS (95% efficiency)",
+        "wmma_gemm": "67.2 GFLOPS (95% efficiency via rocWMMA)",
+        "flash_attn_4096": "3.1 ms/token (WMMA path)",
+        "dot4_i8_dequant": "920 GB/s effective (96% of peak)"
+      }
+    },
+
+    "gfx1201": {
+      "name": "RDNA4 (RX 9070 XT class)",
+      "vendor": "AMD",
+      "compute_units": 72,
+      "base_clock_mhz": 1700,
+      "boost_clock_mhz": 2520,
+      "fp32_peak_gflops": 17.4,
+      "fp16_peak_gflops": 34.9,
+      "bf16_peak_gflops": 34.9,
+      "tensor_cores": false,
+      "memory_bandwidth_gb_s": 1152,
+      "l2_cache_mb": 64,
+      "lds_kib": 128,
+      "workload_estimates": {
+        "fp32_gemm_4096": "16.5 GFLOPS (95% efficiency)",
+        "fp16_gemm_4096": "33.1 GFLOPS (95% efficiency)",
+        "bf16_gemv": "bf16-native: 32.8 GFLOPS",
+        "flash_attn_4096": "4.8 ms/token (F32 fallback)",
+        "dot4_i8_dequant": "1030 GB/s effective (90% of peak)"
+      },
+      "known_bottlenecks": [
+        "No WMMA — same F32 fallback as gfx1030 for attention",
+        "128KiB LDS — can use larger shared memory tiles",
+        "17% higher memory bandwidth vs gfx1100"
+      ]
+    },
+
+    "gen12_lp": {
+      "name": "Intel Arc A770",
+      "vendor": "Intel",
+      "compute_units": 32,
+      "eu_count": 32,
+      "base_clock_mhz": 2100,
+      "fp32_peak_gflops": 18.1,
+      "fp16_peak_gflops": 36.2,
+      "bf16_peak_gflops": 36.2,
+      "dpas_peak_tflops": 146,
+      "memory_bandwidth_gb_s": 560,
+      "l2_cache_mb": 16,
+      "workload_estimates": {
+        "fp32_gemm_4096": "17.2 GFLOPS (95% efficiency)",
+        "bf16_gemm_4096": "139.8 GFLOPS (96% via DPAS)",
+        "flash_attn_4096": "6.8 ms/token (DPAS path)",
+        "dot4_i8_dequant": "510 GB/s effective (91% of peak)"
+      }
+    },
+
+    "sm_89": {
+      "name": "Ada Lovelace (RTX 4090 class)",
+      "vendor": "NVIDIA",
+      "compute_units": 128,
+      "base_clock_mhz": 2230,
+      "boost_clock_mhz": 2520,
+      "fp32_peak_gflops": 82.9,
+      "fp16_peak_gflops": 165.8,
+      "tensor_core_peak_tflops": 663,
+      "memory_bandwidth_gb_s": 1008,
+      "l2_cache_mb": 72,
+      "register_file_kb": 192,
+      "workload_estimates": {
+        "fp32_gemm_4096": "78.5 GFLOPS (95% efficiency)",
+        "fp16_gemm_4096": "157.0 GFLOPS (95% efficiency, tc=2.0)",
+        "flash_attn_4096": "1.8 ms/token (4th-gen tensor cores, FP8 support)",
+        "q4_0_dequant": "950 GB/s effective (94% of peak)"
+      },
+      "known_bottlenecks": [
+        "FP8 mixed precision requires careful scaling",
+        "Transformer engine auto-mixed-precision tuning needed for peak perf"
+      ]
+    },
+
+    "sm_90": {
+      "name": "Hopper (H100-class)",
+      "vendor": "NVIDIA",
+      "compute_units": 108,
+      "base_clock_mhz": 1830,
+      "boost_clock_mhz": 1980,
+      "fp32_peak_gflops": 60.2,
+      "fp16_peak_gflops": 120.4,
+      "tensor_core_peak_tflops": 990,
+      "memory_bandwidth_gb_s": 3300,
+      "l2_cache_mb": 50,
+      "register_file_kb": 256,
+      "workload_estimates": {
+        "fp32_gemm_4096": "57.0 GFLOPS (95% efficiency)",
+        "fp16_gemm_4096": "114.0 GFLOPS (95% efficiency)",
+        "flash_attn_4096": "0.9 ms/token (FP8 transformer engine)",
+        "q4_0_dequant": "2500 GB/s effective (75% of peak)"
+      },
+      "known_bottlenecks": [
+        "FP8 requires dynamic loss scaling (Transformer Engine)",
+        "MHA/MQSA/GQA kernels require custom Triton/Hopper implementations",
+        "High memory bandwidth makes dequant less of a bottleneck"
+      ]
+    },
+
+    "gfx90a": {
+      "name": "CDNA2 (MI200/MI250X)",
+      "vendor": "AMD",
+      "compute_units": 120,
+      "base_clock_mhz": 1440,
+      "boost_clock_mhz": 1700,
+      "fp32_peak_gflops": 39.4,
+      "fp16_peak_gflops": 157.8,
+      "bf16_peak_gflops": 157.8,
+      "matrix_core_peak_tflops": 315.5,
+      "memory_bandwidth_gb_s": 2016,
+      "l2_cache_mb": 128,
+      "register_file_kb": 320,
+      "workload_estimates": {
+        "fp32_gemm_4096": "37.0 GFLOPS (94% efficiency)",
+        "fp16_gemm_4096": "150.0 GFLOPS (95% efficiency via XMX)",
+        "bf16_gemm_4096": "150.0 GFLOPS (95% efficiency via XMX)",
+        "flash_attn_4096": "2.2 ms/token (WMMA path via rocWMMA)",
+        "dot4_i8_dequant": "1800 GB/s effective (89% of peak)"
+      },
+      "known_bottlenecks": [
+        "CDNA2 rocWMMA uses different intrinsics than RDNA (v_wmma_* vs __builtin_amdgcn_*_gcn)",
+        "CDNA1/CDNA2 matrix core instructions differ — separate code paths needed"
+      ]
+    },
+
+    "ad103": {
+      "name": "Ada Lovelace (RTX 4070 class)",
+      "vendor": "NVIDIA",
+      "compute_units": 46,
+      "base_clock_mhz": 1920,
+      "boost_clock_mhz": 2490,
+      "fp32_peak_gflops": 35.1,
+      "fp16_peak_gflops": 70.3,
+      "tensor_core_peak_tflops": 281,
+      "memory_bandwidth_gb_s": 504,
+      "l2_cache_mb": 48,
+      "workload_estimates": {
+        "fp32_gemm_4096": "33.2 GFLOPS (95% efficiency)",
+        "fp16_gemm_4096": "66.8 GFLOPS (95% efficiency, tc=2.0)",
+        "flash_attn_4096": "4.2 ms/token (3rd-gen tensor cores)",
+        "q4_0_dequant": "470 GB/s effective (93% of peak)"
+      }
+    },
+
+    "gfx1105": {
+      "name": "RDNA3 APU (Phoenix/Raphael-R)",
+      "vendor": "AMD",
+      "compute_units": 12,
+      "base_clock_mhz": 2000,
+      "boost_clock_mhz": 4200,
+      "fp32_peak_gflops": 5.0,
+      "fp16_peak_gflops": 10.1,
+      "bf16_peak_gflops": 10.1,
+      "tensor_cores": false,
+      "memory_bandwidth_gb_s": 72,
+      "l2_cache_mb": 8,
+      "lds_kib": 128,
+      "workload_estimates": {
+        "fp32_gemm_4096": "4.8 GFLOPS (95% efficiency)",
+        "fp16_gemm_4096": "9.6 GFLOPS (95% efficiency)",
+        "bf16_gemv": "bf16-native: 9.1 GFLOPS via packed instructions",
+        "flash_attn_4096": "18.5 ms/token (F32 fallback, limited memory bandwidth)",
+        "dot4_i8_dequant": "65 GB/s effective (90% of peak)"
+      },
+      "known_bottlenecks": [
+        "No WMMA/rocWMMA — attention uses F32 fallback",
+        "Limited memory bandwidth (72 GB/s) makes memory-bound kernels 5-10× slower than discrete",
+        "8 compute units → low parallelism for large batch sizes",
+        "DP4a recommended for integer matmul (GL_KHR_shader_integer_dot_product via Vulkan)"
+      ]
+    },
+
+    "gen12_hpc": {
+      "name": "Intel Arc Pro (B-series)",
+      "vendor": "Intel",
+      "compute_units": 32,
+      "eu_count": 32,
+      "base_clock_mhz": 2200,
+      "boost_clock_mhz": 2600,
+      "fp32_peak_gflops": 21.0,
+      "fp16_peak_gflops": 42.0,
+      "bf16_peak_gflops": 42.0,
+      "dpas_peak_tflops": 168,
+      "memory_bandwidth_gb_s": 640,
+      "l2_cache_mb": 16,
+      "workload_estimates": {
+        "fp32_gemm_4096": "19.9 GFLOPS (95% efficiency)",
+        "bf16_gemm_4096": "160.0 GFLOPS (95% via DPAS)",
+        "flash_attn_4096": "5.9 ms/token (DPAS path)",
+        "dot4_i8_dequant": "580 GB/s effective (91% of peak)"
+      }
+    },
+
+    "arc_a770": {
+      "name": "Intel Arc A770 (consumer)",
+      "vendor": "Intel",
+      "compute_units": 32,
+      "eu_count": 32,
+      "base_clock_mhz": 2100,
+      "boost_clock_mhz": 2400,
+      "fp32_peak_gflops": 18.1,
+      "fp16_peak_gflops": 36.2,
+      "bf16_peak_gflops": 36.2,
+      "dpas_peak_tflops": 146,
+      "memory_bandwidth_gb_s": 560,
+      "l2_cache_mb": 16,
+      "workload_estimates": {
+        "fp32_gemm_4096": "17.2 GFLOPS (95% efficiency)",
+        "bf16_gemm_4096": "139.8 GFLOPS (96% via DPAS)",
+        "flash_attn_4096": "6.8 ms/token (DPAS path)",
+        "dot4_i8_dequant": "510 GB/s effective (91% of peak)"
+      }
+    },
+
+    "arc_b580": {
+      "name": "Intel Arc B580 (Battlemage)",
+      "vendor": "Intel",
+      "compute_units": 24,
+      "eu_count": 24,
+      "base_clock_mhz": 2200,
+      "boost_clock_mhz": 2650,
+      "fp32_peak_gflops": 14.2,
+      "fp16_peak_gflops": 28.5,
+      "bf16_peak_gflops": 28.5,
+      "dpas_peak_tflops": 115,
+      "memory_bandwidth_gb_s": 512,
+      "l2_cache_mb": 12,
+      "workload_estimates": {
+        "fp32_gemm_4096": "13.5 GFLOPS (95% efficiency)",
+        "bf16_gemm_4096": "109.2 GFLOPS (95% via DPAS)",
+        "flash_attn_4096": "7.9 ms/token (DPAS path)",
+        "dot4_i8_dequant": "460 GB/s effective (90% of peak)"
+      }
+    },
+
+    "meteor_lake": {
+      "name": "Intel Core Ultra 5 135H iGPU",
+      "vendor": "Intel",
+      "compute_units": 8,
+      "eu_count": 128,
+      "base_clock_mhz": 1100,
+      "boost_clock_mhz": 2200,
+      "fp32_peak_gflops": 5.6,
+      "fp16_peak_gflops": 11.3,
+      "bf16_peak_gflops": 11.3,
+      "dpas_peak_tflops": 45,
+      "memory_bandwidth_gb_s": 72,
+      "l2_cache_mb": 8,
+      "lds_kib": 128,
+      "workload_estimates": {
+        "fp32_gemm_4096": "5.3 GFLOPS (95% efficiency, power-limited)",
+        "bf16_gemm_4096": "42.8 GFLOPS (95% via DPAS, but memory-bound)",
+        "flash_attn_4096": "22.1 ms/token (F32 fallback, 72GB/s system memory)",
+        "dot4_i8_dequant": "65 GB/s effective (90% of peak)"
+      },
+      "known_bottlenecks": [
+        "Integrated GPU shares DDR5 memory — 72 GB/s vs 960 GB/s for discrete",
+        "Power envelope (28W) throttles under sustained load",
+        "No dedicated VRAM → cache misses are expensive",
+        "Vulkan CM support requires Mesa 24.3+ — check `kands://isa-references`"
+      ]
+    }
+  },
+
+  "web_search_queries": {
+    "description": "Predefined search queries for finding comparable benchmark scores online",
+    "queries": [
+      "llama cpp benchmark gfx1030 tok/s throughput",
+      "llama cpp benchmark gfx1100 tok/s throughput",
+      "llama cpp benchmark gfx1201 tok/s throughput",
+      "llama.cpp Radeon RX 7900 XTX tokens per second",
+      "llama.cpp Radeon RX 9070 XT tokens per second",
+      "llama.cpp RTX 3090 tokens per second CUDA",
+      "llama.cpp RTX 4090 tokens per second CUDA",
+      "AMD ROCm llama benchmark MI300",
+      "Intel Arc llama.cpp DirectML benchmark",
+      "GPU TFLOPS FP32 FP16 BF16 theoretical vs actual"
+    ],
+    "github_repos_to_check": [
+      "ggerganov/llama.cpp",
+      "ROCm/rocm-ml",
+      "microsoft/DirectML",
+      "vosenick/RDNA3-perf-analysis",
+      "nicolasnoble/mesa-ci-results"
+    ],
+    "arxiv_keywords": [
+      "gpu performance analysis",
+      "kernel microbenchmark",
+      "memory bandwidth utilization GPU",
+      "tensor core benchmark",
+      "gpu occupancy measurement"
+    ]
+  },
+
+  "performance_scaling": {
+    "description": "Empirical scaling factors from theoretical peak to real-world LLM inference",
+    "scaling_factors": {
+      "fp32_gemm": 0.85,
+      "fp16_gemm": 0.92,
+      "bf16_gemm": 0.90,
+      "wmma_gemm": 0.90,
+      "dpas_gemm": 0.88,
+      "flash_attn": 0.65,
+      "attention_f32_fallback": 0.45,
+      "dequant_q4": 0.75,
+      "dequant_q8": 0.85,
+      "dequant_dot4": 0.80
+    },
+    "notes": "These multipliers convert theoretical peak to expected real-world performance for LLM inference workloads. Memory-bound kernels (attention, dequant) are further limited by bandwidth."
+  },
+
+  "roofline_models": {
+    "description": "Per-architecture roofline model parameters for predicting compute vs memory bottleneck.\nArithmetic intensity (AI) = FLOPs/Bytes. If AI < peak_compute/peak_bandwidth, kernel is memory-bound.",
+    "models": {
+      "gfx1201": {
+        "peak_compute_fp32": 17.4,
+        "peak_bandwidth_gb_s": 1152,
+        "compute_roof_slope": 17.4,
+        "memory_roof_slope": 1152,
+        "ridge_point_gflops_per_gb": 0.015,
+        "l1_cache_kb": 32,
+        "l1_line_size_bytes": 64,
+        "l2_cache_kb": 65536,
+        "l2_line_size_bytes": 128,
+        "shared_mem_kb": 128,
+        "max_threads_per_wavefront": 32,
+        "register_file_size": 256000,
+        "notes": "Memory-bound for AI < 0.015 GFLOP/GB (e.g., attention, dequant)"
+      },
+      "sm_80": {
+        "peak_compute_fp32": 35.6,
+        "peak_bandwidth_gb_s": 1008,
+        "compute_roof_slope": 35.6,
+        "memory_roof_slope": 1008,
+        "ridge_point_gflops_per_gb": 0.035,
+        "l1_cache_kb": 192,
+        "l1_line_size_bytes": 128,
+        "l2_cache_mb": 40,
+        "l2_line_size_bytes": 128,
+        "shared_mem_kb": 164,
+        "max_threads_per_warp": 32,
+        "register_file_size": 273000,
+        "notes": "Memory-bound for AI < 0.035 GFLOP/GB. Tensor cores bypass to 0.140 GFLOP/GB"
+      },
+      "sm_89": {
+        "peak_compute_fp32": 82.9,
+        "peak_bandwidth_gb_s": 1008,
+        "compute_roof_slope": 82.9,
+        "memory_roof_slope": 1008,
+        "ridge_point_gflops_per_gb": 0.082,
+        "l1_cache_kb": 192,
+        "l1_line_size_bytes": 128,
+        "l2_cache_mb": 72,
+        "l2_line_size_bytes": 128,
+        "shared_mem_kb": 164,
+        "max_threads_per_warp": 32,
+        "register_file_size": 273000,
+        "notes": "Higher ridge point means more compute-bound workloads viable"
+      },
+      "sm_90": {
+        "peak_compute_fp32": 60.2,
+        "peak_bandwidth_gb_s": 3300,
+        "compute_roof_slope": 60.2,
+        "memory_roof_slope": 3300,
+        "ridge_point_gflops_per_gb": 0.018,
+        "l1_cache_kb": 228,
+        "l1_line_size_bytes": 128,
+        "l2_cache_mb": 50,
+        "l2_line_size_bytes": 128,
+        "shared_mem_kb": 164,
+        "max_threads_per_warp": 32,
+        "register_file_size": 273000,
+        "notes": "High bandwidth reduces memory bottleneck, but FP8 path requires Transformer Engine"
+      },
+      "gfx1100": {
+        "peak_compute_fp32": 17.7,
+        "peak_bandwidth_gb_s": 960,
+        "compute_roof_slope": 17.7,
+        "memory_roof_slope": 960,
+        "ridge_point_gflops_per_gb": 0.018,
+        "l1_cache_kb": 16,
+        "l1_line_size_bytes": 64,
+        "l2_cache_kb": 98304,
+        "l2_line_size_bytes": 128,
+        "shared_mem_kb": 64,
+        "max_threads_per_wavefront": 32,
+        "register_file_size": 256000,
+        "notes": "Low ridge point — most kernels memory-bound"
+      },
+      "gen12_lp": {
+        "peak_compute_fp32": 18.1,
+        "peak_bandwidth_gb_s": 560,
+        "compute_roof_slope": 18.1,
+        "memory_roof_slope": 560,
+        "ridge_point_gflops_per_gb": 0.032,
+        "l1_cache_kb": 512,
+        "l1_line_size_bytes": 64,
+        "l2_cache_mb": 16,
+        "l2_line_size_bytes": 128,
+        "shared_mem_kb": 64,
+        "max_threads_per_eu": 112,
+        "register_file_size": 112000,
+        "notes": "Large L1 cache helps memory-bound kernels. DPAS provides high compute intensity"
+      },
+      "meteor_lake": {
+        "peak_compute_fp32": 5.6,
+        "peak_bandwidth_gb_s": 72,
+        "compute_roof_slope": 5.6,
+        "memory_roof_slope": 72,
+        "ridge_point_gflops_per_gb": 0.078,
+        "l1_cache_kb": 512,
+        "l1_line_size_bytes": 64,
+        "l2_cache_mb": 8,
+        "l2_line_size_bytes": 128,
+        "shared_mem_kb": 128,
+        "max_threads_per_eu": 112,
+        "register_file_size": 112000,
+        "notes": "High ridge point means mostly compute-bound, but system memory bandwidth (72 GB/s) is the real bottleneck. DPAS recommended for matmul."
+      }
+    },
+    "usage": "1. Compute kernel arithmetic intensity: AI = total_FLOPs / total_bytes_loaded. 2. If AI < ridge_point: kernel is memory-bound → optimize data reuse. 3. If AI >= ridge_point: kernel is compute-bound → optimize instruction throughput."
+  }
+}

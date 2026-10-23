@@ -1,0 +1,130 @@
+{
+  "description": "Model file format matrix for LLM engines. Describes each format's quantization support, GPU memory layout, and porting implications.",
+
+  "formats": {
+
+    "gguf": {
+      "name": "GGUF (GGML Universal Format)",
+      "extension": ".gguf",
+      "vendor": "llama.cpp / ggml",
+      "url": "https://github.com/ggerganov/ggml/blob/master/docs/gguf.md",
+      "description": "Single-file binary format with model weights, metadata, and quantization info. Used by Maya for both GLM and DS4 packs.",
+      "quant_types": {
+        "f32": "32-bit float (FP32) — full precision, largest",
+        "f16": "16-bit float (FP16) — half precision",
+        "bf16": "BF16 — hardware-supported on CDNA2, SM_89, Arc; emulated elsewhere",
+        "q4_0": "4-bit quantized (GGML Q4_0) — 4.5 bits/weight",
+        "q4_1": "4-bit quantized (GGML Q4_1) — 4.5 bits/weight, with sign + scale",
+        "q5_0": "5-bit quantized (GGML Q5_0) — 5.5 bits/weight",
+        "q5_1": "5-bit quantized (GGML Q5_1) — 5.5 bits/weight, with sign + scale",
+        "q8_0": "8-bit quantized (GGML Q8_0) — 8.5 bits/weight, near-lossless",
+        "iq2_xxs": "2-bit with 16-value codebook — 2.06 bits/weight",
+        "iq2_s": "2-bit with 16-value codebook — 2.25 bits/weight",
+        "iq3_xxs": "3-bit with 256-value codebook — 3.0 bits/weight",
+        "iq3_s": "3-bit with 256-value codebook — 3.0 bits/weight",
+        "iq4_nl": "4-bit with 16-value non-linear codebook — 4.5 bits/weight",
+        "iq1_s": "1-bit with learned codebook — 1.56 bits/weight",
+        "exl3_2.9": "3-bit EXL3 with grouped matrix quantization — 2.9 bits/weight",
+        "exl3_3.5": "3.5-bit EXL3 — 3.5 bits/weight"
+      },
+      "gpu_kernels": {
+        "dequant": ["dequant_s2.cu", "dequant_bf16.cu", "iq_kernels.cu", "exl3.cu", "exl3_legacy.cu", "q2_avx2.cpp", "iq_avx512.cpp"],
+        "gemv": ["s_gemv.cu", "s2_gemv.cu", "s2_gemv_q8.cu", "s2_gemv_fast.cu", "s2_gemv_quads.cu", "bf16_gemv.cu"],
+        "expert": ["native_moe.cu", "s2_expert_grouped.cu", "native_mmvq.cu", "shared_expert.cu", "exl3.cu", "exl3_legacy.cu"],
+        "router": ["router_top10.cu", "router_sigmoid.cu", "native_router.cu"],
+        "kv_cache": ["kv_q4.cu", "kv_q8.cu", "kv_stream.cu"]
+      },
+      "porting_notes": {
+        "AMD": "EXL3 kernels on gfx1030 use older v_dot4_i32_i8 (hip_compat/intrinsics.hpp). gfx1201+ supports newer packed dot4. No tensor cores — use F32 fallback for bf16.",
+        "NVIDIA": "EXL3 uses tensor cores on sm_80+. Q8_0 uses imad instruction. All quantized dequant on CPU for non-native formats.",
+        "Intel": "EXL3 via DPAS on Arc. Q8_0 via DP4a."
+      }
+    },
+
+    "safetensors": {
+      "name": "SafeTensors",
+      "extension": ".safetensors",
+      "vendor": "HuggingFace",
+      "url": "https://github.com/huggingface/safetensors",
+      "description": "Safe tensor format — no arbitrary code execution, header-only metadata + raw weight bytes. Used by HF transformers.",
+      "quant_types": {
+        "fp32": "32-bit float (default)",
+        "fp16": "16-bit float",
+        "bf16": "BF16",
+        "int8": "8-bit integer (with scales)",
+        "int4": "Generic 4-bit (requires custom dequant)",
+        "nf4": "NormalFloat4 (QLoRA)",
+        "q8_0": "Same as GGUF q8_0 (via bitsandbytes)"
+      },
+      "gpu_kernels": {
+        "loading": "Memory-mapped — direct mmap, no dequant at load time",
+        "compute": "Depends on framework (torch → Triton kernels, JAX → XLA)",
+        "quant_inference": "bitsandbytes kernels (CUDA only), GPTQ-for-LLaMa (CUDA), auto-gptq (CUDA/Vulkan)"
+      },
+      "porting_notes": {
+        "AMD": "No native bitsandbytes support. Use rocm-torch or custom kernels. GPTQ kernels often CUDA-only.",
+        "NVIDIA": "Full ecosystem — bitsandbytes, auto-gptq, GPTQ-for-LLaMa all support CUDA.",
+        "Intel": "Use intel-extension-for-transformers, or convert to GGUF."
+      }
+    },
+
+    "huggingface_hub": {
+      "name": "HuggingFace Hub (sharded)",
+      "extension": ".bin / *.safetensors",
+      "vendor": "HuggingFace",
+      "description": "PyTorch checkpoint shards. Can be .bin (pickle, unsafe) or .safetensors.",
+      "quant_types": ["fp32", "fp16", "bf16", "int8", "int4", "nf4"],
+      "gpu_kernels": {
+        "loading": "torch.load or safetensors.torch.load_file",
+        "compute": "Framework-native (torch → ATen kernels)",
+        "quant_inference": "bitsandbytes (CUDA), AQLM (CUDA)"
+      },
+      "porting_notes": "For porting to C++ engines: convert to GGUF first (see tools/iq_pack.py). Direct .bin parsing requires custom PyTorch-free loader."
+    },
+
+    "onnx": {
+      "name": "ONNX (Open Neural Network Exchange)",
+      "extension": ".onnx",
+      "vendor": "Linux Foundation / ONNX",
+      "description": "Intermediate representation for AI models. Hardware-agnostic graph + weights.",
+      "quant_types": ["fp32", "fp16", "bf16", "int8", "int4 (QLinearConv, QDQ)"],
+      "gpu_kernels": {
+        "runtime": "ONNX Runtime with CUDA/Metal/Vulkan/DirectML execution provider",
+        "compute": "ORT handles kernel dispatch — no custom kernels needed",
+        "quant": "ORT quantization tools produce Q4/Q8 weight-only quant"
+      },
+      "porting_notes": "ORT can target many backends (CUDA, Vulkan, Metal, DirectML). For custom GPU kernels, need to extract ONNX weights and write custom runtime."
+    },
+
+    "hdf5": {
+      "name": "HDF5 (TensorFlow checkpoint format)",
+      "extension": ".h5 / .hdf5",
+      "vendor": "HDF Group / TensorFlow",
+      "description": "Hierarchical Data Format v5. Used by Keras/TF model.save().",
+      "porting_notes": "Rarely used for LLMs. Convert to safetensors or GGUF for GPU inference."
+    },
+
+    "mlc_llm": {
+      "name": "MLC LLM format (GGUF-compatible)",
+      "extension": "*.gguf",
+      "vendor": "MLC AI",
+      "description": "MLC's format is GGUF with their own quantization (R4F4, etc.).",
+      "quant_types": ["f32", "f16", "int4", "int8", "R4F4"],
+      "porting_notes": "Compatible with GGUF tooling. MLC's webgpu backend targets Vulkan/Metal/DirectX."
+    }
+  },
+
+  "format_conversion": {
+    "to_gguf": {
+      "from_safetensors": "tools/iq_pack.py (Maya's native pack) — reads HF safetensors, writes GGUF with BF16 preserves",
+      "from_huggingface": "tools/iq_pack.py + gguf-py — exports tokenizer + chat template too",
+      "from_pytorch_bin": "tools/iq_pack.py — converts .bin shards to GGUF via gguf-py",
+      "from_onnx": "onnx-to-gguf scripts or convert via safetensors intermediate"
+    },
+    "from_gguf": {
+      "to_safetensors": "gguf-to-safetensors tools exist (e.g., gguf-checkpoint-tools)",
+      "to_torch": "Not directly — extract weights and load into PyTorch model",
+      "to_huggingface": "Tools exist (e.g., gguf-to-hf) but require model architecture code"
+    }
+  }
+}

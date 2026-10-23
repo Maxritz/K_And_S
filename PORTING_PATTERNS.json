@@ -1,0 +1,368 @@
+{
+  "description": "Engine-agnostic GPU compute porting patterns. Maps source API constructs to target API equivalents with transformation notes, complexity ratings, and known caveats.",
+  "last_updated": "2026-10-23T00:00:00Z",
+
+  "patterns": {
+
+    "cuda_to_hip": {
+      "name": "CUDA → HIP",
+      "source": "CUDA",
+      "target": "HIP (AMD ROCm)",
+      "complexity": "low",
+      "auto_translatable": ["hipify-perl", "hipify-python"],
+      "manual_transforms": {
+        "cudaMalloc": {"hip": "hipMalloc", "notes": "Direct replacement, same semantics"},
+        "cudaFree": {"hip": "hipFree", "notes": "Direct replacement"},
+        "cudaMemcpy": {"hip": "hipMemcpy", "notes": "Add hipMemcpyKind::hipMemcpyDefault if direction unclear"},
+        "cudaMemcpyHostToDevice": {"hip": "hipMemcpyHostToDevice", "notes": "Same enum value"},
+        "cudaMemcpyDeviceToHost": {"hip": "hipMemcpyDeviceToHost", "notes": "Same enum value"},
+        "cudaMemcpyDeviceToDevice": {"hip": "hipMemcpyDeviceToDevice", "notes": "Same enum value"},
+        "cudaStreamCreate": {"hip": "hipStreamCreate", "notes": "Direct replacement"},
+        "cudaStreamSynchronize": {"hip": "hipStreamSynchronize", "notes": "Direct replacement"},
+        "cudaEventRecord": {"hip": "hipEventRecord", "notes": "Direct replacement"},
+        "cudaEventSynchronize": {"hip": "hipEventSynchronize", "notes": "Direct replacement"},
+        "cudaDeviceSynchronize": {"hip": "hipDeviceSynchronize", "notes": "Direct replacement"},
+        "<<<>>>": {"hip": "hipLaunchKernelGGL()", "notes": "Kernel launch syntax change — hipify handles automatically"},
+        "__syncthreads": {"hip": "__syncthreads", "notes": "Direct replacement in HIP"},
+        "blockIdx": {"hip": "hipThreadIdx_x", "notes": "hipify auto-replaces blockIdx → hipBlockIdx"},
+        "threadIdx": {"hip": "hipThreadIdx", "notes": "hipify auto-replaces"},
+        "threadIdx.x": {"hip": "hipThreadIdx_x", "notes": "hipify auto-replaces"},
+        "blockIdx.x": {"hip": "hipBlockIdx_x", "notes": "hipify auto-replaces"},
+        "blockDim": {"hip": "hipBlockDim", "notes": "hipify auto-replaces"},
+        "gridDim": {"hip": "hipGridDim", "notes": "hipify auto-replaces"},
+        "__umulhi": {"hip": "__umulhi", "notes": "Supported on AMD in ROCm 6+"},
+        "__ldg": {"hip": "__ldg", "notes": "Supported"},
+        "__float2half": {"hip": "__float2half", "notes": "Supported"},
+        "__half2float": {"hip": "__half2float", "notes": "Supported"}
+      },
+      "manual_only": {
+        "wmma": {"hip": "rocWMMA (gfx1100+) or F32 fallback", "notes": "No WMMA on gfx1030/gfx1200/gfx1201 without rocWMMA"},
+        "mma": {"hip": "rocBLASLt or dot4 instructions", "notes": "Tensor cores → dot4 or rocBLASLt"},
+        "tensor_core_mma": {"hip": "rocWMMA or rocBLASLt MMA API", "notes": "Requires ROCm 5.7+"},
+        "nvrtc": {"hip": "hiprtc or runtime compilation via HIPRTC", "notes": "Different API but similar concept"},
+        "cuMemPool": {"hip": "hipMemPool (if available) or hipMalloc managed", "notes": "Memory pooling support varies by ROCm version"},
+        "cudaGraph": {"hip": "hipGraph (experimental)", "notes": "HIP graphs are experimental; may need fallback"},
+        "cuStreamWorkDescrib": {"hip": "hipStreamWorkStealing", "notes": "Different semantics"}
+      },
+      "hipify_notes": {
+        "command": "hipify-perl source.cu > target.cpp --inplace",
+        "flags": ["--inplace", "--inplace-relative-prefix", "--no-backup"],
+        "caveats": [
+          "hipify does NOT handle WMMA → rocWMMA conversion automatically",
+          "hipify does NOT handle tensor core intrinsics (mma/sm) automatically",
+          "hipify does NOT handle CUDA Graphs automatically",
+          "hipify replaces __syncthreads with __syncthreads in HIP 6+"
+        ]
+      }
+    },
+
+    "cuda_to_sycl": {
+      "name": "CUDA → oneAPI DPC++/SYCL",
+      "source": "CUDA",
+      "target": "SYCL (Intel oneAPI)",
+      "complexity": "high",
+      "auto_translatable": ["dpct (Intel DPC++ Compatibility Tool)"],
+      "manual_transforms": {
+        "cudaMalloc": {"sycl": "sycl::malloc_device", "notes": "SYCL uses unified memory model"},
+        "cudaFree": {"sycl": "sycl::free", "notes": "Must specify queue"},
+        "cudaMemcpy": {"sycl": "queue.copy or handler.copy", "notes": "Explicit copy vs unified memory"},
+        "cudaStreamCreate": {"sycl": "sycl::queue", "notes": "Queue replaces stream concept"},
+        "<<<blocks, threads>>>": {"sycl": "parallel_for(nd_range(...))", "notes": "Different kernel launch model"},
+        "threadIdx.x": {"sycl": "item.get_local_id(0)", "notes": "Index space access differs"},
+        "blockIdx.x": {"sycl": "item.get_group(0)", "notes": "Group indexing"},
+        "blockDim.x": {"sycl": "item.get_local_range(0)", "notes": "Local range"},
+        "gridDim.x": {"sycl": "item.get_group_range(0)", "notes": "Group range"},
+        "__syncthreads": {"sycl": "item.barrier()", "notes": "Requires nd_item parameter"},
+        "warpSize": {"sycl": "get_sub_group().get_local_range()", "notes": "Subgroup size varies by target"},
+        "threadIdx.x % 32": {"sycl": "item.get_local_id(0) % sub_group_size", "notes": "Subgroup size is target-specific"},
+        "shared_memory": {"sycl": "sycl::local_accessor<T, 1>", "notes": "Different declaration syntax"},
+        "wmma": {"sycl": "dp4a or joint_matrix (SYCL 2020)", "notes": "oneAPI has joint_matrix extension for matrix ops"},
+        "mma": {"sycl": "oneMKL gemm or joint_matrix", "notes": "Use oneMKL for BLAS, joint_matrix for tensors"}
+      },
+      "dpct_notes": {
+        "command": "dpct -outdir <output> <source>",
+        "support_level": "70% auto, 30% manual",
+        "caveats": [
+          "DPCT cannot auto-migrate WMMA/tensor core code",
+          "CUDA graphs require manual rewrite",
+          "Memory model differences (explicit vs unified) may need design changes",
+          "Subgroup/warp programming needs manual adjustment"
+        ]
+      }
+    },
+
+    "cuda_to_vulkan": {
+      "name": "CUDA → Vulkan Compute (SPIR-V)",
+      "source": "CUDA",
+      "target": "Vulkan Compute / SPIR-V",
+      "complexity": "very_high",
+      "auto_translatable": [],
+      "manual_transforms": {
+        "cudaMalloc": {"vulkan": "vkAllocateMemory + vkBindBufferMemory", "notes": "Full buffer creation pipeline"},
+        "cudaMemcpy": {"vulkan": "vkCmdCopyBufferToImage / staging buffer", "notes": "Must use staging buffers for upload"},
+        "cudaStreamCreate": {"vulkan": "vkCreateCommandPool + vkAllocateCommandBuffers", "notes": "Command buffer model"},
+        "<<<>>>": {"vulkan": "vkCmdDispatch", "notes": "Workgroup size defined in shader via layout(local_size_x=N)"},
+        "threadIdx": {"vulkan": "gl_GlobalInvocationID / gl_LocalInvocationID", "notes": "Built-in variables in GLSL/SPIR-V"},
+        "blockIdx": {"vulkan": "gl_WorkGroupID", "notes": "Built-in variable"},
+        "blockDim": {"vulkan": "gl_WorkGroupSize", "notes": "Built-in variable"},
+        "gridDim": {"vulkan": "gl_NumWorkGroups", "notes": "Built-in variable"},
+        "__syncthreads": {"vulkan": "shared/shared variables + control flow", "notes": "No explicit barrier; use executionBarrier() / OpControlBarrier"},
+        "shared_memory": {"vulkan": "shared variables in GLSL / OpVariable with Shared storage class", "notes": "Different declaration"},
+        "wmma": {"vulkan": "GL_KHR_cooperative_matrix (NVIDIA) or GL_KHR_shader_integer_dot_product (DP4a AMD)", "notes": "AMD CM broken → use DP4a"},
+        "mma": {"vulkan": "GL_KHR_shader_integer_dot_product (dp4) or CM", "notes": "NVIDIA: CM works. AMD: broken, use DP4a"},
+        "texture_2d": {"vulkan": "subpassLoad / texture() with sampler", "notes": "Image load/store vs texture sampling"},
+        "surface": {"vulkan": "imageStore / atomicImageOp", "notes": "Different write semantics"},
+        "warp shuffle": {"vulkan": "subgroup operations (GL_KHR_vulkan_glsl) or SM extension", "notes": "Subgroup ops in SPIR-V"},
+        "__ldg": {"vulkan": "OpLoad with Aligned hint (or just read-only buffer)", "notes": "Read-only access pattern"}
+      },
+      "vulkan_notes": {
+        "compilation": "glslc shader.comp -o shader.spv OR dxc -T cs_6_6 shader.hlsl -E main -spirv",
+        "validation": "spirv-val shader.spv",
+        "optimisation": "spirv-opt -O shader.spv -o shader_opt.spv",
+        "runtime": "vkCreateShaderModule + vkCreateComputePipelines + vkCmdBindPipeline + vkCmdDispatch",
+        "amd_caveat": "CooperativeMatrix extension is broken on AMD Vulkan drivers. Use DP4a (GL_KHR_shader_integer_dot_product) for all matmul operations on AMD.",
+        "nvidia_ok": "CooperativeMatrix works on NVIDIA Vulkan drivers SM 7.5+ (535.x+) via GL_NV_cooperative_matrix"
+      }
+    },
+
+    "cuda_to_directx": {
+      "name": "CUDA → HLSL (Direct3D 12)",
+      "source": "CUDA",
+      "target": "HLSL → DXIL",
+      "complexity": "very_high",
+      "auto_translatable": [],
+      "manual_transforms": {
+        "cudaMalloc": {"hlsl": "StructuredBuffer/RWByteAddressBuffer in HLSL", "notes": "GPU resource via D3D12 buffer upload"},
+        "cudaMemcpy": {"hlsl": "D3D12 command list copy commands", "notes": "Use UpdateSubresources or Upload heap"},
+        "threadIdx": {"hlsl": "SV_DispatchThreadID / SV_GroupThreadID", "notes": "HLSL built-in semantics"},
+        "blockIdx": {"hlsl": "SV_GroupID", "notes": "HLSL built-in semantics"},
+        "blockDim": {"hlsl": "SV_GroupSize", "notes": "HLSL built-in semantics"},
+        "gridDim": {"hlsl": "numthreads() attribute + dispatch size", "notes": "Workgroup size via [numthreads(x,y,z)]"},
+        "__syncthreads": {"hlsl": "GroupMemoryBarrierWithGroupSync()", "notes": "HLSL barrier"},
+        "shared_memory": {"hlsl": "groupshared", "notes": "HLSL keyword"},
+        "wmma": {"hlsl": "NativeFloat16_Rolling or Wave* intrinsics", "notes": "Use WaveActiveMatMul or scalar fallbacks"},
+        "mma": {"hlsl": "WaveActiveMatMul or manual SIMD", "notes": "DirectX 12 has wave intrinsics for matrix ops"},
+        "warp shuffle": {"hlsl": "WaveReadLane", "notes": "HLSL wave intrinsics (WaveIsa)"}
+      },
+      "hlsl_notes": {
+        "compiler": "dxc.exe -T cs_6_6 -E main shader.hlsl -Fo shader.dxil",
+        "agility_sdk": "Provides enhanced barriers, mesh shaders, variable rate shading",
+        "directml": "DirectML provides ML primitives on D3D12 — alternative to writing custom HLSL"
+      }
+    },
+
+    "hip_to_cuda": {
+      "name": "HIP → CUDA",
+      "source": "HIP",
+      "target": "CUDA",
+      "complexity": "low",
+      "auto_translatable": [],
+      "manual_transforms": {
+        "hipMalloc": {"cuda": "cudaMalloc", "notes": "Direct replacement"},
+        "hipFree": {"cuda": "cudaFree", "notes": "Direct replacement"},
+        "hipMemcpy": {"cuda": "cudaMemcpy", "notes": "Direct replacement"},
+        "hipLaunchKernelGGL": {"cuda": "<<<>>>", "notes": "Kernel launch syntax"},
+        "hipGetLastError": {"cuda": "cudaGetLastError", "notes": "Direct replacement"},
+        "hipPeekAtLastError": {"cuda": "cudaPeekAtLastError", "notes": "Direct replacement"}
+      },
+      "notes": "HIP → CUDA is generally straightforward since HIP is a subset of CUDA API. rocWMMA → WMMA needs manual work."
+    },
+
+    "python_to_native": {
+      "name": "Python (PyTorch/TensorFlow) → Native CUDA/HIP",
+      "source": "Python",
+      "target": "CUDA/HIP C++",
+      "complexity": "high",
+      "auto_translatable": [],
+      "manual_transforms": {
+        "torch.matmul": {"cuda": "mma / tensor cores", "notes": "Requires manual GEMM kernel or cuBLAS"},
+        "torch.softmax": {"cuda": "custom kernel with max-subtract-reduce", "notes": "Numerically stable implementation needed"},
+        "torch.topk": {"cuda": "radix-select or partial sort", "notes": "Custom selection algorithm needed"},
+        "torch.quantize": {"cuda": "manual dequant + imad/dp4", "notes": "Quantized GEMV/GEMM requires arch-specific instructions"},
+        "torch.cuda.amp": {"cuda": "tensor cores / tf32", "notes": "Use __hmma or mma instructions"},
+        "torch.cuda.stream": {"cuda": "cudaStream_t / hipStream_t", "notes": "Same API concept"},
+        "torch.compile": {"cuda": "manual optimization", "notes": "Compile-time fusion must be done manually in C++"}
+      },
+      "notes": "Python → native requires full rewrite of tensor operations. PyTorch ops map to CUDA intrinsics or cuBLAS calls."
+    }
+  },
+
+  "language_mappings": {
+    "c++_to_python": {
+      "description": "C++ → Python type and API mappings",
+      "type_map": {
+        "float*": "float*",
+        "half*": "torch.float16 tensor",
+        "int8_t*": "torch.int8 tensor",
+        "size_t": "int",
+        "cudaStream_t": "torch.cuda.Stream",
+        "cudaEvent_t": "torch.cuda.Event"
+      }
+    },
+    "c++_to_rust": {
+      "description": "C++ → Rust type and API mappings",
+      "type_map": {
+        "float*": "*const f32 or &[f32]",
+        "half*": "half::f16 or &[u16]",
+        "size_t": "usize",
+        "cudaStream_t": "cuda_runtime::SysCudaStream or cust::Stream",
+        "hipModule_t": "hip_runtime::HipModule"
+      }
+    }
+  },
+
+  "memory_models": {
+    "cuda": {
+      "model": "Explicit allocation + transfer",
+      "managed_memory": "cudaMallocManaged (optional, slower on AMD)",
+      "unified": false,
+      "pinning": "cudaHostAlloc / cudaHostRegister",
+      "prefetch": "cudaMemPrefetchAsync (CUDA 11+)"
+    },
+    "hip": {
+      "model": "Explicit allocation + transfer",
+      "managed_memory": "hipMallocManaged (varies by ROCm version)",
+      "unified": false,
+      "pinning": "hipHostMalloc / hipHostRegister",
+      "prefetch": "hipMemPrefetchAsync (ROCm 5+)"
+    },
+    "sycl": {
+      "model": "Unified shared memory (USM) + explicit buffers",
+      "managed_memory": "sycl::malloc_shared (implicitly managed)",
+      "unified": true,
+      "pinning": "N/A (unified)",
+      "prefetch": "queue.prefetch (implicit in USM)"
+    },
+    "vulkan": {
+      "model": "Explicit buffer/image resources",
+      "managed_memory": "N/A (fully explicit)",
+      "unified": false,
+      "pinning": "staging buffers",
+      "prefetch": "vkCmdCopyBuffer → pipeline barrier"
+    },
+    "directx12": {
+      "model": "Explicit heap allocation + upload/download",
+      "managed_memory": "N/A (fully explicit)",
+      "unified": false,
+      "pinning": "Upload heap",
+      "prefetch": "Resource barriers"
+    }
+  },
+
+  "sync_patterns": {
+    "description": "Fence / synchronization patterns to avoid TDRs (Timeout Detection and Recovery) and GPU hangs",
+    "tdr_limits_ms": {
+      "windows_cuda": 2000,
+      "windows_directx": 2000,
+      "windows_vulkan": 2000,
+      "linux_cuda": 60000,
+      "linux_vulkan": 60000
+    },
+    "fence_types": {
+      "cuda": {
+        "host_sync": "cudaEventSynchronize / cudaStreamSynchronize",
+        "device_sync": "__syncthreads() (intra-block only)",
+        "async_signal": "cudaEventRecord + cudaStreamWaitEvent",
+        "timeout": "cudaEventSynchronize (no built-in timeout, must poll or use stream)"
+      },
+      "hip": {
+        "host_sync": "hipEventSynchronize / hipStreamSynchronize",
+        "device_sync": "__syncthreads() (intra-block only)",
+        "async_signal": "hipEventRecord + hipStreamWaitEvent",
+        "timeout": "hipEventSynchronize (poll with hipEventQuery for timeout)"
+      },
+      "vulkan": {
+        "host_sync": "vkWaitFences / vkWaitSemaphores",
+        "device_sync": "OpMemoryBarrier / OpControlBarrier (SPIR-V)",
+        "async_signal": "VkSemaphore (binary or timeline)",
+        "timeout": "vkWaitFences(pFence, timeoutNs=INF) or vkAcquireNextImageKHR(timeout)"
+      },
+      "directx12": {
+        "host_sync": "ID3D12Fence::SetEventOnCompletion + WaitForSingleObject",
+        "device_sync": "All_Barrier (D3D12_BARRIER), GroupMemoryBarrierWithGroupSync",
+        "async_signal": "ID3D12Fence (timeline)",
+        "timeout": "WaitForSingleObject(timeoutMs). Must use timeline fences for long GPU work"
+      },
+      "sycl": {
+        "host_sync": "queue.wait() (blocks until queue idle)",
+        "device_sync": "nd_item::barrier()",
+        "async_signal": "queue.ext_oneapi_submit_barrier()",
+        "timeout": "queue.wait() (blocks). Use queue.is_submitted work tracking for soft timeout"
+      }
+    },
+    "tdr_avoidance": {
+      "principle": "Never let a GPU kernel run > 2s (Windows default) without yielding",
+      "cuda": "Split long kernels into chunks. Use cudaStreamQuery to check completion. Insert events between chunks.",
+      "hip": "Split kernels at 1024-thread boundary. Use hipEventQuery for polling.",
+      "vulkan": "Use timeline semaphores (VK_FENCE_TYPE_TIMELINE) for multi-second operations. Insert VkSemaphore after each queue submission.",
+      "directx12": "Use timeline fence (ID3D12Fence at fenceValue). Signal+wait for each batch. Call IDXGISwapChain::Present(1, 0) with GPU wait.",
+      "sycl": "Submit work in small chunks. Use queue.wait_with_khr_event() to poll. Avoid blocking waits on single large kernels."
+    },
+    "translation_patterns": {
+      "cuda_to_vulkan": {
+        "cudaEventRecord": "vkCmdWriteTimestamp + VkSemaphore signaled",
+        "cudaStreamSynchronize": "vkQueueWaitIdle OR vkWaitFences with timeout",
+        "cudaDeviceSynchronize": "vkDeviceWaitIdle",
+        "warning": "vkQueueWaitIdle blocks the CPU thread — use fences with timeout instead for TDR safety"
+      },
+      "cuda_to_directx12": {
+        "cudaEventRecord": "ID3D12Device5::SignalFence(fence, value)",
+        "cudaStreamSynchronize": "ID3D12Fence::SetEventOnCompletion(value, event) + WaitForSingleObject",
+        "cudaDeviceSynchronize": "ID3D12Device::WaitForFence() with polling",
+        "warning": "Always use timeline fences for multi-second GPU operations. Legacy fences can cause TDR on Windows."
+      },
+      "hip_to_vulkan": {
+        "hipEventRecord": "vkCmdWriteTimestamp(slot, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT)",
+        "hipStreamSynchronize": "vkQueueWaitIdle OR vkWaitFences with timeout",
+        "hipDeviceSynchronize": "vkDeviceWaitIdle"
+      }
+    },
+    "no_placeholder_fences": {
+      "never_allow": [
+        "// TODO: add sync",
+        "/* no fence */",
+        "// stub: assume done",
+        "cudaDeviceSynchronize(); // placeholder"
+      ],
+      "required_pattern": "Every kernel submission MUST have a fence/semaphore pair. At minimum, insert `query_toolchain()` for the proper fence pattern on your target."
+    }
+  },
+
+  "memory_patterns": {
+    "cuda_to_hip": {
+      "model": "Explicit allocation + transfer",
+      "managed_memory": "hipMallocManaged (varies by ROCm version)",
+      "unified": false,
+      "pinning": "hipHostMalloc / hipHostRegister",
+      "prefetch": "hipMemPrefetchAsync (ROCm 5+)"
+    },
+    "hip": {
+      "model": "Explicit allocation + transfer",
+      "managed_memory": "hipMallocManaged (varies by ROCm version)",
+      "unified": false,
+      "pinning": "hipHostMalloc / hipHostRegister",
+      "prefetch": "hipMemPrefetchAsync (ROCm 5+)"
+    },
+    "sycl": {
+      "model": "Unified shared memory (USM) + explicit buffers",
+      "managed_memory": "sycl::malloc_shared (implicitly managed)",
+      "unified": true,
+      "pinning": "N/A (unified)",
+      "prefetch": "queue.prefetch (implicit in USM)"
+    },
+    "vulkan": {
+      "model": "Explicit buffer/image resources",
+      "managed_memory": "N/A (fully explicit)",
+      "unified": false,
+      "pinning": "staging buffers",
+      "prefetch": "vkCmdCopyBuffer → pipeline barrier"
+    },
+    "directx12": {
+      "model": "Explicit heap allocation + upload/download",
+      "managed_memory": "N/A (fully explicit)",
+      "unified": false,
+      "pinning": "Upload heap",
+      "prefetch": "Resource barriers"
+    }
+  }
+}

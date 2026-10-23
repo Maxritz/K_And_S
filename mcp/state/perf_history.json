@@ -1,0 +1,13 @@
+{
+  "description": "Local performance history — records measurements as the user runs optimizations. The MCP learns from what the user does.",
+  "created": "2026-10-23T00:00:00Z",
+  "last_modified": "2026-10-23T00:00:00Z",
+  "entries": [],
+  "targets": [],
+  "notes": [
+    "This file is updated by the `record_performance` tool.",
+    "Each entry records: arch, workload, tok_per_s, config_hash, git_hash, notes.",
+    "The `suggest_optimizations` tool reads this history to recommend next steps.",
+    "Date-aware: use kands://status for current time before recording entries."
+  ]
+}

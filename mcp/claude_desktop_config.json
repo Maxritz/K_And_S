@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "kands": {
+      "command": "python",
+      "args": ["-m", "server"],
+      "env": {
+        "PYTHONPATH": "C:\\path\\to\\K_and_S\\mcp"
+      }
+    }
+  }
+}

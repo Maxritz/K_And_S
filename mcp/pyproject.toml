@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "mcp>=1.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-kands"
+version = "0.2.0"
+description = "MCP server for GPU kernel & shader porting analysis (K_and_S bundle)"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0",
+    "pydantic>=2.0",
+]
+
+[project.scripts]
+kands-server = "server:main"
+
+[tool.setuptools]
+packages = ["mcp"]
+
+[tool.setuptools.package-dir]
+"mcp" = "."
+
+[tool.setuptools.package-data]
+"mcp" = ["state/*.json", "state/analysis/*.md", "../*.json", "../*.md", "../docs/*.md", "../findings/*.md"]
