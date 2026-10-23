@@ -26,6 +26,7 @@ import glob
 import os
 import re
 import shutil
+import struct
 import subprocess
 import tempfile
 from pathlib import Path
@@ -169,14 +170,51 @@ def find_llvm_tool(*names: str) -> Path | None:
 # --------------------------------------------------------------------------- disassembly
 
 _ELF_MAGIC = b"\x7fELF"
+_BUNDLE_MAGIC = b"__CLANG_OFFLOAD_BUNDLE__"
 
 
-def unwrap_code_object(path: str | Path) -> Path | None:
+def bundle_entries(path: str | Path) -> list[dict[str, Any]]:
+    """Parse a clang offload bundle into [(triple, offset, size), ...].
+
+    hipcc and nvcc write a *bundle* (fatbinary container) rather than a bare
+    code object, and a bundle can hold several architectures. Slicing from the
+    first ELF magic therefore analyses whichever payload happens to come first,
+    which is how a report can describe codegen for an arch that was never
+    targeted. Parse the container instead and select by triple.
+    """
+    try:
+        data = Path(path).read_bytes()
+    except Exception:
+        return []
+    if not data.startswith(_BUNDLE_MAGIC):
+        return []
+    off = len(_BUNDLE_MAGIC)
+    try:
+        (n,) = struct.unpack_from("<Q", data, off)
+    except struct.error:
+        return []
+    off += 8
+    out: list[dict[str, Any]] = []
+    for _ in range(n):
+        try:
+            o, sz, tl = struct.unpack_from("<QQQ", data, off)
+        except struct.error:
+            break
+        off += 24
+        triple = data[off:off + tl].decode("utf-8", "replace")
+        off += tl
+        if o + sz <= len(data):
+            out.append({"triple": triple, "offset": o, "size": sz})
+    return out
+
+
+def unwrap_code_object(path: str | Path, arch: str | None = None) -> Path | None:
     """Return a raw ELF code object, unbundling a clang offload bundle if needed.
 
-    hipcc/nvcc write a *bundle* (fatbinary container), not a bare ELF, so
-    objdump and nm reject it with "not recognized as a valid object file".
-    Scan for the ELF magic and slice from there.
+    objdump and nm reject a bundle with "not recognized as a valid object file".
+    When the bundle holds several targets, `arch` (e.g. "gfx1201", "sm_90")
+    selects the payload; otherwise the first one is used. Falls back to the
+    first ELF magic for container formats this parser does not know.
     """
     p = Path(path)
     try:
@@ -185,6 +223,24 @@ def unwrap_code_object(path: str | Path) -> Path | None:
         return None
     if data[:4] == _ELF_MAGIC:
         return p
+
+    entries = bundle_entries(p)
+    chosen = None
+    if entries:
+        if arch:
+            for e in entries:
+                if arch in e["triple"]:
+                    chosen = e
+                    break
+        if chosen is None:
+            chosen = entries[0]
+        out = p.with_name(p.name + (".%s" % arch if arch else "") + ".elf")
+        try:
+            out.write_bytes(data[chosen["offset"]:chosen["offset"] + chosen["size"]])
+        except Exception:
+            return None
+        return out
+
     idx = data.find(_ELF_MAGIC)
     if idx < 0:
         return None
@@ -481,6 +537,191 @@ def diff_symbols(found: list[str], expected: list[str]) -> dict[str, list[str]]:
         "unexpected": sorted(fset - eset),
         "present": sorted(eset & fset),
     }
+
+
+# --------------------------------------------------------------------------- code object budget
+
+_META_KEYS = (
+    ".wavefront_size", ".vgpr_count", ".sgpr_count",
+    ".vgpr_spill_count", ".sgpr_spill_count",
+    ".private_segment_fixed_size", ".group_segment_fixed_size",
+    ".max_flat_workgroup_size",
+)
+
+
+def _kernel_meta(elf: Path) -> dict[str, dict[str, int]]:
+    """Per-kernel code-object metadata (AMD). Keyed by kernel name."""
+    out: dict[str, dict[str, int]] = {}
+    tool = find_llvm_tool("llvm-readelf.exe", "llvm-readelf")
+    if not tool:
+        return out
+    try:
+        r = subprocess.run([str(tool), "-n", str(elf)], capture_output=True,
+                           text=True, timeout=300, env=_env())
+    except Exception:
+        return out
+    cur: dict[str, int] = {}
+    name = None
+    for line in (r.stdout or "").splitlines():
+        s = line.strip()
+        m = re.match(r"^\.name:\s*(\S+)", s)
+        if m:
+            if name and cur:
+                out[name] = cur
+            name, cur = m.group(1).strip('"'), {}
+            continue
+        for k in _META_KEYS:
+            if s.startswith(k + ":"):
+                try:
+                    cur[k.lstrip(".")] = int(s.split(":", 1)[1].strip())
+                except ValueError:
+                    pass
+    if name and cur:
+        out[name] = cur
+    return out
+
+
+def _kernel_mix(txt: str) -> dict[str, dict[str, Any]]:
+    """Instruction budget per kernel from llvm-objdump -d output."""
+    chunks: dict[str, list[str]] = {}
+    cur = None
+    for line in txt.splitlines():
+        m = re.match(r"^[0-9a-f]+ <([^>]+)>:", line)
+        if m:
+            cur = m.group(1).split(".kd")[0]
+            chunks.setdefault(cur, [])
+        elif cur is not None:
+            chunks[cur].append(line)
+
+    out: dict[str, dict[str, Any]] = {}
+    for name, body in chunks.items():
+        ops: dict[str, int] = {}
+        widths: dict[str, int] = {}
+        for line in body:
+            code = line.split("#", 1)[0]
+            m = re.search(r"\b(v_\w+|s_\w+|ds_\w+|global_\w+|flat_\w+|buffer_\w+"
+                          r"|scratch_\w+|image_\w+|exp|s_waitcnt|s_barrier)\b", code)
+            if not m:
+                continue
+            op = m.group(1)
+            ops[op] = ops.get(op, 0) + 1
+            if "load" in op and ("global" in op or "flat" in op or "buffer" in op
+                                 or "scratch" in op or "image" in op):
+                w = re.search(r"(dwordx\d|dword|ubyte\d*|byte|ushort\d*|short)", op)
+                key = w.group(1) if w else op
+                widths[key] = widths.get(key, 0) + 1
+        if not ops:
+            continue
+        n = sum(ops.values())
+        lds = sum(c for k, c in ops.items() if k.startswith("ds_"))
+        bitw = sum(c for k, c in ops.items() if k in ("v_and_or_b32", "v_lshlrev_b32",
+                                                      "v_lshrrev_b32", "v_perm_b32",
+                                                      "v_alignbit_b32"))
+        loads = sum(widths.values())
+        out[name] = {
+            "instructions": n,
+            "global_loads": loads,
+            "load_widths": widths,
+            "lds_ops": lds,
+            "bit_ops": bitw,
+            "waits": ops.get("s_waitcnt", 0),
+            "branches": sum(c for k, c in ops.items() if k.startswith("s_cbranch")
+                            or k.startswith("s_branch")),
+            "dot_ops": sum(c for k, c in ops.items() if "dot" in k),
+            "fma_ops": sum(c for k, c in ops.items() if "fma" in k or "fmac" in k),
+            "top_ops": sorted(ops.items(), key=lambda kv: -kv[1])[:6],
+        }
+    return out
+
+
+def code_object_report(path: str, arch: str | None = None,
+                       lds_kib: float | None = None) -> dict[str, Any]:
+    """ISA and residency budget for a compiled kernel artifact.
+
+    Answers the two questions a port has to answer before tuning anything:
+
+    * **Is the kernel doing the work the algorithm describes?** A decode loop
+      that spends its issue slots on table lookups and bit manipulation, with a
+      handful of global loads, is not bandwidth-bound no matter what the
+      bandwidth counters say.
+    * **Can more than one block be resident per compute unit?** The scratch
+      memory a block reserves (`group_segment_fixed_size` / `smem`) divided into
+      the usable scratch per compute unit decides it. A design written for a GPU
+      with 48 KiB of scratch can pin a modern GPU at one block per CU without
+      anybody noticing.
+
+    Field names are the AMD/LLVM ones because that is the path implemented here;
+    the concepts map directly to CUDA (`registers`, `smem`, `warp size` from
+    `cuobjdump --dump-resource-usage` / `nvdisasm`) and to SPIR-V modules.
+    `lds_kib` is the usable scratch per compute unit for the target; pass it, or
+    leave None to report the raw number. Measured values, not datasheet values,
+    are the ones that match reality.
+    """
+    p = Path(path)
+    if not p.exists():
+        return {"ok": False, "error": "not found: %s" % path}
+    res: dict[str, Any] = {"ok": True, "path": str(p), "arch": arch or ""}
+
+    entries = bundle_entries(p)
+    res["bundle"] = [e["triple"] for e in entries] if entries else []
+    elf = unwrap_code_object(p, arch)
+    if elf is None:
+        res["ok"] = False
+        res["error"] = "no ELF code object inside %s" % p.name
+        return res
+    res["code_object"] = str(elf)
+
+    meta = _kernel_meta(elf)
+    res["kernels_in_metadata"] = len(meta)
+
+    tool = find_llvm_tool("llvm-objdump.exe", "llvm-objdump")
+    mix: dict[str, dict[str, Any]] = {}
+    if tool:
+        try:
+            r = subprocess.run([str(tool), "-d", "--mcpu=" + arch, str(elf)] if arch
+                               else [str(tool), "-d", str(elf)],
+                               capture_output=True, text=True, timeout=600, env=_env())
+            if r.returncode == 0:
+                mix = _kernel_mix(r.stdout or "")
+            else:
+                try:
+                    r = subprocess.run([str(tool), "-d", str(elf)], capture_output=True,
+                                       text=True, timeout=600, env=_env())
+                    mix = _kernel_mix(r.stdout or "")
+                except Exception:
+                    mix = {}
+        except Exception:
+            mix = {}
+    else:
+        res["note"] = ("no llvm-objdump found: metadata only. On CUDA use "
+                       "`cuobjdump --dump-resource-usage` and `nvdisasm`.")
+
+    kernels: dict[str, Any] = {}
+    for name in sorted(set(meta) | set(mix)):
+        row: dict[str, Any] = dict(meta.get(name, {}))
+        row.update(mix.get(name, {}))
+        # residency: the unambiguous half of occupancy
+        gs = row.get("group_segment_fixed_size") or 0
+        per_cu = float(lds_kib) * 1024.0 if lds_kib else 0.0
+        if per_cu and gs:
+            row["lds_blocks_per_cu"] = int(per_cu // gs)
+        verdicts = []
+        if row.get("vgpr_spill_count") or row.get("sgpr_spill_count"):
+            verdicts.append("registers spill to scratch")
+        if per_cu and gs and (per_cu // gs) <= 1:
+            verdicts.append("LDS-pinned: only 1 workgroup per CU")
+        if per_cu and gs >= per_cu:
+            verdicts.append("group segment alone exceeds the LDS per CU")
+        if row.get("instructions") and row.get("global_loads") == 0 and row.get("lds_ops"):
+            verdicts.append("LDS-driven with no global loads in the body (check for a loop)")
+        n = row.get("instructions") or 0
+        if n and (row.get("lds_ops", 0) + row.get("bit_ops", 0)) > 0.05 * n and not row.get("dot_ops"):
+            verdicts.append("LDS/bit-op heavy with no dot instruction "
+                            "(confirm: decode loop, or a reduction?)")
+        row["verdicts"] = verdicts
+        kernels[name] = row
+    res["kernels"] = kernels
+    return res
 
 
 # --------------------------------------------------------------------------- capability report

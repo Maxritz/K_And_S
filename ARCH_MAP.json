@@ -285,6 +285,18 @@
       "vendor_id": "gfx1201",
       "wave_size": 32,
       "lds_kib": 128,
+      "measured": {
+        "provenance": "RX 9070 XT (gfx1201), Windows, measured on-device; see PORTING-LESSONS.md section 9",
+        "streaming_bandwidth_gb_s": 616,
+        "cache_resident_bandwidth_gb_s": 1424,
+        "lds_kib_usable_per_cu": 64,
+        "compute_units_physical": 64,
+        "compute_units_reported_by_runtime": 32,
+        "runtime_unit_note": "the runtime multiprocessor count returns workgroup processors (WGP), not compute units: 32 WGP = 64 CU",
+        "l2_mib_reported_by_runtime": 8,
+        "wave_size_from_code_object": 32,
+        "wave_size_probe": "__ballot(1) returns 0xffffffff; code object reports wavefront_size 32"
+      },
       "tensor_cores": false,
       "wmma": true,
       "dot4": true,

@@ -1,8 +1,27 @@
 {
   "description": "Local performance history — records measurements as the user runs optimizations. The MCP learns from what the user does.",
   "created": "2026-10-23T00:00:00Z",
-  "last_modified": "2026-10-23T00:00:00Z",
-  "entries": [],
+  "last_modified": "2026-10-23T20:22:07.931702+00:00",
+  "entries": [
+    {
+      "timestamp": "2026-10-23T19:14:17.635160+00:00",
+      "arch": "gfx1201",
+      "workload": "llm_decode",
+      "tok_per_s": 35.0,
+      "config_hash": "",
+      "git_hash": "",
+      "notes": "kindi 2B ternary: cached ctypes arg marshalling in cupy shim (15.5us -> 3.3us per launch, 331 launches[path] body 28.1 -> 35.0 tok[path] (+24.5%). device-side still 25ms[path] vs 0.7ms roofline: launch count dominates."
+    },
+    {
+      "timestamp": "2026-10-23T20:22:07.931702+00:00",
+      "arch": "gfx1201",
+      "workload": "llm_decode",
+      "tok_per_s": 282.0,
+      "config_hash": "",
+      "git_hash": "",
+      "notes": "CORRECTION of the 35 tok/s entry above, same engine and card. Re-measured with burst replay + host subtraction (paired events report the host submission span when the host is the bottleneck; sync-per-launch reports the driver round trip): device 1.94 ms, host 3.30 ms, wall 3.55 ms/token, 282 tok/s decode, 1726 tok/s read. Launch count 346 -> 130 by capturing 18 layers as replayable command graphs (no numerical change). Device now runs at 242 GB/s = 39% of the 616 GB/s MEASURED streaming rate (not the 1152 GB/s datasheet figure), i.e. 2.54x off roofline; the earlier '25 ms device' was a measurement artefact inflated ~13x and it hid this. Hot kernel is an LDS table decoder: 41 472 B scratch per block pins one block per CU and it spends 64 shared-loads + 64 bit-ops per 96 bytes decoded. Retracted claim: it was NOT purely launch-bound - the wall is host-shaped, but the device is also 2.54x off its own roofline."
+    }
+  ],
   "targets": [],
   "notes": [
     "This file is updated by the `record_performance` tool.",

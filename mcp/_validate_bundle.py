@@ -65,9 +65,17 @@ try:
     tool_names = [t.name for t in tools]
     print(f'Has verify_numerical_equivalence: {"verify_numerical_equivalence" in tool_names}')
 
-    # Verify autonomous_port has security params
+    # Verify autonomous_port has security params.
+    # The SDK model may expose the field as `inputSchema` (wire name) or
+    # `input_schema` (python attribute), so read both rather than assuming one.
     ap_tool = [t for t in tools if t.name == 'autonomous_port'][0]
-    ap_props = ap_tool.inputSchema.get('properties', {})
+    ap_schema = (getattr(ap_tool, 'inputSchema', None)
+                 or getattr(ap_tool, 'input_schema', None) or {})
+    if isinstance(ap_schema, dict) and ap_schema.get('properties'):
+        ap_props = ap_schema.get('properties', {})
+    else:
+        ap_props = {}
+        errors.append('autonomous_port: no readable input schema on the Tool model')
     print(f'autonomous_port security params:')
     print(f'  max_files in schema: {"max_files" in ap_props}')
     print(f'  timeout_seconds in schema: {"timeout_seconds" in ap_props}')

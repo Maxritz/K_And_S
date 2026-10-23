@@ -33,7 +33,8 @@ This document tracks all files in the K_and_S bundle for audit and contribution 
 
 | Path | Purpose |
 |---|---|
-| `mcp/server.py` | Main MCP server (26 tools, 20 resources, MCP 2.x, runtime toolchain detection) |
+| `mcp/isa_tools.py` | Instruction probing, artifact verification (bundle-aware), build gates, `code_object_report` |
+| `mcp/server.py` | Main MCP server (37 tools, 21 resources, MCP 2.x, runtime toolchain detection) |
 | `mcp/reference_search.py` | ArXiv + GitHub search utilities |
 | `mcp/pyproject.toml` | `pip install -e .` packaging |
 | `mcp/claude_desktop_config.json` | Ready-to-use MCP client config |
@@ -47,8 +48,8 @@ This document tracks all files in the K_and_S bundle for audit and contribution 
 - **5** model families (DeepSeek, GLM, Qwen, LLaMA, etc.)
 - **7** GPU toolkits + **6** host toolchains (incl. Strawberry Perl)
 - **5** model file formats (GGUF, Safetensors, ONNX, HDF5, MLC)
-- **26** MCP tools (incl. `detect_toolchain`, `search_online`, `reject_common_pattern`, `radical_experiment_plan`)
-- **20** MCP resources (incl. `kands://radical-experiments`)
+- **37** MCP tools (incl. `detect_toolchain`, `search_online`, `code_object_report`, `probe_isa`, `build_porting_map`)
+- **21** MCP resources (incl. `kands://porting-lessons`, `kands://radical-experiments`)
 - **Phase 0-8** methodology (incl. Phase 8: Share/Contribute)
 - **3** diagnostic methods (Ponytail-diag, sherlock-it, CPU-as-oracle)
 

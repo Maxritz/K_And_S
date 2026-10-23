@@ -15,7 +15,7 @@
 
 Modern GPU development is complicated. You have NVIDIA with CUDA, AMD with HIP and ROCm, Intel with oneAPI and SYCL, and then there is Vulkan and DirectX for cross-platform compute. Most developers stick to one vendor because porting is hard. When you do try to port, you end up copying code blindly, hoping intrinsics translate, and debugging mysterious performance regressions.
 
-K_and_S was built to fix that. It started as a collection of notes from real kernel porting work, documenting what actually works on real hardware. We tested on AMD RDNA2 and RDNA4 (gfx1031, gfx1201), and later will test on Intel Core Ultra 5 135H (meteor_lake). We learned which patterns fail, which optimizations actually help, and which myths waste hours of development time.
+K_and_S was built to fix that. It started as a collection of notes from real kernel porting work, documenting what actually works on real hardware. We tested on AMD RDNA2 and RDNA4 (gfx1031, gfx1201), and later will test on Intel Core Ultra 5 135H (meteor_lake). We learned which patterns fail, which optimizations help in practice, and which myths waste hours of development time.
 
 This is not just a tool. It is a knowledge base that travels with you. When you fix a kernel on one project, you can save the solution as a template and reuse it on the next project. When the team grows, the knowledge stays.
 
@@ -29,38 +29,38 @@ Point K_and_S at any codebase. It will scan every `.cu`, `.hip`, `.comp`, `.hlsl
 ### Check Compatibility
 Before you start porting, see if your target architecture supports everything your source needs. Does your target have tensor cores? DP4a? Native BF16? Will Vulkan cooperative matrices work (they do not on AMD, use DP4a instead). K_and_S tells you upfront so you do not waste weeks on a dead end.
 
-### Inventory before you port — the pre-port reference
+### Inventory before you port: the pre-port reference
 Do not start from "where do I begin". Start from a complete list of what the tree actually depends on.
 
 `build_function_reference` scans the sources and produces the vendor-function reference for your target: every CUDA runtime call, driver call, inline-PTX instruction, device intrinsic and framework feature that is genuinely used, each with
 
 - the replacement on the target,
-- a status — **Auto** (compiler maps it), **Partial** (maps but differs), **Manual** (source must change) or **No equivalent** (restructure),
+- a status: **Auto** (compiler maps it), **Partial** (maps but differs), **Manual** (source must change) or **No equivalent** (restructure),
 - the call sites and the files that depend on it.
 
-Status resolves **per architecture**, because the answer changes within a vendor family: `mma.sync` is manual on every AMD target, but MFMA covers CDNA, WMMA covers RDNA3/RDNA4, and RDNA2 has no matrix core at all — the table says so rather than flattening it into "manual".
+Status resolves **per architecture**, because the answer changes within a vendor family. `mma.sync` is manual on every AMD target, but MFMA covers CDNA, WMMA covers RDNA3/RDNA4, and RDNA2 has no matrix core at all. The table says so instead of flattening it all into "manual".
 
-Anything with **no equivalent** is reported as a hard blocker. A blocker is not a partial gap: the kernel must be redesigned or dropped, and that decision belongs before the first line of code, not after.
+Anything with **no equivalent** is reported as a hard blocker. A blocker is not a partial gap. The kernel has to be redesigned or dropped, and that decision belongs before the first line of code, not after.
 
 `lookup_api` gives the same answer for a single symbol while you are reading code.
 
 
-Capability tables lie. A real port was designed around `v_dot4_i32_i8`; that mnemonic has **no gfx12 encoding** and crashes the LLVM backend rather than failing at the assembler. Its replacement, `amd_mixed_dot`, compiles fine and emits `v_dot4_i32_iu8` — same hardware, different spelling.
+Capability tables lie. A real port was designed around `v_dot4_i32_i8`, and that mnemonic has **no gfx12 encoding**. It crashes the LLVM backend instead of failing at the assembler. Its replacement, `amd_mixed_dot`, compiles fine and emits `v_dot4_i32_iu8`. Same hardware, different spelling.
 
 `probe_isa` compiles each candidate **for your actual target**, one translation unit per candidate so a single failure cannot mask the rest, and returns both the verdict and the disassembled mnemonics. That is the only reliable oracle for "does this instruction exist on this chip".
 
 ### Build a function-to-function porting map
-`build_porting_map` reads your source and, for every kernel/device function, reports:
+`build_porting_map` reads your source and, for every kernel or device function, reports:
 
 - the constructs it uses (inline-asm mnemonics, warp intrinsics, barriers, local memory, id builtins)
 - the **substitution** for your target, with an explicit fidelity grade: `exact`, `portable`, `approximate`, `lossy`, `manual` or `drop`
-- a caveat where one applies (e.g. a matrix instruction that can only be reconstructed element-wise)
+- a caveat where one applies (for example a matrix instruction that can only be reconstructed element-wise)
 
-It understands CUDA/HIP, SYCL, OpenCL, GLSL, HLSL and Metal, and it follows ISA constructs that hide inside `#define` macros — otherwise code built entirely from an unsupported instruction reports as clean.
+It understands CUDA/HIP, SYCL, OpenCL, GLSL, HLSL and Metal, and it follows ISA constructs that hide inside `#define` macros. Otherwise code built entirely from an unsupported instruction reports as clean.
 
 It also emits the **extension-to-extension file plan** for the ported tree, so you know which files are rewritten and which are copied:
 
-| source | → HIP | → CUDA | → SYCL | → Vulkan | → DirectX |
+| source | to HIP | to CUDA | to SYCL | to Vulkan | to DirectX |
 |---|---|---|---|---|---|
 | `.cu` (CUDA) | `.hip` | `.cu` | `.cpp` | `.comp` | `.hlsl` |
 | `.cl` (OpenCL) | `.cpp` | `.cu` | `.cpp` | `.comp` | `.hlsl` |
@@ -72,7 +72,14 @@ It also emits the **extension-to-extension file plan** for the ported tree, so y
 `verify_porting_map` then closes the loop: it probes every mapped *replacement* on the real target and downgrades anything that does not encode.
 
 ### Gate the build
-`scan_residual_asm` finds live `asm("…")` strings that still name a foreign mnemonic (comments are ignored, so no false positives), and `build_module` deletes the output before compiling, then reports size plus the exported kernel symbols compared against what you expect. A module that compiles but lacks a kernel the runtime calls is not a successful build — and a stale artifact must never look like a fresh one.
+`scan_residual_asm` finds live `asm("...")` strings that still name a foreign mnemonic (comments are ignored, so no false positives), and `build_module` deletes the output before compiling, then reports the size plus the exported kernel symbols compared against what you expect. A module that compiles but lacks a kernel the runtime calls is not a successful build, and a stale artifact must never look like a fresh one.
+
+### Inspect the compiled artifact
+`code_object_report` opens a compiled kernel file (`.hsaco`, `.cubin`, `.co`, `.elf`) and tells you what the compiler actually produced.
+
+It unpacks the container and selects the right target if the file holds more than one architecture, then reports for each kernel: SIMD width, register counts, spills, scratch memory per block, how many blocks that scratch allows to reside per compute unit, and the instruction mix (global loads with their widths, shared memory operations, bit operations, dot operations), with plain verdicts.
+
+This is how a kernel that looks acceptable in a timing profile turns out to be pinned at one block per compute unit, or to be spending its issue slots decoding data instead of moving it. In one port it found both problems in a single kernel that had been assumed to be memory bound.
 
 ### Find Installed Toolchains
 Instead of reading docs and guessing where hipcc or nvcc lives on your machine, K_and_S checks at runtime. It looks in your PATH, checks your environment variables (ROCM_PATH, CUDA_PATH, VULKAN_SDK, ONEAPI_ROOT), and scans common install locations. It even detects Strawberry Perl, which you need for some build scripts alongside MSVC.
@@ -80,8 +87,10 @@ Instead of reading docs and guessing where hipcc or nvcc lives on your machine, 
 ### Estimate Performance
 Got a target architecture and a workload (say, flash attention at 8192 sequence length)? K_and_S uses roofline models to tell you the theoretical ceiling and what real developers achieve in practice. You get a target tokens per second number before you write a single line of code.
 
+Remember to divide by a bandwidth you measured on your own card. On one RDNA4 card the datasheet says 1152 GB/s and a streaming read measures 616 GB/s, so a kernel sitting at 39 percent of the datasheet figure was really at 73 percent of what the machine can do.
+
 ### Reject Common Myths
-Before you follow the usual advice, check if it is actually wisdom or just cargo culting. Is hipify-perl enough to port a CUDA project to HIP? No. Can you copy CUDA code to HIP verbatim? No. Does Vulkan CooperativeMatrix work on AMD? No. K_and_S has a tool that calls out these patterns as wrong and explains the correct approach for your specific architecture.
+Before you follow the usual advice, check if it is wisdom or just cargo culting. Is hipify-perl enough to port a CUDA project to HIP? No. Can you copy CUDA code to HIP verbatim? No. Does Vulkan CooperativeMatrix work on AMD? No. K_and_S has a tool that calls out these patterns as wrong and explains the correct approach for your specific architecture.
 
 ### Plan Radical Experiments
 RDNA has hundreds of extensions most developers never use because they copy CUDA habits. K_and_S generates experiments you can try instead: use DPP shuffles instead of LDS transposes, try register-only blocking for small tiles, compare wave32 vs wave64, write raw AMDGCN assembly for hot loops. Each experiment comes with a verification plan so you do not break correctness while chasing performance.
@@ -131,7 +140,8 @@ All templates are standard markdown files. You can:
 3. `compare_archs` shows all feature gaps before you start coding
 4. `estimate_performance` gives you a realistic target upfront
 5. `verify_numerical_equivalence` catches correctness bugs immediately
-6. Save successful approaches as templates for the whole team
+6. `code_object_report` shows what the compiler really emitted, so you tune the kernel you have and not the one you assumed
+7. Save successful approaches as templates for the whole team
 
 ---
 
@@ -187,7 +197,7 @@ estimate_performance(arch="gfx1201", workload="flash_attn", seq_len=8192)
 # 4. Check a common idea before implementing
 reject_common_pattern("hipify-perl handles everything", arch="gfx1201")
 
-# 5. Verify every instruction the port depends on — before designing anything
+# 5. Verify every instruction the port depends on, before designing anything
 probe_isa(target="gfx1201", candidates=[
     {"name": "raw v_dot4",     "stmt": 'asm("v_dot4_i32_i8 %0,%1,%2,%0;" : "+r"(acc) : "r"(a),"r"(b));'},
     {"name": "amd_mixed_dot",  "stmt": "acc = amd_mixed_dot(ca, cb, acc, false);"},
@@ -206,16 +216,21 @@ scan_residual_asm(files=[...], backend="hip")
 build_module(sources=[...], target="gfx1201", out="engine.hsaco",
              expected_symbols=["k_g4", "k_rmsw"])
 
-# 9. Port the full repo
+# 9. Look at what the compiler actually emitted, before writing any tuning code
+code_object_report(path="engine.hsaco", arch="gfx1201", lds_kib=64)
+# -> k_g4: scratch 41472 B per block, 1 block per CU,
+#    64 shared loads and 64 bit ops for every 96 bytes decoded
+
+# 10. Port the full repo
 autonomous_port(repo_path="/path/to/kernel/code", source_arch="sm_80", target_arch="gfx1201")
 
-# 10. Verify correctness after each change
+# 11. Verify correctness after each change
 verify_numerical_equivalence(arch="gfx1201", workload="gemm", source_values=[...], target_values=[...])
 
-# 11. Record what you learned
+# 12. Record what you learned
 record_performance(arch="gfx1201", workload="gemm", tok_per_s=42500.0, notes="Used DPP shuffle, wave32")
 
-# 12. Save as a template for next time
+# 13. Save as a template for next time
 export_contribution(engine_name="MyEngine", arch="gfx1201", workload="gemm")
 ```
 
@@ -239,17 +254,22 @@ K_and_S follows an eight phase methodology so you never miss a step:
 
 ## Field Notes: `kands://porting-lessons`
 
-`PORTING-LESSONS.md` is a resource distilled from an end-to-end port of a ternary-quantised LLM engine from CUDA to RDNA4. Read it before starting any port. It is deliberately blunt about what failed:
+`PORTING-LESSONS.md` is compiled from a full port of a ternary quantised LLM engine from CUDA to RDNA4. Read it before starting any port. It is blunt about what went wrong, and it is written in vendor neutral language, so the rules apply to CUDA, HIP, Vulkan, DirectX, Metal and SYCL alike.
 
-- **Nine gates** that must exist before the first edit (probe the ISA, scan for residual foreign asm, delete artifacts, assert the symbol inventory, run the model)
-- **The ISA verification protocol**, including the measured table showing that a mnemonic name is not a capability — `v_dot4_i32_i8` fails while `amd_mixed_dot` emits `v_dot4_i32_iu8`
-- **Six ways a source rewrite silently fails**: literal mismatch, prefix mismatch, terminator mismatch, cross-line regex, whole-line replacement, ordering
-- **Two structural traps**: `__launch_bounds__(N)` corrupting every signature scan, and ISA constructs hiding inside `#define` macros
-- **Shim conformance**: a drop-in replacement must match *behavioural* contracts (bytes vs str, 0-d device views, strided copies, argument marshalling)
-- **A performance method** that separates host launch, queue wait, device execution and sync — and the finding that 331 launches/token cost more than the arithmetic ever did
-- **An engine-class checklist** for ninfer/deepinfer/llama.cpp-style ports: what already runs on the target, what is genuinely custom, which runtime machinery must be replaced, which named libraries need call-level answers, and how to establish the numerical contract
+- **A terminology map** at the top, which lines up queue, captured commands, execution batch, SIMD unit, lane, fast scratch, timestamp, artifact, compute unit and registers across six ecosystems. A rule stated once can then be applied anywhere.
+- **Six gates** that must exist before the first edit: probe the ISA, scan for leftover foreign asm, delete the output before building, check the exported symbols, and run the model (section 1).
+- **The ISA verification protocol** (section 2). A mnemonic name is not a capability. `v_dot4_i32_i8` has no gfx12 encoding and breaks the backend, while `amd_mixed_dot` compiles and emits `v_dot4_i32_iu8`. The same section records that a wave size flag was rejected by the compiler while the default was already correct, which is a reminder to verify the artifact and not the flag.
+- **Six ways a source rewrite fails silently**: literal mismatch, prefix mismatch, terminator mismatch, cross line regex, whole line replacement, and ordering (section 3).
+- **Two structural traps**: `__launch_bounds__(N)` breaking every signature scan, and ISA constructs hiding inside `#define` macros (section 3).
+- **Shim conformance** (section 4). A drop in replacement has to match behaviour and not just names: bytes against str, zero dimensional device views, strided copies, and argument marshalling.
+- **A measurement doctrine** (section 6). Four different instruments that timed the same kernel gave answers three orders of magnitude apart, so the document now records what each one really reports. A timestamp pair around a whole phase measures the host submission span whenever the host is the bottleneck. A timestamp pair around every operation measures its own instrumentation floor, which is per operation and not small. A launch followed by an immediate device sync measures the driver round trip. Only burst replay with the host time subtracted measures the kernel. The section then gives the question that settles the diagnosis (does the host finish submitting before the device finishes executing?), the invariant that the parts cannot exceed the whole, and the conditions for accepting a change at all (bit exact output, reproducible numbers, arms interleaved).
+- **Verify the artifact, not the flag** (section 7). Compiler output is usually a container that can hold more than one architecture, the metadata states the real SIMD width, register counts and scratch sizes, and a probe that appears to prove six compiler flags were rejected proves nothing if the test source never compiled in the first place.
+- **Port the reason, not the code** (section 7.1). A kernel that hoists tables into a scarce resource was written for that scarcity. If the new target has the instruction that made the trick unnecessary, the structure has become a cost instead of an optimisation.
+- **Capture and replay semantics** (section 8). What cannot be captured, why host side bookkeeping has to be replayed by hand, why a capture is valid only for the state it was recorded in, and why a failed capture must run the work again instead of silently dropping it.
+- **Measured numbers beat datasheet numbers** (section 9). On one card: 616 GB/s achieved against 1152 GB/s on paper, 64 KiB of usable scratch against 128 KiB in the table, and a runtime "compute unit" count that was really workgroup processors.
+- **An engine class checklist** (section 10) for ninfer, deepinfer and llama.cpp style ports: what already runs on the target, what is genuinely custom, which runtime machinery has to be replaced, which named libraries need call level answers, and how to fix the numerical contract before touching code.
 
-Every claim in it is tied to a measurement that was taken, not to advice that was read.
+Every claim in it is tied to a measurement that was taken, not advice that was read. That includes a **retraction** of the document's own earlier performance number, because a wrong measurement left sitting in documentation is worse than no measurement at all.
 
 ---
 

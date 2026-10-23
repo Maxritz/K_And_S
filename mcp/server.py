@@ -3239,6 +3239,7 @@ _build_module = isa_tools.build_module
 _module_symbols = isa_tools.module_symbols
 _diff_symbols = isa_tools.diff_symbols
 _capability_report = isa_tools.capability_report
+_code_object_report = isa_tools.code_object_report
 _FOREIGN_MNEMONICS = isa_tools.FOREIGN_MNEMONICS
 
 _build_porting_map = porting_map.build_map
@@ -3725,6 +3726,33 @@ def _tools() -> list[mcp_types.Tool]:
                     "expected_symbols": {"type": "array", "items": {"type": "string"}, "description": "If given, report missing/unexpected kernel symbols"},
                 },
                 "required": ["sources", "target", "out"],
+            },
+        ),
+        mcp_types.Tool(
+            name="code_object_report",
+            description=("ISA and residency budget for a compiled kernel artifact. "
+                         "Unbundles a container (clang offload bundle / fatbinary) and "
+                         "selects the right target from it, then reports per kernel: "
+                         "SIMD width, register counts (VGPR/SGPR or registers), spills, "
+                         "scratch memory per block, how many blocks that allows to be "
+                         "resident per compute unit, and the instruction mix (global "
+                         "loads with widths, shared-memory ops, bit ops, dot ops) with "
+                         "verdicts. Use before tuning: a kernel can be pinned at one "
+                         "block per CU, or spending its issue slots decoding, and "
+                         "neither shows up in timing counters. Vendor-neutral in what "
+                         "it asks; the AMD/LLVM path is implemented, and the CUDA "
+                         "equivalents are reported when no LLVM tooling is present."),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string",
+                             "description": "Compiled kernel artifact (.hsaco/.cubin/.co/.elf/.metallib), bundle or raw ELF"},
+                    "arch": {"type": "string",
+                             "description": "Select this target from a multi-arch bundle, e.g. 'gfx1201' or 'sm_90'"},
+                    "lds_kib": {"type": "number",
+                                "description": "Usable scratch memory per compute unit in KiB (measured, not datasheet) to compute residency"},
+                },
+                "required": ["path"],
             },
         ),
         mcp_types.Tool(
@@ -4685,6 +4713,51 @@ gh pr view --web
                           "now present is from this attempt only.")
             results.append(mcp_types.TextContent(type="text", text="\n".join(md)))
             results.append(mcp_types.TextContent(type="text", text=json.dumps(res, indent=2)))
+
+    elif name == "code_object_report":
+        p = arguments.get("path", "")
+        if not p:
+            results.append(mcp_types.TextContent(
+                type="text", text="Error: path is required"))
+        else:
+            r = _code_object_report(p, arguments.get("arch"),
+                                    arguments.get("lds_kib"))
+            if not r.get("ok"):
+                results.append(mcp_types.TextContent(
+                    type="text", text="Error: %s" % r.get("error")))
+            else:
+                md = ["# Code object — `%s`\n" % Path(p).name]
+                if r.get("bundle"):
+                    md.append("- bundle targets: %s" % ", ".join(r["bundle"]))
+                md.append("- kernels found: %d" % len(r.get("kernels", {})))
+                if r.get("note"):
+                    md.append("- note: %s" % r["note"])
+                md.append("")
+                md.append("| kernel | wave | VGPR | SGPR | LDS/block | blocks/CU | insns |"
+                          " glb loads | ld widths | LDS | bit | dot | verdicts |")
+                md.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+                for kname, v in sorted(r.get("kernels", {}).items()):
+                    widths = ",".join("%s x%d" % (a, b) for a, b in
+                                      sorted(v.get("load_widths", {}).items())) or "-"
+                    md.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |"
+                              % (kname, v.get("wavefront_size", "?"),
+                                 v.get("vgpr_count", "?"), v.get("sgpr_count", "?"),
+                                 v.get("group_segment_fixed_size", "?"),
+                                 v.get("lds_blocks_per_cu", "-"),
+                                 v.get("instructions", "?"),
+                                 v.get("global_loads", "?"), widths,
+                                 v.get("lds_ops", 0), v.get("bit_ops", 0),
+                                 v.get("dot_ops", 0),
+                                 "; ".join(v.get("verdicts", [])) or "ok"))
+                md.append("")
+                md.append("Residency is computed from LDS per block against the "
+                          "`lds_kib` you supply; register-limited occupancy needs the "
+                          "register file size for the target. Measured LDS per CU is "
+                          "the number that matches reality, not the datasheet.")
+                results.append(mcp_types.TextContent(
+                    type="text", text="\n".join(md)))
+                results.append(mcp_types.TextContent(
+                    type="text", text=json.dumps(r["kernels"], indent=2)))
 
     elif name == "build_porting_map":
         files = arguments.get("files", []) or []
