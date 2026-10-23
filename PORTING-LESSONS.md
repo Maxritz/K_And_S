@@ -241,6 +241,21 @@ transfers.
   submitting an entire token plan on the null stream while the shim synchronised its own,
   so a batched path was measured at 2.3 ms/token, which implied 2.3 TB/s of weight
   traffic and is therefore impossible. Validate by comparing against a device-wide sync.
+- **Count the work from the artifact, not from the source.** A microbenchmark's arithmetic
+  must come from the instructions actually emitted, because a loop body commonly holds more
+  than one instance of the operation of interest: a four-fold miscount here made a figure
+  wrong by 4x, and the error survived because the number looked plausible.
+- **Interleave the variants inside one thermal state.** Sweeping variants one after another
+  lets the clock drift between them, and the same kernel then read 94 in one sweep and 170
+  in another. Running them round-robin and taking the best per round made the figures
+  reproducible to about 1 percent. If a number moves when you re-run it, it is not a
+  measurement yet, and do not build a plan on it.
+- **Check a throughput figure against the issue bound before believing it.** Divide the
+  measured operations per second by the unit count and the clock to get operations per
+  cycle per unit. If that comes out above what the hardware can issue, the number is wrong;
+  if it comes out at a clean fraction like a quarter, the kernel is probably at a real
+  limit. Here the measured 0.22 matrix ops per unit per cycle was the tell that a widely
+  quoted one-per-cycle figure was about 4.5x too high.
 
 ### 6.2 Decompose, then ask which side the wall is on
 

@@ -314,7 +314,7 @@
           "fp4": "absent",
           "fp8": "exists only as WMMA; no scalar fp8 conversion (v_cvt_pk_fp8_f32 is rejected)",
           "pipeline_rules": "ISA 7.12.1 needs >=1 independent VALU between WMMAs whose operands overlap the previous D; 7.12.2 fixes lane/vgpr/startPosn per element; 11.6.2 gives GLOBAL_LOAD_TR_B64/B128 load-and-transpose straight into operand registers",
-          "measured": "a naive 8-accumulator loop reached only 176 TOPS because it ignored the layout and hazard rules; rated dense int4 is 766 TOPS"
+          "measured": "dense matrix throughput measured with independent accumulator chains and round-robin interleaved rounds: int4 16x16x16 = 161 TOPS, int4 16x16x32 = 336 TOPS, fp16 16x16x16 = 179 TFLOPS. Both int4 forms peak at about 0.22 matrix instructions per CU per cycle, i.e. roughly one per 4.6 cycles and not one per cycle, so any figure derived from one-per-cycle is about 4.5x too high. The 16x16x32 form is 2.08x the 16x16x16 form at the same instruction rate, so the wider-K form is the one to use. fp16 is 3.7x the scalar FP32 vector rate and needs no activation quantisation, but the int4 K=32 form is 3.75x the fp16 MAC rate, so the choice trades numerical transparency against throughput. An earlier figure of 176 TOPS was not reproducible: its MAC count missed the number of matrix ops in the loop body, and its sequential sweep let the clock drift between variants"
         },
         "operand_width_vs_density": {
           "ternary_bits_per_weight_ideal": 1.585,
