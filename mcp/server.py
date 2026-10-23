@@ -241,9 +241,11 @@ class AutonomousPortParams(BaseModel):
     target_os: str = Field("auto", description="Target OS: 'linux', 'windows', 'auto'")
     target_tok_per_s: float = Field(0, description="Performance target for LLM workloads (0 = no target)")
     mode: str = Field("strict", description="Porting mode: 'strict' or 'loose'")
-    max_files: int = Field(1000, description="Maximum number of files to scan (security: prevents resource exhaustion from large repos)")
+    max_files: int = Field(1000, description="Maximum number of files to scan")
     force_refresh: bool = Field(False, description="Force re-analysis (bypass cache)")
-    break_self_check: bool = Field(False, description="Set to True (1) to bypass Self-Check Gate violations. Gate violations are listed in output for selection.")
+    break_self_check: bool = Field(False, description="Bypass Self-Check Gate violations")
+    strip_debug: int = Field(0, description="Strip debug tracing: 0=keep, 1=comment-out (compile-time), 2=remove from source")
+    strip_perf: int = Field(0, description="Strip perf tracing: 0=keep, 1=comment-out (compile-time), 2=remove from source")
     timeout_seconds: int = Field(60, description="Timeout for clone + scan operations (seconds)")
 
 
@@ -2716,6 +2718,21 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
     step += 1
     report += f"{step}. **Verify:** `ctest -R _parity` && run host binary with `--selftest` flag\n"
 
+    # ── Strip options ──────────────────────────────
+    if params.strip_debug > 0 or params.strip_perf > 0:
+        report += f"\n### Tracing Stripped (production build)\n\n"
+        report += "| Flag | Level | Effect |\n|---|---|---|\n"
+        if params.strip_debug == 1:
+            report += "| `strip_debug=1` | Comment out | STRACE calls wrapped in `#ifdef STRACE_ENABLED` (compile-time disable) |\n"
+            report += f"  **Compile with:** `-DSTRACE_ENABLED=0` or `/DSTRACE_ENABLED=0`\n"
+        elif params.strip_debug == 2:
+            report += "| `strip_debug=2` | Remove source | STRACE calls removed entirely from source files |\n"
+        if params.strip_perf == 1:
+            report += "| `strip_perf=1` | Comment out | PERF_SUMMARY calls wrapped in `#ifdef TRACE_PERF` (compile-time disable) |\n"
+            report += f"  **Compile with:** `-DTRACE_PERF=0` or `/DTRACE_PERF=0`\n"
+        elif params.strip_perf == 2:
+            report += "| `strip_perf=2` | Remove source | PERF_SUMMARY calls removed entirely from source files |\n"
+
     report += f"""
 ### Loose mode (get it running first):
 
@@ -2908,6 +2925,74 @@ def _run_mcp_selfcheck(report: str, params, patterns: dict) -> str:
     return result, []
 
 server = Server("kands")
+
+
+def _strip_tracing_from_dir(directory: str, strip_debug: int, strip_perf: int, extensions: list[str]) -> str:
+    """Strip STRACE/PERF tracing from source files in a directory.
+
+    Level 1: comment out tracing calls (compile-time disable via #ifdef)
+    Level 2: remove tracing calls entirely from source
+    """
+    from pathlib import Path
+    import re
+
+    dir_path = Path(directory)
+    if not dir_path.exists():
+        return f"Error: directory '{directory}' does not exist"
+
+    stats = {"files_processed": 0, "straces_removed": 0, "perfs_removed": 0}
+
+    for f in dir_path.rglob("*"):
+        if not f.is_file():
+            continue
+        if f.suffix.lower() not in extensions:
+            continue
+
+        try:
+            content = f.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+
+        original = content
+
+        # STRACE patterns: STRACE(...), STRACE_SCOPE_BEGIN(...), STRACE_SCOPE_END(...), PERF_SUMMARY(...)
+        # Also handle variations: STRACE, STRACE_SCOPE_BEGIN/END, PERF_SUMMARY
+        strace_pattern = r'(\s*)STRACE\s*\([^)]*\)'
+        perf_pattern = r'(\s*)PERF_SUMMARY\s*\([^)]*\)'
+
+        if strip_debug == 1:
+            # Level 1: comment out
+            content = re.sub(strace_pattern, lambda m: m.group(1) + '// ' + m.group(0).lstrip(), content)
+            stats["straces_removed"] += len(re.findall(strace_pattern, original))
+        elif strip_debug == 2:
+            # Level 2: remove
+            content = re.sub(strace_pattern, '', content)
+            stats["straces_removed"] += len(re.subn(strace_pattern, '', original)[1])
+
+        if strip_perf == 1:
+            # Level 1: comment out
+            content = re.sub(perf_pattern, lambda m: m.group(1) + '// ' + m.group(0).lstrip(), content)
+            stats["perfs_removed"] += len(re.findall(perf_pattern, original))
+        elif strip_perf == 2:
+            # Level 2: remove
+            content = re.sub(perf_pattern, '', content)
+            stats["perfs_removed"] += len(re.subn(perf_pattern, '', original)[1])
+
+        if content != original:
+            f.write_text(content, encoding="utf-8")
+            stats["files_processed"] += 1
+
+    return f"""**strip_tracing results:**
+- Files processed: {stats['files_processed']}
+- STRACE calls {'commented out' if strip_debug == 1 else 'removed' if strip_debug == 2 else 'kept'}: {stats['straces_removed']}
+- PERF_SUMMARY calls {'commented out' if strip_perf == 1 else 'removed' if strip_perf == 2 else 'kept'}: {stats['perfs_removed']}
+
+**Compile flags for level 1 (comment-out):**
+- Debug: `-DSTRACE_ENABLED=0` (MSVC: `/DSTRACE_ENABLED=0`)
+- Perf: `-DTRACE_PERF=0` (MSVC: `/DTRACE_PERF=0`)
+
+**Compile flags for level 2 (removed):** No special flags needed — code is gone.
+"""
 
 
 def _make_list_resources_handler():
@@ -3256,6 +3341,20 @@ def _tools() -> list[mcp_types.Tool]:
             },
         ),
         mcp_types.Tool(
+            name="strip_tracing",
+            description="Strip debug (STRACE) and/or perf (PERF_SUMMARY) tracing from source files. Level 1=comment-out (compile-time disable), Level 2=remove code permanently.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "directory": {"type": "string", "description": "Source directory to process"},
+                    "strip_debug": {"type": "integer", "description": "Debug tracing: 0=keep, 1=comment-out, 2=remove", "default": 0},
+                    "strip_perf": {"type": "integer", "description": "Perf tracing: 0=keep, 1=comment-out, 2=remove", "default": 0},
+                    "extensions": {"type": "array", "items": {"type": "string"}, "description": "File extensions", "default": [".c", ".cpp", ".cu", ".h", ".hpp"]},
+                },
+                "required": ["directory"],
+            },
+        ),
+        mcp_types.Tool(
             name="reject_common_pattern",
             description="Scrutinize a conventional GPU porting idea. Returns why it's wrong, the correct approach, and arch-specific evidence. Use to catch common traps before implementing.",
             inputSchema={
@@ -3323,6 +3422,9 @@ def _tools() -> list[mcp_types.Tool]:
                     "max_files": {"type": "integer", "description": "Max files to scan", "default": 1000},
                     "timeout_seconds": {"type": "integer", "description": "Timeout for clone+scan (default 60s)", "default": 60},
                     "force_refresh": {"type": "boolean", "description": "Force re-analysis", "default": False},
+                    "break_self_check": {"type": "boolean", "description": "Bypass Self-Check Gate violations", "default": False},
+                    "strip_debug": {"type": "integer", "description": "0=keep, 1=comment-out, 2=remove", "default": 0},
+                    "strip_perf": {"type": "integer", "description": "0=keep, 1=comment-out, 2=remove", "default": 0},
                 },
                 "required": [],
             },
@@ -3980,6 +4082,14 @@ gh pr view --web
                 report += "- Consider DP4a (GL_KHR_shader_integer_dot_product) if integer ops are used\n"
 
         results.append(mcp_types.TextContent(type="text", text=report))
+
+    elif name == "strip_tracing":
+        directory = arguments.get("directory", ".")
+        strip_debug = int(arguments.get("strip_debug", 0))
+        strip_perf = int(arguments.get("strip_perf", 0))
+        extensions = arguments.get("extensions", [".c", ".cpp", ".cu", ".h", ".hpp"])
+        result = _strip_tracing_from_dir(directory, strip_debug, strip_perf, extensions)
+        results.append(mcp_types.TextContent(type="text", text=result))
 
     elif name == "reject_common_pattern":
         params = RejectPatternParams(**arguments)
