@@ -256,6 +256,21 @@ transfers.
   if it comes out at a clean fraction like a quarter, the kernel is probably at a real
   limit. Here the measured 0.22 matrix ops per unit per cycle was the tell that a widely
   quoted one-per-cycle figure was about 4.5x too high.
+- **Score an ablation on the quantity, not on a downstream coin flip.** Free-running greedy
+  decoding is chaotic: any perturbation changes the output, so "the first token differs"
+  says nothing about whether the perturbation mattered. Score the change at the point of
+  interest instead, as the magnitude of the difference in the next-token logits and the
+  total variation between the two distributions. Here a window that shrank the context to
+  a quarter produced a large logit shift but left the argmax intact, while a window of
+  eight tokens broke it, and only the magnitude showed that ordering.
+- **Always include the degenerate setting that should be a no-op, and require exactly
+  zero.** A window equal to the prompt length must reproduce the baseline bit for bit.
+  It is free, it validates the whole harness, and here it was the measurement that proved
+  the fix had landed.
+- **Verify the code path that runs, not the one you edited.** A file can define the same
+  method twice and bind the last definition; an edit to the earlier one is dead code and
+  the measurement will silently reproduce the old behaviour. Print the source line of the
+  function that is actually reachable before trusting a change to it.
 
 ### 6.2 Decompose, then ask which side the wall is on
 
