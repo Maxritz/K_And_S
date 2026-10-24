@@ -182,8 +182,53 @@ fail in the client too, and the output says which part broke.
 
 ### Configure Your MCP Client
 
-Use the included `claude_desktop_config.json`, or add to your client config. The one
-thing that must be right is `PYTHONPATH`: it has to point at the `mcp/` directory.
+#### OpenCode
+
+Use the CLI: it writes the correct shape for you, and `opencode mcp list` is also the
+first thing to check when a server does not appear.
+
+```sh
+opencode mcp add kands \
+  --env PYTHONPATH=/absolute/path/to/K_and_S/mcp \
+  -- python -m server
+opencode mcp list          # expect: kands  connected
+```
+
+Add `--global` to make it available in every project; omit it for project-local.
+
+By hand, server names go under **`mcp.servers`**. V2 does not accept them directly under
+`mcp`, and a block OpenCode does not recognise is ignored **silently**:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "kands": {
+        "type": "local",
+        "command": ["python", "-m", "server"],
+        "environment": { "PYTHONPATH": "/absolute/path/to/K_and_S/mcp" },
+      },
+    },
+  },
+}
+```
+
+Field notes that matter here:
+
+- `command` is the executable followed by its arguments, as one array.
+- `environment` adds variables to OpenCode's own environment. `PYTHONPATH` is what makes
+  the server's sibling imports (`isa_tools`, `porting_map`, `reference_search`) resolve,
+  and it must be absolute.
+- `cwd` is an alternative to `PYTHONPATH`: point it at the `mcp/` directory.
+- `disabled: true` keeps a server configured without connecting it. There is no `enabled`.
+- Use `{env:NAME}` for environment substitution; `$NAME` is not expanded in JSON.
+- Config changes reload on save. There is no restart step.
+
+#### Other clients
+
+Claude Desktop and others use this shape instead. Note `mcpServers`, `env`, and the split
+command/args: OpenCode does not accept any of those.
 
 ```json
 {
@@ -197,23 +242,18 @@ thing that must be right is `PYTHONPATH`: it has to point at the `mcp/` director
 }
 ```
 
-OpenCode reads `opencode.json`, and spells the same three things differently — `mcp`
-instead of `mcpServers`, `environment` instead of `env`, and the command as one array:
+#### If it does not show up in the server list
 
-```json
-{
-  "mcp": {
-    "kands": {
-      "type": "local",
-      "command": ["python", "-m", "server"],
-      "environment": { "PYTHONPATH": "C:/path/to/K_and_S/mcp" }
-    }
-  }
-}
-```
-
-A relative path will not work here; use the absolute path to `mcp/`, in the host's own
-form (`C:/...` on Windows).
+- Run `opencode mcp list`, or `/mcps` inside OpenCode. If it is not listed there, OpenCode
+  never saw the configuration. The usual cause is the nesting: an entry under `mcp.<name>`
+  instead of `mcp.servers.<name>`, or a `mcpServers` block, both of which are ignored
+  without any error.
+- Check the file is one OpenCode reads: `opencode.json(c)` at a project root or any
+  ancestor, or the global `~/.config/opencode/opencode.json(c)`.
+- Run `python _smoke_register.py` inside `mcp/`. A server that crashes at startup produces
+  nothing useful in the client and simply never connects.
+- On Windows, give `command` the full interpreter path (`C:/.../python.exe`): `python` may
+  not be on the PATH that OpenCode's process inherits.
 
 #### If it will not start
 
