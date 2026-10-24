@@ -346,7 +346,10 @@
       "fp8_native": false,
       "known_issues": [
         "builds validated",
-        "gfx1201 hipBLASLt table needed"
+        "no 4-bit matrix-core kernel ships for this target: the tuned BLAS solution set has none, and its generator cannot express a 4-bit datatype at all, so a 4-bit path has to be hand-written. The vendor's kernel-template library does expose packed-int4 at K=16 and K=32",
+        "matrix-core datatypes are same-type only here (fp16, bf16, int8, fp8 in all four mixes, packed int4): there is no narrow-weight/wide-activation pair, so choosing a 4-bit weight operand forces a 4-bit activation operand, which is a numerical change to whatever the activations feed",
+        "4-bit float exists in the generator but its opcode is gated to a later target family and is absent from this instruction set",
+        "measured on this target: int4 16x16x16 = 161 TOPS, int4 16x16x32 = 336 TOPS, fp16 16x16x16 = 179 TFLOPS, and both int4 forms issue about 0.22 matrix ops per CU per cycle rather than one, so any figure derived from one-per-cycle is roughly 4.5x too high"
       ],
       "vulkan": {
         "cooperative_matrix": false,
