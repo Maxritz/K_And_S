@@ -254,6 +254,30 @@ command/args: OpenCode does not accept any of those.
   nothing useful in the client and simply never connects.
 - On Windows, give `command` the full interpreter path (`C:/.../python.exe`): `python` may
   not be on the PATH that OpenCode's process inherits.
+- Make sure the config file is valid JSON **as a whole**. A trailing comma or a mismatched
+  brace anywhere in it stops the file loading at all, so every entry disappears and it
+  looks like an MCP problem. Check it directly:
+
+  ```sh
+  python -c "import json,io,sys; json.load(io.open(sys.argv[1], encoding='utf-8')); print('valid')" path/to/opencode.json
+  ```
+
+#### If the server shows as failed
+
+The client reports only `process exited with code 1`. Run it yourself to see why:
+
+```sh
+cd mcp
+python -m server        # should wait on stdio, not exit
+```
+
+- A traceback here is the real error. Two that have been hit and are fixed in `main`: a
+  dead `from mcp.server.lowlevel import NotificationOptions` (a module some `mcp` builds do
+  not have), and `asyncio.run(stdio_server(server))`, which cannot work because
+  `stdio_server` is an async context manager that takes no server argument. Pull the latest
+  `main` before debugging either.
+- If a source edit seems to have no effect, delete `mcp/__pycache__`: a stale `.pyc` keeps
+  running the old code after the source changes.
 
 #### If it will not start
 

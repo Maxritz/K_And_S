@@ -60,8 +60,6 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 from mcp.server import Server
-from mcp.server.lowlevel import NotificationOptions
-from mcp.server.models import InitializationOptions
 try:                                    # mcp >= 1.x ships these under the package
     from mcp import types as mcp_types
 except ImportError:                     # older layouts vendored a top-level mcp_types
@@ -4907,9 +4905,21 @@ _register("tools/call", mcp_types.CallToolRequestParams, "CallToolRequest",
 
 
 def main():
-    """Entry point: run the MCP server over stdio."""
+    """Entry point: run the MCP server over stdio.
+
+    stdio_server is an async context manager, not a coroutine, and it takes no server
+    argument; the server is driven by run() over the streams it yields. Calling
+    asyncio.run(stdio_server(server)) raises "an asyncio.Future, a coroutine or an
+    awaitable is required" and no server ever starts.
+    """
     from mcp.server.stdio import stdio_server
-    asyncio.run(stdio_server(server))
+
+    async def _serve():
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(read_stream, write_stream,
+                             server.create_initialization_options())
+
+    asyncio.run(_serve())
 
 
 if __name__ == "__main__":

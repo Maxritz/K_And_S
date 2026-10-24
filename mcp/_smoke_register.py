@@ -1,5 +1,10 @@
-"""Smoke-test the mcp registration fix: does the server import, and are the four request
-handlers bound under the API this mcp build actually uses?"""
+"""Smoke-test the K_and_S MCP server: does it import, which mcp API path is taken, and
+does every resource it advertises actually read?
+
+The resource URIs are taken from the server's own list rather than hardcoded. The
+previous version hardcoded two invented URIs ("kands://arch-map", "kands://lessons"),
+which never existed and produced two false FAILs while the server was fine.
+"""
 import os
 import sys
 
@@ -8,36 +13,47 @@ import server  # noqa: E402
 
 t = server.mcp_types
 print("mcp_types module     :", getattr(t, "__name__", t))
-print("types has AnyUrl     :", hasattr(t, "AnyUrl"))
 
 srv = server.server
 rh = getattr(srv, "request_handlers", None)
-print("server API           :", "request_handlers (mcp >= 1.x)" if rh else "add_request_handler (mcp < 1.x)")
+has_old = hasattr(srv, "add_request_handler")
+print("server API           :",
+      "add_request_handler (mcp < 1.x)" if has_old else "request_handlers (mcp >= 1.x)")
 if rh is not None:
-    print("registered handlers  :", sorted(getattr(k, "__name__", str(k)) for k in rh))
+    print("registered handlers  :",
+          sorted(getattr(k, "__name__", str(k)) for k in rh))
+print("create_init_options  :", hasattr(srv, "create_initialization_options"))
 
-for label, fn in (("resources", server._list_resources),):
+res = server._list_resources()
+uris = [str(getattr(r, "uri", "")) for r in res]
+print("resources            :", len(uris))
+print("   e.g.              :", ", ".join(uris[:4]))
+
+# the test that would have caught the wrong URIs: read every advertised resource
+bad = []
+biggest = ("", 0)
+for u in uris:
     try:
-        r = fn()
-        print("%-20s : %d" % (label, len(r)))
+        n = len(server._read_resource(u))
     except Exception as e:  # noqa: BLE001
-        print("%-20s : FAILED %s" % (label, e))
+        bad.append((u, str(e)))
+        continue
+    biggest = max(biggest, (u, n), key=lambda x: x[1])
+print("all resources read   :", "yes" if not bad else "NO -> %s" % bad[:3])
+print("largest read         : %s -> %d chars" % biggest)
 
-for uri in ("kands://porting-patterns", "kands://arch-map", "kands://lessons"):
-    try:
-        got = server._read_resource(uri)
-        print("read %-26s -> %d chars" % (uri, len(got)))
-    except Exception as e:  # noqa: BLE001
-        print("read %-26s -> FAILED %s" % (uri, e))
-
-# the AnyUrl path: an object that is not a str but stringifies to the uri
+# a read through a non-str URI: mcp can pass a URL object that does not compare to str
 class FakeUrl:
     def __str__(self):
-        return "kands://porting-patterns"
+        return uris[0] if uris else ""
 
 
-try:
-    got = server._read_resource(FakeUrl())
-    print("read AnyUrl-like object    -> %d chars  (str() coercion works)" % len(got))
-except Exception as e:  # noqa: BLE001
-    print("read AnyUrl-like object    -> FAILED %s" % e)
+if uris:
+    try:
+        print("non-str URI read     : %d chars (str() coercion works)"
+              % len(server._read_resource(FakeUrl())))
+    except Exception as e:  # noqa: BLE001
+        print("non-str URI read     : FAILED %s" % e)
+
+print("tools                :", len(server._tools()))
+print("RESULT               :", "OK" if not bad else "PROBLEMS")
