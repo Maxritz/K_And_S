@@ -62,7 +62,10 @@ from pydantic import BaseModel, Field
 from mcp.server import Server
 from mcp.server.lowlevel import NotificationOptions
 from mcp.server.models import InitializationOptions
-import mcp_types
+try:                                    # mcp >= 1.x ships these under the package
+    from mcp import types as mcp_types
+except ImportError:                     # older layouts vendored a top-level mcp_types
+    import mcp_types
 from reference_search import search_arxiv, search_github, search_references
 
 # ── Paths ──────────────────────────────────────────────────────────────────
@@ -597,6 +600,7 @@ def _list_resources() -> list[mcp_types.Resource]:
 
 
 def _read_resource(uri: str) -> str:
+    uri = str(uri)          # mcp passes AnyUrl, which does not compare equal to str
     if uri == RES_ARCH:
         return json.dumps(_load_json(_ARCH_MAP_PATH), indent=2)
 
@@ -683,7 +687,7 @@ def _read_resource(uri: str) -> str:
     if uri == RES_RADICAL_EXPERIMENTS:
         return _radical_experiments_markdown()
 
-    if uri.startswith(RES_FINDINGS_PREFIX):
+    if str(uri).startswith(RES_FINDINGS_PREFIX):
         name = uri[len(RES_FINDINGS_PREFIX):]
         findings_path = _KANDS_ROOT / "findings" / f"{name}.md"
         if findings_path.exists():
@@ -4881,30 +4885,25 @@ gh pr view --web
     return results
 
 
-# Register resource handlers
-server.add_request_handler(
-    "resources/list",
-    mcp_types.PaginatedRequestParams,
-    _make_list_resources_handler(),
-)
+# Register resource handlers for both mcp API generations:
+#   mcp < 1.x  : server.add_request_handler(name, params_class, handler)
+#   mcp >= 1.x : server.request_handlers[RequestType] = handler, keyed by the request type
+# Handlers are the same either way: coroutines taking (request, params).
+def _register(name, params_cls, req_attr, handler):
+    if hasattr(server, "add_request_handler"):
+        server.add_request_handler(name, params_cls, handler)
+        return
+    server.request_handlers[getattr(mcp_types, req_attr)] = handler
 
-server.add_request_handler(
-    "resources/read",
-    mcp_types.ReadResourceRequestParams,
-    _make_read_resource_handler(),
-)
 
-server.add_request_handler(
-    "tools/list",
-    mcp_types.PaginatedRequestParams,
-    _make_list_tools_handler(),
-)
-
-server.add_request_handler(
-    "tools/call",
-    mcp_types.CallToolRequestParams,
-    _make_call_tool_handler(),
-)
+_register("resources/list", mcp_types.PaginatedRequestParams, "ListResourcesRequest",
+          _make_list_resources_handler())
+_register("resources/read", mcp_types.ReadResourceRequestParams, "ReadResourceRequest",
+          _make_read_resource_handler())
+_register("tools/list", mcp_types.PaginatedRequestParams, "ListToolsRequest",
+          _make_list_tools_handler())
+_register("tools/call", mcp_types.CallToolRequestParams, "CallToolRequest",
+          _make_call_tool_handler())
 
 
 def main():
