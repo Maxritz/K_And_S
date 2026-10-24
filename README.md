@@ -161,14 +161,29 @@ All templates are standard markdown files. You can:
 
 ### Install the MCP Server
 
+The server speaks both `mcp` API generations (0.x `add_request_handler` and the
+1.x/2.x `request_handlers` registry), so no version pin and no downgrade is needed.
+
 ```bash
 cd mcp
 pip install -e .
 ```
 
+Then confirm it starts, rather than assuming it did:
+
+```bash
+python _smoke_register.py
+```
+
+That prints the `mcp` version, which API path was taken, the resource count, a large
+resource read, and a read through a non-`str` URI. Expect **21 resources** and a
+**~26,000-character** read from `kands://porting-patterns`. If it fails here it will
+fail in the client too, and the output says which part broke.
+
 ### Configure Your MCP Client
 
-Use the included `claude_desktop_config.json` or add to your client config:
+Use the included `claude_desktop_config.json`, or add to your client config. The one
+thing that must be right is `PYTHONPATH`: it has to point at the `mcp/` directory.
 
 ```json
 {
@@ -181,6 +196,37 @@ Use the included `claude_desktop_config.json` or add to your client config:
   }
 }
 ```
+
+OpenCode reads `opencode.json`, and spells the same three things differently — `mcp`
+instead of `mcpServers`, `environment` instead of `env`, and the command as one array:
+
+```json
+{
+  "mcp": {
+    "kands": {
+      "type": "local",
+      "command": ["python", "-m", "server"],
+      "environment": { "PYTHONPATH": "C:/path/to/K_and_S/mcp" }
+    }
+  }
+}
+```
+
+A relative path will not work here; use the absolute path to `mcp/`, in the host's own
+form (`C:/...` on Windows).
+
+#### If it will not start
+
+- `ModuleNotFoundError: No module named 'mcp_types'`, or `'Server' object has no
+  attribute 'add_request_handler'` — these were real bugs in this repo (a top-level
+  `mcp_types` import and a 0.x-only registration call) and are fixed; pull the latest
+  `main` before debugging your environment.
+- `ModuleNotFoundError` for a sibling such as `isa_tools`, `porting_map` or
+  `reference_search` — that is `PYTHONPATH` pointing somewhere other than `mcp/`, not a
+  broken install. The server imports those modules from its own directory.
+- A resource read returns `Unknown resource URI` — list the resources first
+  (`_list_resources()` via the smoke test prints the real URIs); the scheme is
+  `kands://`, and the names are not guesses.
 
 ### Typical Workflow
 
