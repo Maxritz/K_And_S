@@ -1,4 +1,381 @@
 {
+  "description": "AI/ML framework matrix and LLM engine APIs. Maps each framework's GPU compute path, quantization support, and porting implications.",
+  "frameworks": {
+    "pytorch": {
+      "name": "PyTorch",
+      "vendor": "Meta AI / Linux Foundation",
+      "gpu_backends": {
+        "cuda": "ATen kernels compiled via `python setup.py` or pip torch+cu126. Custom kernels via Triton.",
+        "hip": "ROCm-torch (pip install torch --index-url https://download.pytorch.org/whl/rocm6.0). Custom C++ extensions via hipify.",
+        "vulkan": "No native Vulkan backend. Use TorchInductor → C++ path with vulkan-compute in Rust, or use ExecuTorch Vulkan delegate.",
+        "xpu": "Intel PyTorch (oneAPI) — for Intel Arc GPUs via SYCL"
+      },
+      "triton_support": {
+        "cuda": "Full — torch._inductor codegen uses Triton for CUDA kernels",
+        "hip": "Full (since PyTorch 2.4, PR #121801). PyTorch CI now pulls from openai/triton main repo (third_party/amd).",
+        "intel_xpu": "Via intel-xpu-backend-for-triton",
+        "macos": "Not supported (no GPU compute target)"
+      },
+      "quantization": {
+        "bitsandbytes": "CUDA only — NF4, FP4, INT8 (no AMD support)",
+        "AQLM": "CUDA only — additive quantization",
+        "GPTQ": "AutoGPTQ — CUDA + CPU, no AMD/Vulkan",
+        "SmoothQuant": "CUDA + ROCm (via torch-ao)"
+      },
+      "porting_notes": {
+        "AMD": "Install: `pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/rocm6.0/`. Triton-AMD (upstream in triton-lang/triton/main/third_party/amd as of 2025). Custom kernels may need manual CUDA→HIP translation for ops Triton-AMD doesn't support yet.",
+        "NVIDIA": "Standard pip install torch. Triton (openai/triton) for custom kernels (Python-like DSL, compiles to PTX via MLIR).",
+        "Intel": "intel-extension-for-transformers (IPEX) for Arc GPU. Or use SYCL via torch-xpu / oneAPI.",
+        "Vulkan": "Use ExecuTorch (PyTorch's edge framework) which has Vulkan compute backend with GL_EXT_integer_dot_product (DP4a) support. See `executorch` entry.",
+        "ROCm_torch_nightly": "pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/rocm6.0/"
+      }
+    },
+    "tensorflow": {
+      "name": "TensorFlow / Keras",
+      "vendor": "Google",
+      "gpu_backends": {
+        "cuda": "TensorFlow with CUDA 12.x",
+        "rocm": "TensorFlow-ROCm",
+        "vulkan": "No native support"
+      },
+      "quantization": {
+        "default": "INT8, FP16, Dynamic range quantization",
+        "aot": "TensorFlow Lite with GPU delegate (Vulkan/Metal on Android, OpenGL elsewhere)"
+      },
+      "porting_notes": "For LLM porting: use tf-keras with float8_e4m3 on newer GPUs. TFLite GPU delegates use Vulkan compute."
+    },
+    "jax": {
+      "name": "JAX / Flax",
+      "vendor": "Google",
+      "gpu_backends": {
+        "cuda": "jax[cuda12]",
+        "rocm": "JAX-ROCm (rocm/jax)",
+        "vulkan": "No native support — XLA targets CUDA/HIP only"
+      },
+      "quantization": {
+        "xla": "XLA's FP8 and INT8 quantization",
+        "aqt": "Automatic Quantization Tool"
+      },
+      "porting_notes": "JAX uses XLA Pjrt — kernels are generated per-arch. For custom kernels: use Triton (CUDA) or HSAIL (AMD). Pallas for low-level kernel definition."
+    },
+    "llamacpp": {
+      "name": "llama.cpp",
+      "vendor": "ggerganov",
+      "gpu_backends": {
+        "cuda": "llama.cpp with -DLLAMA_CUDA=ON",
+        "hip": "llama.cpp with -DBUILD_HIP=ON — Vulkan compute support coming",
+        "vulkan": "llama.cpp with -DBUILD_VULKAN=ON — Vulkan compute via Vulkan-Hpp",
+        "metal": "llama.cpp with -DBUILD_METAL=ON",
+        "opencl": "Legacy, deprecated",
+        "directml": "Windows DirectX 12 via DirectML"
+      },
+      "quantization": {
+        "supported": [
+          "f32",
+          "f16",
+          "bf16",
+          "q2_k",
+          "q3_k_m",
+          "q3_k_s",
+          "q3_k_l",
+          "q4_0",
+          "q4_1",
+          "q5_0",
+          "q5_1",
+          "q6_k",
+          "q8_0",
+          "q8_1",
+          "q8_2",
+          "iq1_s",
+          "iq2_s",
+          "iq2_m",
+          "iq2_k",
+          "iq2_xxs",
+          "iq3_s",
+          "iq3_xxs",
+          "iq3_m",
+          "iq4_nl",
+          "iq4_s",
+          "iq5_m",
+          "iq5_s",
+          "iq5_1",
+          "th1",
+          "th2"
+        ],
+        "cuda": "Custom CUDA kernels — mma, imad, shmem",
+        "hip": "Custom HIP kernels — dot4, FMA chains, rocBLAS for dense",
+        "vulkan": "Custom Vulkan compute shaders — uses @GLSL for kernel code, compiled to SPIR-V",
+        "metal": "Custom Metal Shading Language (MSL) kernels"
+      },
+      "vulkan_coop_matrix_note": "Vulkan CooperativeMatrix (GL_KHR_cooperative_matrix) is BROKEN on AMD drivers. llama.cpp's Vulkan backend falls back to DP4a-style (shared_f32_4x8_f32 / spv_dp4) instructions for matmul on AMD. NVIDIA Vulkan drivers support CooperativeMatrix natively.",
+      "porting_notes": {
+        "AMD_vulkan": "Uses DP4a (spirv instruction) for matmul — not CooperativeMatrix. Check `llama-vulkan.cpp` for the fallback shader.",
+        "AMD_hip": "Uses dot4 instructions (v_dot4_i32_i8 on gfx1030, packed dot4 on gfx1100+).",
+        "NVIDIA_cuda": "Uses Tensor cores (mma.m16n8k8) for dense + imad for quantized."
+      }
+    },
+    "transformers": {
+      "name": "HuggingFace Transformers",
+      "vendor": "HuggingFace",
+      "gpu_backends": {
+        "cuda": "torch.compile or custom CUDA kernels via Triton",
+        "hip": "ROCm-torch + custom kernels",
+        "vulkan": "No native support — use llama.cpp or vLLM"
+      },
+      "quantization": {
+        "supported": [
+          "fp16",
+          "bf16",
+          "int8",
+          "int4",
+          "nf4",
+          "fp8"
+        ],
+        "bitsandbytes": "8-bit, 4-bit NF4, FP4 (CUDA only)",
+        "GPTQ": "4-bit with custom kernels (CUDA)",
+        "AWQ": "Activation-aware weight quantization (CUDA)"
+      }
+    },
+    "triton_language": {
+      "name": "OpenAI Triton (Programming Language)",
+      "vendor": "OpenAI",
+      "description": "Python-like DSL for writing GPU kernels. Compiles to PTX for NVIDIA, HIP for AMD (experimental).",
+      "gpu_backends": {
+        "cuda": "Full support — compiles to PTX via MLIR",
+        "hip": "Full (upstreamed as of 2025). Code in openai/triton/main/third_party/amd. PR #121801 in pytorch/pytorch uses upstream triton AMD backend.",
+        "vulkan": "Not supported — MLIR-Vulkan compute backend is experimental",
+        "windows": "triton-windows (triton-lang/triton-windows) — native Windows build. MSVC for NVIDIA, clang-cl for AMD."
+      },
+      "windows_support": {
+        "pip_package": "triton-windows",
+        "install": "pip install triton-windows",
+        "pytorch_version_map": {
+          "2.4": "3.1",
+          "2.5": "3.1",
+          "2.6": "3.2",
+          "2.7": "3.3",
+          "2.8": "3.4",
+          "2.9": "3.5",
+          "2.10": "3.6",
+          "2.11": "3.6",
+          "2.12": "3.7",
+          "2.13": "3.7",
+          "2.14": "3.8"
+        },
+        "amd_windows": "Supported via clang-cl backend (PR #179 merged Dec 2025). Uses TheRock for ROCm/PyTorch.",
+        "nvidia_windows": "Fully supported with MSVC. Bundled CUDA toolchain (PTXAS 12.8/12.9).",
+        "supported_gpus": {
+          "nvidia": [
+            "sm70 (V100)",
+            "sm75 (RTX 20xx)",
+            "sm86 (RTX 30xx)",
+            "sm89 (RTX 40xx)",
+            "sm120 (RTX 50xx)"
+          ],
+          "amd": [
+            "gfx90a (RX 7xxx) — partial",
+            "gfx103x (RX 6xxx) — partial",
+            "gfx110x (RX 7xxx)",
+            "gfx120x (RX 9xxx)"
+          ]
+        }
+      },
+      "porting_notes": {
+        "AMD": "Triton-AMD now upstreamed in openai/triton/main/third_party/amd. PyTorch 2.7+ uses it directly (PR #121801). For extracting Triton kernels to standalone HIP C++: see cross_port_framework_extraction.md.",
+        "NVIDIA": "Primary target. All Triton features supported.",
+        "Intel": "SYCL backend via MLIR — experimental. Check https://github.com/openai/triton/tree/main/third_party/intel",
+        "Windows_AMD": "Use triton-windows with clang-cl backend. Requires TheRock for ROCm/PyTorch.",
+        "Windows_NVIDIA": "Use triton-windows. MSVC + bundled CUDA toolchain.",
+        "extraction_to_cpp": "To extract a Triton kernel to standalone CUDA/HIP C++: compile with Triton JIT, then use Triton to LLVM pass to get LLVM IR, then use `triton-opt --convert-to-llvm` to get LLVM IR. Alternatively, analyze the Triton IR and manually translate blocksize/warp patterns to CUDA/HIP intrinsics."
+      },
+      "torch_integration": "torch.compile uses Triton for CUDA codegen (torch._inductor.triton). Windows requires triton-windows >= 3.1.",
+      "extraction_pattern": {
+        "python_to_cpp": "1. Compile Triton kernel with triton.compile() → get PTX/AMDGCN binary. 2. Disassemble with cuobjdump/llvm-objdump. 3. Map PTX instructions to CUDA intrinsics or AMDGCN to HIP intrinsics. 4. Wrap in extern \"C\" function for C++ integration.",
+        "standalone_usage": "Extracted kernels can be compiled standalone with nvcc/hipcc. No Python/Torch dependency at runtime."
+      }
+    },
+    "executorch": {
+      "name": "ExecuTorch",
+      "vendor": "Meta AI",
+      "description": "PyTorch's edge deployment framework. Generates deployable ML models for mobile/embedded/IoT devices.",
+      "gpu_backends": {
+        "vulkan": "Vulkan compute backend via `VulkanComputePipeline` (SPIR-V)",
+        "metal": "Metal Performance Shaders backend",
+        "directx12": "DirectML backend for Windows",
+        "cuda": "CUDA backend (experimental)",
+        "hip": "Not supported — no ROCm backend planned"
+      },
+      "quantization": {
+        "supported": [
+          "q8_0",
+          "q4_0",
+          "q4_2",
+          "nf4",
+          "fp16",
+          "bf16",
+          "fp32"
+        ],
+        "vulkan": "Vulkan compute — uses DP4a-style integer dot products (NOT CooperativeMatrix on AMD)"
+      },
+      "porting_notes": {
+        "Vulkan_AMD": "ExecuTorch's Vulkan backend uses shared_f32_4x8_f32 + spv_dp4 fallback (same pattern as llama.cpp). Verify GL_KHR_shader_integer_dot_product is enabled. IMPORTANT: Android NDK glslc doesn't support GL_EXT_integer_dot_product — use Vulkan SDK 1.4.321+ glslc instead (--target-env=vulkan1.3).",
+        "Vulkan_NVIDIA": "Supports both DP4a (GL_EXT_integer_dot_product) and VK_NV_cooperative_matrix2 (Vulkan 1.4.304 SDK).",
+        "Windows_DirectML": "DirectML-EP via ONNX Runtime. Use DXC compiler + Agility SDK. DirectML is in sustained engineering — new work goes to Windows ML.",
+        "Windows_WindowsML": "Windows ML (newer than DirectML) — WinML API with DirectML backend. Use for Windows 11+ deployments.",
+        "Windows_Triton": "Combine ExecuTorch with triton-windows for custom CUDA kernels on Windows. Use Triton for CUDA compute, ExecuTorch Vulkan/DirectML for model orchestration.",
+        "Windows_AMD_Triton": "Use triton-windows with clang-cl backend. Requires TheRock for ROCm/PyTorch. AMD support is newer (Dec 2025)."
+      },
+      "shader_extension_note": "ExecuTorch PR #13743 added GL_EXT_integer_dot_product capability checking. Ensure Vulkan SDK 1.4.321+ and glslc with --target-env=vulkan1.3.",
+      "windows_triton_integration": {
+        "use_case": "Run custom CUDA/Triton kernels on Windows while using ExecuTorch's Vulkan/DirectML backend for model execution.",
+        "setup": "1. pip install triton-windows. 2. pip install executorch[vulkan] or [directml]. 3. Export model with custom ops marked as Triton kernels. 4. Use Triton for CUDA backend, ExecuTorch for Vulkan/DX12 backend.",
+        "note": "Triton Windows is for CUDA kernels. For Vulkan kernels, use ExecuTorch's GLSL/SPIR-V backend directly."
+      }
+    },
+    "torchinductor": {
+      "name": "TorchInductor",
+      "vendor": "Meta AI",
+      "description": "torch.compile backend. Generates fused kernels via Triton (CUDA) or C++ (CPU/HIP).",
+      "gpu_backends": {
+        "cuda": "Triton codegen — generates PTX kernels",
+        "hip": "C++ codegen + hipify — generates HIP C++ kernels via `torch._inductor.codecache`",
+        "vulkan": "No native support — would need custom Vulkan codegen backend"
+      },
+      "porting_notes": "For AMD: torchinductor hip path generates C++ kernels that require manual rocWMMA insertion for matmul ops. Triton codegen is CUDA-only."
+    },
+    "vulkan_compute_rust": {
+      "name": "Vulkan Compute (Rust)",
+      "vendor": "Open-source ecosystem",
+      "description": "Rust crate for Vulkan compute. Used by executorch, wgpu, and custom GPU compute projects.",
+      "gpu_backends": {
+        "vulkan": "Primary — uses ash/vulkano wsi for Vulkan compute",
+        "directx12": "Via wgpu-native (D3D12 backend)",
+        "metal": "Via wgpu-native (Metal backend)"
+      },
+      "porting_notes": "Use `wgpu` for cross-platform compute. SPIR-V shaders compiled via glslangValidator or naga."
+    },
+    "thunderkittens": {
+      "name": "ThunderKittens",
+      "vendor": "HazyResearch (Stanford)",
+      "description": "Tile-based GPU kernel primitives (16x16 matrix tiles at warp level). Matches or outperforms CuBLAS and FlashAttention-3. CUDA-focused with H100/B200 targets.",
+      "gpu_backends": {
+        "cuda": "Primary — uses PTX matrix instructions (mma)",
+        "hip": "Reference: HipKittens (see separate entry) for AMD implementation",
+        "vulkan": "No direct support — tile primitives map to SPIR-V cooperative matrix"
+      },
+      "supported_kernels": [
+        "GEMM (fp16, bf16, fp8, fp4)",
+        "Attention (MHA, GQA, causal, non-causal)",
+        "Mamba2 / state space models",
+        "Rotary embeddings",
+        "LayerNorm (fused)",
+        "FFT convolution",
+        "Ring/ulysses attention (ParallelKittens)",
+        "MoE routing + GEMM"
+      ],
+      "tiling_model": {
+        "tile_size": "16x16 (warp-level)",
+        "dtype": "FP32/Boot16/BF16/FP8/FP4/INT8/INT4",
+        "layout": "Row/column major with matrix-core optimized layouts",
+        "async_ops": "Async load/store across shared memory hierarchy"
+      },
+      "porting_use_case": "Use ThunderKittens kernels as performance references when porting. Compare your HIP/Vulkan implementation against TK's CUDA kernels.",
+      "repo_url": "https://github.com/HazyResearch/ThunderKittens",
+      "paper": "https://arxiv.org/abs/2410.20399"
+    },
+    "hipkittens": {
+      "name": "HipKittens",
+      "vendor": "HazyResearch (Stanford)",
+      "description": "AMD-focused tile-based kernel primitives (sister project to ThunderKittens). Targets CDNA3/CDNA4. Provides tile-based programming for AMD that carries over from TK's abstractions.",
+      "gpu_backends": {
+        "hip": "Primary — wraps AMDGCN assembly directly",
+        "cuda": "Reference: ThunderKittens for NVIDIA implementation"
+      },
+      "supported_archs": [
+        "CDNA3 (MI300/M325)",
+        "CDNA4 (MI350/M355)"
+      ],
+      "supported_kernels": [
+        "GEMM (bf16/fp16/fp8/fP4)",
+        "Attention (MHA/GQA/causal)",
+        "Rotary embeddings",
+        "LayerNorm (fused)",
+        "All-gather + GEMM fusion",
+        "Ring attention"
+      ],
+      "tiling_model": {
+        "tile_size": "16x16 (wavefront-level)",
+        "wave_size": "64 (CDNA3/CDNA4), 32 (RDNA2+) — adapt HK for RDNA",
+        "dtype": "BF16/FP16/FP8",
+        "async_ops": "Direct buffer loads to shared memory for latency hiding",
+        "scheduling": "8-wave ping-pong OR 4-wave interleave"
+      },
+      "porting_use_case": "Use HipKittens as the AMD reference implementation. For porting CUDA→HIP: compare patterns — TK uses CUDA tiles, HK uses HIP tiles on wavefronts. Key differences: memory access patterns (coalesced vs bank-conflict-free), scheduling (warp vs wavefront), thread block ordering within chiplets. For RDNA (consumer GPUs): HK targets CDNA3/CDNA4 (wave64/wave32), but the tile abstractions, async load patterns, and scheduling strategies directly transfer — only the wavefront size (32 for RDNA vs 64 for CDNA) and LDS size differ. Use HK code as a starting template, then adjust: tile size (16x16 works for both), wavefront size (RDNA=32), and LDS size (RDNA1: 32KiB, RDNA2: 64KiB, RDNA3: 128KiB).",
+      "repo_url": "https://github.com/HazyResearch/HipKittens",
+      "paper": "https://arxiv.org/abs/2511.08083",
+      "known_diff": "TK→HK porting: tile primitives carry over, but memory scheduling and thread block ordering must be rethought for AMD chiplet architecture. Async load patterns differ due to different cache hierarchy."
+    },
+    "tilelang": {
+      "name": "TileLang",
+      "vendor": "tile-ai (community / Tsinghua University)",
+      "description": "Tile-based programming DSL built on TVM IR. Generates optimized CUDA, HIP, Metal, CPU, and WebGPU code from a Pythonic tile-level API. Focuses on decoupling dataflow from scheduling (like Triton) but offers explicit hardware memory control (like ThunderKittens).",
+      "gpu_backends": {
+        "cuda": "Primary (NVCC/ptxas via TVM/CodegenT)",
+        "hip": "Full — generates HIP C++ targeting gfx90a/gfx1100/gfx1200/gfx1201",
+        "vulkan": "Experimental via TVM SPIR-V backend",
+        "metal": "Full — Apple Silicon via MSL",
+        "webgpu": "Experimental — SPIR-V/WGSL",
+        "npu": "Huawei Ascend via AscendC"
+      },
+      "programming_model": {
+        "tile_primitives": "T.alloc_shared, T.alloc_fragment, T.copy, T.clear",
+        "kernel_launch": "T.Kernel(grid_x, grid_y, threads=N), T.ClusterKernel(cluster_dims=...)",
+        "memory_hierarchy": "Global → Shared (T.alloc_shared) → Register/Fragment (T.alloc_fragment)",
+        "scheduling": "T.Pipelined(num_stages=N) for software pipelining, T.Parallel for elementwise"
+      },
+      "supported_dtypes": [
+        "float32",
+        "float16",
+        "bfloat16",
+        "float8",
+        "float4",
+        "int8",
+        "int4",
+        "fp64"
+      ],
+      "supported_kernels": [
+        "GEMM (dense, quantized, sparse via T.gemm_sp)",
+        "FlashAttention / FlashMLA",
+        "Mamba / state space models",
+        "Rotary embeddings",
+        "Elementwise ops (add, mul, softmax)",
+        "Reductions (sum, max, argmax)",
+        "Sort/top-k",
+        "MLP blocks"
+      ],
+      "compilation_flow": [
+        "1. Define @T.prim_func with tile-level computation",
+        "2. Apply T.Kernel/T.ClusterKernel for thread mapping",
+        "3. TVM IR lowering → TIR → target-specific codegen",
+        "4. NVCC/HIPCC/MSLCC → binary/executable"
+      ],
+      "porting_use_case": "TileLang kernels map tile primitives to hardware-specific instructions. Use T.alloc_shared for shared memory (matches CUDA __shared__, HIP __shared__). T.alloc_fragment maps to CUDA fragment registers or HIP accumulators. The scheduling primitives (num_stages, tile sizes) carry over directly — TileLang abstracts this across vendors.",
+      "comparison": {
+        "thunderkittens": "TK uses C++ templates, TileLang uses Python DSL with TVM backend. Both provide tile abstractions — TileLang covers more backends (HIP, Metal, WebGPU).",
+        "hipkittens": "HK is C++ templates for AMD only. TileLang provides Python API targeting AMD via HIP codegen.",
+        "triton": "Both use Python DSL. Triton hides thread/memory control. TileLang exposes hardware memory explicitly via T.alloc_shared/T.alloc_fragment."
+      },
+      "repo_url": "https://github.com/tile-ai/tilelang",
+      "paper": "https://arxiv.org/abs/2504.17577",
+      "pip": "pip install tilelang",
+      "known_limitations": [
+        "TVM-based compilation can add overhead for simple kernels",
+        "WebGPU backend is experimental",
+        "NPU backend requires external Ascend project",
+        "No native Python callable at runtime (compiles to C++/CUDA/HIP)"
+      ]
+    }
+  },
   "llm_engine_apis": {
     "openai_compatible": {
       "description": "OpenAI API — chat completions, completions, embeddings",
@@ -8,43 +385,60 @@
         "url": "POST /v1/chat/completions",
         "body": {
           "model": "your-model-7b",
-          "messages": [{"role": "user", "content": "Hello!"}],
+          "messages": [
+            {
+              "role": "user",
+              "content": "Hello!"
+            }
+          ],
           "max_tokens": 2048,
           "temperature": 0.7,
           "stream": true
         }
       }
     },
-
     "anthropic_compatible": {
       "description": "Anthropic Claude API — messages, tools, thinking",
       "endpoint": "/v1/messages",
       "auth": "x-api-key header",
       "example": {}
     },
-
     "mcp": {
       "description": "Model Context Protocol — tool calling for AI agents",
       "endpoint": "stdio or SSE",
       "auth": "None (local) or connection token (remote)",
       "note": "How K_and_S MCP server integrates — agents can query kands:// resources and call tools"
     },
-
     "vllm": {
       "description": "vLLM — high-throughput inference server with PagedAttention, continuous batching",
       "endpoint": "/v1/chat/completions, /v1/completions (OpenAI-compatible)",
-      "features": ["continuous batching", "prefix caching", "LoRA", "quantization (Q4_0, Q8_0, AWQ)", "PagedAttention", "KV cache management"],
+      "features": [
+        "continuous batching",
+        "prefix caching",
+        "LoRA",
+        "quantization (Q4_0, Q8_0, AWQ)",
+        "PagedAttention",
+        "KV cache management"
+      ],
       "repo_url": "https://github.com/vllm-project/vllm",
       "porting_notes": {
         "purpose": "vLLM is the production-grade LLM inference server. tiny-vllm is a minimal educational reimplementation of vLLM's core ideas (PagedAttention, continuous batching, KV cache) in C++/CUDA.",
         "cpu_port_notes": "vLLM is CUDA-focused. CPU port would need to drop PagedAttention (GPU VRAM optimization), drop continuous batching (optional for CPU), and replace CUDA kernels with CPU BLAS. See tiny-vllm for the educational minimal version."
       }
     },
-
     "tiny_vllm": {
       "description": "tiny-vllm — minimal educational LLM inference engine in C++/CUDA, sibling of vLLM",
       "endpoint": "CLI executable (./build/tiny-vllm)",
-      "features": ["safetensors model loading (Llama 3.2 1B Instruct)", "full forward pass (prefill + decode)", "CUDA kernels for all ops", "KV cache (2GB, paged)", "static + continuous batching", "online softmax, FlashAttention-like", "PagedAttention (vLLM's key innovation)", "GQA (Grouped Query Attention)"],
+      "features": [
+        "safetensors model loading (Llama 3.2 1B Instruct)",
+        "full forward pass (prefill + decode)",
+        "CUDA kernels for all ops",
+        "KV cache (2GB, paged)",
+        "static + continuous batching",
+        "online softmax, FlashAttention-like",
+        "PagedAttention (vLLM's key innovation)",
+        "GQA (Grouped Query Attention)"
+      ],
       "repo_url": "https://github.com/jmaczan/tiny-vllm",
       "model": "meta-llama/Llama-3.2-1B-Instruct (safetensors, NOT included in repo — must be downloaded separately)",
       "architecture": {
@@ -66,7 +460,14 @@
         "matmul_library": "cuBLAS (cublasGemmEx with CUDA_R_16BF + CUBLAS_COMPUTE_32F)",
         "kernel_langs": "CUDA (.cu) + HIP (cuda_to_hip.h, USE_HIP option)",
         "bfloat16_type": "__nv_bfloat16 (CUDA/HIP-specific)",
-        "custom_kernels": ["embeddingGatherKernel", "rmsNormKernel", "RoPE kernel", "softmax kernel", "attention kernel", "paged attention kernel"]
+        "custom_kernels": [
+          "embeddingGatherKernel",
+          "rmsNormKernel",
+          "RoPE kernel",
+          "softmax kernel",
+          "attention kernel",
+          "paged attention kernel"
+        ]
       },
       "cpu_port_notes": {
         "bf16_on_cpu": "No native BF16 on consumer Intel (10th-14th Gen). Options: software BF16 (slower), FP32 fallback (simplest), or ARM CPU with NEON BF16.",
@@ -76,7 +477,12 @@
         "continuous_batching_on_cpu": "Optional for CPU. For single-request CPU inference, drop continuous batching. Simpler.",
         "tokenizer": "Uses HuggingFace transformers AutoTokenizer for 'meta-llama/Llama-3.2-1B-Instruct'. Need C++ tokenizer. Likely sentencepiece (LLaMA-style BPE). Check python/tokenizer.py.",
         "model_file": "model.safetensors NOT in repo — must download from HuggingFace. ~2GB for BF16 1B model.",
-        "simplifications_for_cpu": ["Drop PagedAttention (contiguous KV cache instead)", "Drop continuous batching (single-request inference)", "Consider FP32 instead of BF16 (if no CPU BF16 support)", "Drop HIP/CUDA dependencies (use CPU BLAS + CPU kernels)"]
+        "simplifications_for_cpu": [
+          "Drop PagedAttention (contiguous KV cache instead)",
+          "Drop continuous batching (single-request inference)",
+          "Consider FP32 instead of BF16 (if no CPU BF16 support)",
+          "Drop HIP/CUDA dependencies (use CPU BLAS + CPU kernels)"
+        ]
       },
       "files": {
         "main_cpp": "src/main.cpp — main inference loop, weight loading, prefill, decode, batching (largest file)",
@@ -96,33 +502,44 @@
         "hip_option": "USE_HIP=ON builds with HIP for AMD GPUs. hipBLAS instead of cuBLAS. hip::host + roc::hipblas."
       }
     },
-
     "tgi": {
       "description": "Text Generation Inference (HuggingFace)",
       "endpoint": "/v1/completions, /generate",
-      "features": ["OpenAPI spec", "gRPC support", "custom model loading"]
+      "features": [
+        "OpenAPI spec",
+        "gRPC support",
+        "custom model loading"
+      ]
     },
-
     "triton_inference_server": {
       "description": "NVIDIA Triton — model server with GPU scheduling",
       "endpoint": "HTTP/REST (8000), gRPC (8001), metrics (8002)",
-      "features": ["model ensemble", "dynamic batching", "GPU memory pooling"]
+      "features": [
+        "model ensemble",
+        "dynamic batching",
+        "GPU memory pooling"
+      ]
     },
-
     "directml": {
       "description": "DirectML — TensorFlow/PyTorch backend on DirectX 12 (Windows)",
       "endpoint": "In-process (DLL)",
-      "features": ["Windows-native GPU compute", "no CUDA required", "FP32/INT8/BF16"],
+      "features": [
+        "Windows-native GPU compute",
+        "no CUDA required",
+        "FP32/INT8/BF16"
+      ],
       "porting_notes": "DirectML uses DirectX 12 — requires DXC compiler + Agility SDK. Use GL_KHR_shader_integer_dot_product equivalent for matmul."
     },
-
     "windows_ml": {
       "description": "Windows ML — Windows-native ML inference (DirectX 12)",
       "endpoint": "WinRT API (Windows 10/11)",
-      "features": ["ONNX model evaluation", "DirectX 12 GPU acceleration", "FP16/INT8"],
+      "features": [
+        "ONNX model evaluation",
+        "DirectX 12 GPU acceleration",
+        "FP16/INT8"
+      ],
       "porting_notes": "Uses DirectML under the hood. Best for ONNX models on Windows without CUDA."
     },
-
     "nvidia_open_gpu_kernel_modules": {
       "description": "NVIDIA Linux open GPU kernel module source (R515+) — open-source Linux kernel driver for NVIDIA GPUs",
       "endpoint": "kernel-space driver (nvidia.ko, nvidia-drm.ko, nvidia-modeset.ko, nvidia-uvm.ko)",
@@ -139,7 +556,6 @@
         "gsp_note": "Requires GSP (GPU System Processor) firmware from the matching driver release. Without it, the driver will not load on supported GPUs."
       }
     },
-
     "nvidia_open_gpu_doc": {
       "description": "NVIDIA open GPU documentation — chip/hardware interface specs (power management, VRAM controller, GSP firmware interface)",
       "endpoint": "Documentation repository (spec documents)",
@@ -151,7 +567,6 @@
         "vs_amd": "AMD's equivalent is the AMDGPU kernel driver (in-tree Linux kernel) + command processor firmware (mesa/amd-pstate). NVIDIA's open kernel modules + open-gpu-doc are the closest NVIDIA equivalent."
       }
     },
-
     "gpuopen_isa_decoder": {
       "description": "AMD GPUOpen IsaDecoder API — parse/decode AMD GPU instruction encodings from ISA XML",
       "endpoint": "C++ library + headers (compile into your tool)",
@@ -166,7 +581,6 @@
         "amd_isa_xml": "Download ISA XML from https://gpuopen.com/machine-readable-isa/ — each file covers one arch + extension set. Update your local copy when targeting a new microarchitecture."
       }
     },
-
     "amd_gpuopen_isa": {
       "description": "AMD GPUOpen — machine-readable GPU ISA XML for RDNA 1–4 and CDNA 1–5",
       "endpoint": "XML downloads (isa_spec_manager parses these)",
@@ -175,14 +589,30 @@
       "maintained_by": "AMD (GPUOpen)",
       "supported_archs": [
         "gfx803 (Polaris/RX 580) — GCN 4 ISA, NOT in GPUOpen XML (use GCN 4 PDF manual)",
-        "gfx900 (RDNA1/5700)", "gfx901 (RDNA1/5600)",
-        "gfx908 (CDNA1/MI100)", "gfx90a (CDNA1/MI100)",
-        "gfx940 (CDNA2/MI200)", "gfx941 (CDNA2/MI210/250)", "gfx942 (CDNA2/MI250X)",
-        "gfx902 (RDNA2/6000)", "gfx904 (RDNA2/6800)", "gfx906 (RDNA2/6900)", "gfx909 (RDNA2/6700)",
-        "gfx1030 (RDNA2.5/6600)", "gfx1031 (RDNA3.5/7800)", "gfx1034 (RDNA4/7600)",
-        "gfx1100 (RDNA3/7600XT)", "gfx1101 (RDNA3/7700)", "gfx1102 (RDNA3/7900)", "gfx1103 (RDNA3/7900 XT)",
-        "gfx1150 (RDNA3/7800)", "gfx1151 (RDNA3/7900)", "gfx1153 (RDNA3/7900)",
-        "gfx1200 (RDNA4/9000)", "gfx1201 (RDNA4/9000 XT)", "gfx1250 (CDNA4/MI350)"
+        "gfx900 (RDNA1/5700)",
+        "gfx901 (RDNA1/5600)",
+        "gfx908 (CDNA1/MI100)",
+        "gfx90a (CDNA1/MI100)",
+        "gfx940 (CDNA2/MI200)",
+        "gfx941 (CDNA2/MI210/250)",
+        "gfx942 (CDNA2/MI250X)",
+        "gfx902 (RDNA2/6000)",
+        "gfx904 (RDNA2/6800)",
+        "gfx906 (RDNA2/6900)",
+        "gfx909 (RDNA2/6700)",
+        "gfx1030 (RDNA2.5/6600)",
+        "gfx1031 (RDNA3.5/7800)",
+        "gfx1034 (RDNA4/7600)",
+        "gfx1100 (RDNA3/7600XT)",
+        "gfx1101 (RDNA3/7700)",
+        "gfx1102 (RDNA3/7900)",
+        "gfx1103 (RDNA3/7900 XT)",
+        "gfx1150 (RDNA3/7800)",
+        "gfx1151 (RDNA3/7900)",
+        "gfx1153 (RDNA3/7900)",
+        "gfx1200 (RDNA4/9000)",
+        "gfx1201 (RDNA4/9000 XT)",
+        "gfx1250 (CDNA4/MI350)"
       ],
       "isa_xml_files": {
         "rdna1.xml": "gfx900, gfx901 (RDNA 1 — RX 5700/5700 XT/5600 XT)",
@@ -222,6 +652,165 @@
           "notes": "GTX 1060 has no tensor cores (sm_70+ feature), no mma.sync, no WMMA. It has __shfl_sync, __ballot_sync, basic CUDA runtime API. CUDA still works on the proprietary NVIDIA driver — the lack of open kernel modules does not affect CUDA userspace. If porting to HIP, the HIP target arch (e.g. gfx1030, gfx1100) needs to support the translated HIP features — the GTX 1060 is the source, not the target."
         }
       }
+    }
+  },
+  "model_format_quant_matrix": {
+    "description": "Which quant types work on which GPU backends",
+    "table": {
+      "q4_0": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": true,
+        "Vulkan_DP4a": true,
+        "Vulkan_CM": "broken_on_AMD"
+      },
+      "q4_1": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": true,
+        "Vulkan_DP4a": true,
+        "Vulkan_CM": "broken_on_AMD"
+      },
+      "q5_0": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": true,
+        "Vulkan_DP4a": true,
+        "Vulkan_CM": "broken_on_AMD"
+      },
+      "q5_1": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": true,
+        "Vulkan_DP4a": true,
+        "Vulkan_CM": "broken_on_AMD"
+      },
+      "q8_0": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": true,
+        "Vulkan_DP4a": true,
+        "Vulkan_CM": true
+      },
+      "iq2_xxs": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": false,
+        "Vulkan_DP4a": false,
+        "Vulkan_CM": false
+      },
+      "iq2_s": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": false,
+        "Vulkan_DP4a": false,
+        "Vulkan_CM": false
+      },
+      "iq3_xxs": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": false,
+        "Vulkan_DP4a": false,
+        "Vulkan_CM": false
+      },
+      "iq3_s": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": false,
+        "Vulkan_DP4a": false,
+        "Vulkan_CM": false
+      },
+      "iq4_nl": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": false,
+        "Vulkan_DP4a": false,
+        "Vulkan_CM": false
+      },
+      "iq4_s": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": false,
+        "Vulkan_DP4a": false,
+        "Vulkan_CM": false
+      },
+      "iq5_1": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": false,
+        "Vulkan_DP4a": false,
+        "Vulkan_CM": false
+      },
+      "iq5_s": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": false,
+        "Vulkan_DP4a": false,
+        "Vulkan_CM": false
+      },
+      "iq1_s": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": false,
+        "Vulkan_DP4a": false,
+        "Vulkan_CM": false
+      },
+      "exl3_2.9": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": false,
+        "Vulkan_DP4a": false,
+        "Vulkan_CM": false
+      },
+      "exl3_3.5": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": false,
+        "Vulkan_DP4a": false,
+        "Vulkan_CM": false
+      },
+      "nf4_bnb": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": false,
+        "Intel_Ar": false,
+        "Vulkan_DP4a": false,
+        "Vulkan_CM": false
+      },
+      "fp8_e4m3": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": true,
+        "Vulkan_DP4a": true,
+        "Vulkan_CM": false
+      },
+      "bf16": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": true,
+        "Vulkan_DP4a": true,
+        "Vulkan_CM": true
+      },
+      "fp16": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": true,
+        "Vulkan_DP4a": true,
+        "Vulkan_CM": true
+      },
+      "fp32": {
+        "NVIDIA_CUDA": true,
+        "AMD_HIP": true,
+        "Intel_Ar": true,
+        "Vulkan_DP4a": true,
+        "Vulkan_CM": true
+      }
+    },
+    "key": {
+      "NVIDIA_CUDA": "CUDA with tensor cores (sm_80+) or FP32 fallback (sm_75)",
+      "AMD_HIP": "HIP with dot4 (RDNA2+) or FMA fallback",
+      "Intel_Ar": "Intel Arc with DPAS and bf16/FP8 native",
+      "Vulkan_DP4a": "Vulkan compute with GL_KHR_shader_integer_dot_product (DP4a)",
+      "Vulkan_CM": "Vulkan compute with GL_KHR_cooperative_matrix (Matrix multiply)"
     }
   }
 }
