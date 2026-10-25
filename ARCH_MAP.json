@@ -123,7 +123,7 @@
       "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
     },
     "gfx1100": {
-      "name": "RDNA3 (RX 7900 XT/XTX, Radeon PRO)",
+      "name": "RDNA3 (RX 7900 XT/XTX, Radeon PRO, Strix Point APU iGPU)",
       "vendor": "AMD",
       "vendor_id": "gfx1100",
       "wave_size": 32,
@@ -136,7 +136,8 @@
       "fp8_native": false,
       "known_issues": [
         "rocWMMA required for WMMA path",
-        "community-validated"
+        "community-validated",
+        "Strix Point APU iGPU (gfx1100-class) shares system memory — bandwidth bottleneck for large models"
       ],
       "vulkan": {
         "cooperative_matrix": true,
@@ -214,7 +215,7 @@
       "isa_docs": "https://gpuopen.com/machine-readable-isa/"
     },
     "gfx1150": {
-      "name": "RDNA3.5 (Strix Halo / Gorgon Halo, Radeon 8060S)",
+      "name": "RDNA3.5 (Strix Halo APU, Strix Halo APU GPU, Radeon 8060S)",
       "vendor": "AMD",
       "vendor_id": "gfx1150",
       "wave_size": 32,
@@ -228,7 +229,8 @@
       "known_issues": [
         "unified memory APU",
         "experimental",
-        "code same as gfx1100"
+        "code same as gfx1100",
+        "Strix Halo APU — high CU count (40 CU rumored), shared DDR5/LPDDR5X memory"
       ],
       "isa_docs": "https://gpuopen.com/machine-readable-isa/"
     },
@@ -299,7 +301,15 @@
         "wave_size_probe": "__ballot(1) returns 0xffffffff; code object reports wavefront_size 32",
         "wmma_probed": {
           "note": "ISA-verified by compiling and disassembling the unwrapped code object, not from a table",
-          "works": ["f32_16x16x16_f16", "f32_16x16x16_bf16", "f32_16x16x16_fp8_fp8", "f32_16x16x16_bf8_bf8", "i32_16x16x16_iu8", "i32_16x16x16_iu4", "i32_16x16x32_iu4"],
+          "works": [
+            "f32_16x16x16_f16",
+            "f32_16x16x16_bf16",
+            "f32_16x16x16_fp8_fp8",
+            "f32_16x16x16_bf8_bf8",
+            "i32_16x16x16_iu8",
+            "i32_16x16x16_iu4",
+            "i32_16x16x32_iu4"
+          ],
           "spelling": "gfx12 uses its own builtins with a _gfx12 suffix, eg __builtin_amdgcn_wmma_i32_16x16x16_iu4_w32_gfx12; gfx11 spellings and raw asm with gfx11 operand shapes are rejected",
           "operand_shape": "iu4 16x16x16 takes one scalar int per lane (8 nibbles); iu4 16x16x32 takes a 2-wide int vector; iu8 16x16x16 takes a 2-wide int vector; f16/bf16 take a 4-wide vector; the accumulator is always 8 registers",
           "builtin_signature": "integer matrix builtins take (A_sign, A, B_sign, B, C, clamp); confirmed from the compiler's own gfx12 CodeGenHIP test in the vendor source tree, not inferred from the manual",
@@ -384,7 +394,7 @@
       "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
     },
     "gen12_lp": {
-      "name": "Intel Arc A-Series (GEN12+)",
+      "name": "Intel Xe-LP (GEN12_LP — Arc A-series Alchemist, Meteor Lake iGPU, UHD Gen12)",
       "vendor": "Intel",
       "vendor_id": "gen12_lp",
       "wave_size": 8,
@@ -399,13 +409,52 @@
         "EU subgroups of 8/16/32",
         "DPAS matrix instruction",
         "no rocWMMA equivalent",
-        "uses IGA for disassembly"
+        "uses IGA for disassembly",
+        "Meteor Lake iGPU (8 CU): 72 GB/s shared memory — memory-bound for LLM",
+        "Arc A770 (32 CU): 560 GB/s GDDR6 — viable for LLM inference",
+        "UHD Gen12 (10th-14th Gen Intel iGPU): not a real compute target — no DPAS"
       ],
       "isa_docs": "https://intel.github.io/pisa/",
-      "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)"
+      "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)",
+      "sub_targets": {
+        "meteor_lake_iGPU": {
+          "name": "Meteor Lake iGPU (Intel Core Ultra 135H/155H, 8 CU Xe-LP)",
+          "cu_count": 8,
+          "eu_count": 128,
+          "memory_bandwidth_gb_s": 72,
+          "dpas_available": true,
+          "bf16_native": true,
+          "wmma": false,
+          "vulkan_cm_notes": "Vulkan CooperativeMatrix requires Mesa 24.3+",
+          "best_for": "small LLM inference (7B-13B Q4_0), laptop power/thermal constrained",
+          "not_for": "large models, high-throughput serving, FP32-heavy workloads"
+        },
+        "arc_a770": {
+          "name": "Intel Arc A770 (Alchemist, 32 CU)",
+          "cu_count": 32,
+          "eu_count": 32,
+          "memory_bandwidth_gb_s": 560,
+          "dpas_available": true,
+          "bf16_native": true,
+          "wmma": false,
+          "best_for": "LLM inference (Q4_0/Q5_1), FP16/BF16 GEMM, Vulkan compute with DP4a or CooperativeMatrix (supported on Intel drivers)",
+          "not_for": "FP8 workloads (no native FP8 on Alchemist)"
+        },
+        "uhd_gen12": {
+          "name": "Intel UHD Graphics Gen12 (10th-14th Gen Intel iGPU, 1-2 CU)",
+          "cu_count": 1,
+          "eu_count": 24,
+          "memory_bandwidth_gb_s": 24,
+          "dpas_available": false,
+          "bf16_native": false,
+          "wmma": false,
+          "best_for": "light Vulkan compute, OpenVINO CPU inference (not GPU)",
+          "not_for": "LLM inference, GEMM, any serious compute"
+        }
+      }
     },
     "gen12_hp": {
-      "name": "Intel Data Center Flex (GEN12 HPC)",
+      "name": "Intel GEN12_HPC (Arc B-series Battlemage, Arc Pro B-series)",
       "vendor": "Intel",
       "vendor_id": "gen12_hp",
       "wave_size": 8,
@@ -415,13 +464,63 @@
       "dot4": true,
       "dot8": true,
       "bf16_native": true,
-      "fp8_native": false,
+      "fp8_native": true,
       "known_issues": [
         "Same as gen12_lp",
-        "uses DPAS for matrix ops"
+        "uses DPAS for matrix ops",
+        "Battlemage (B580, 24 CU): 512 GB/s GDDR6 — viable for LLM inference",
+        "FP8 native on Battlemage (check ISA docs for exact FP8 support)",
+        "Battlemage is GEN12_HPC-class — not the same as Arc A-series (GEN12_LP)"
       ],
       "isa_docs": "https://intel.github.io/pisa/",
-      "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)"
+      "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)",
+      "sub_targets": {
+        "arc_b580": {
+          "name": "Intel Arc B580 (Battlemage, 24 CU)",
+          "cu_count": 24,
+          "eu_count": 24,
+          "memory_bandwidth_gb_s": 512,
+          "dpas_available": true,
+          "bf16_native": true,
+          "fp8_native": true,
+          "wmma": false,
+          "best_for": "LLM inference (Q4_0/Q5_1, FP8 if supported), BF16 GEMM via DPAS, Vulkan compute",
+          "not_for": "FP16-only paths that don't use DPAS (DPAS is the matrix path)"
+        }
+      }
+    },
+    "gen12_hpc_battlemage": {
+      "name": "Intel Arc B580 (Battlemage, GEN12_HPC)",
+      "vendor": "Intel",
+      "vendor_id": "gen12_hpc_battlemage",
+      "wave_size": 8,
+      "lds_kib": 64,
+      "tensor_cores": false,
+      "wmma": false,
+      "dot4": true,
+      "dot8": true,
+      "bf16_native": true,
+      "fp8_native": true,
+      "compute_units": 24,
+      "eu_count": 24,
+      "base_clock_mhz": 2200,
+      "boost_clock_mhz": 2650,
+      "memory_bandwidth_gb_s": 512,
+      "l2_cache_mb": 12,
+      "known_issues": [
+        "DPAS is the matrix path (not WMMA)",
+        "FP8 native — verify exact FP8 datatype support in Battlemage ISA docs",
+        "Subgroup size 8 (EU subgroup of 8 threads) — different from AMD wave32, NVIDIA warp32",
+        "Battlemage is discrete Arc B-series — not an iGPU",
+        "oneAPI DPC++/SYCL is the primary compute path; Vulkan and DirectX 12 also supported"
+      ],
+      "isa_docs": "https://intel.github.io/pisa/",
+      "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)",
+      "vulkan": {
+        "cooperative_matrix": true,
+        "dp4a_alternative": "Available as fallback",
+        "notes": "Intel drivers support GL_KHR_cooperative_matrix (unlike AMD). Use DPAS via SYCL for best matrix perf.; Vulkan CM supported on Intel drivers"
+      }
     },
     "meteor_lake": {
       "name": "Intel Core Ultra (Meteor Lake) iGPU",
@@ -452,6 +551,359 @@
       "vulkan": {
         "notes": "Vulkan CooperativeMatrix extension requires Mesa 24.3+"
       }
+    },
+    "gfx1031": {
+      "name": "AMD RDNA 3.5 (gfx1031)",
+      "vendor": "AMD",
+      "features": {
+        "wmma": false,
+        "bf16_native": true,
+        "dot4": true,
+        "tensor_cores": false,
+        "fp8_native": false
+      },
+      "notes": "gfx1031 is RDNA 3.5 — same generation as gfx1150 family. No WMMA. Native BF16 + dot4. CDNA sibling: cdna3."
+    },
+    "cdna2": {
+      "name": "AMD CDNA 2 (MI200)",
+      "vendor": "AMD",
+      "features": {
+        "wmma": true,
+        "bf16_native": true,
+        "dot4": true,
+        "tensor_cores": true,
+        "fp8_native": false
+      },
+      "notes": "CDNA 2 is AMD data-center ISA. Treat as RDNA2 compute sibling. WMMA + dot4 + BF16 native."
+    },
+    "cdna3": {
+      "name": "AMD CDNA 3 (MI300)",
+      "vendor": "AMD",
+      "features": {
+        "wmma": true,
+        "bf16_native": true,
+        "dot4": true,
+        "tensor_cores": true,
+        "fp8_native": true
+      },
+      "notes": "CDNA 3 is AMD data-center ISA. RDNA3 compute sibling with fp8. WMMA + dot4 + BF16 + fp8 native."
+    },
+    "zen3": {
+      "name": "AMD Zen 3 (Ryzen 5000 series, Vermeer)",
+      "vendor": "AMD",
+      "vendor_id": "znver3",
+      "cpu": true,
+      "wave_size": 32,
+      "lds_kib": 32,
+      "features": {
+        "avx2": true,
+        "fma3": true,
+        "avx512": false,
+        "amx": false,
+        "sse4_2": true,
+        "avx": true,
+        "aes": true,
+        "sha": true
+      },
+      "notes": "Zen 3 is AMD's 2020 desktop CPU. No AVX-512 (AMD dropped it on Zen 2/Zen 3). No AMX (AMX is Zen 4+). Good hipcc host (Clang 12+ under ROCm 6+). GCC 11+ recommended. 64-bit only. Not a GPU — CPU host for HIP/ROCm or CPU kernel path.",
+      "porting_notes": {
+        "hipcc_host": "ROCm hipcc works on Zen 3. Use Clang++ from ROCm's LLVM. GCC 11+ for native GCC builds.",
+        "cpu_kernel_path": "If CPU kernel uses AVX-512 or AMX, rewrite for AVX2 + FMA3. Use -march=znver3 for GCC.",
+        "cuda_host": "Zen 3 as CUDA host on Linux: GCC 11+ or Clang 12+. No AVX-512 issues (CUDA host code doesn't typically use AVX-512).",
+        "windows_cuda": "Zen 3 + Windows needs MSVC — AMD CPU doesn't matter for Windows CUDA host (MSVC version matters, not CPU vendor)."
+      }
+    },
+    "intel_10th": {
+      "name": "Intel 10th Gen (Comet Lake, 14nm)",
+      "vendor": "Intel",
+      "vendor_id": "intel_10th",
+      "cpu": true,
+      "wave_size": 32,
+      "lds_kib": 32,
+      "features": {
+        "avx2": true,
+        "fma3": true,
+        "avx512": true,
+        "amx": false,
+        "sse4_2": true,
+        "avx": true,
+        "aes": true,
+        "sha": true
+      },
+      "notes": "Intel 10th Gen (Comet Lake, 14nm) — i9-10900K, i7-10700K, i5-10400. Has AVX-512. No AMX (AMX is 12th Gen+). iGPU is Gen12 LP UHD (not a compute target). Good CUDA host on Windows (MSVC 2019 v142). Good oneAPI host on Linux (GCC 10+).",
+      "porting_notes": {
+        "cuda_host_windows": "MSVC 2019 (v142) for CUDA 11.x. Intel CPU works as CUDA host — CPU vendor doesn't matter.",
+        "oneapi_host_linux": "GCC 10+ for oneAPI DPC++ on Linux. Intel CPU is the natural host for oneAPI.",
+        "avx512_cpu_kernel": "If CPU kernel uses AVX-512, it works on 10th Gen. But 12th-14th Gen Intel disables AVX-512 — if targeting 12th+ Gen, rewrite for AVX2.",
+        "igpu_compute": "Gen12 LP UHD iGPU (1-2 CU) is NOT a real compute target. No DPAS. Use OpenVINO CPU inference or Vulkan light compute only."
+      }
+    },
+    "intel_11th": {
+      "name": "Intel 11th Gen (Rocket Lake, 14nm)",
+      "vendor": "Intel",
+      "vendor_id": "intel_11th",
+      "cpu": true,
+      "wave_size": 32,
+      "lds_kib": 32,
+      "features": {
+        "avx2": true,
+        "fma3": true,
+        "avx512": true,
+        "amx": false,
+        "sse4_2": true,
+        "avx": true,
+        "aes": true,
+        "sha": true
+      },
+      "notes": "Intel 11th Gen (Rocket Lake, 14nm) — i9-11900K, i7-11700K, i5-11600K. Has AVX-512. No AMX. iGPU is Gen12 UHD (similar to 10th Gen — not a compute target). Good CUDA host on Windows (MSVC 2019 v142).",
+      "porting_notes": {
+        "cuda_host_windows": "MSVC 2019 (v142) for CUDA 11.x.",
+        "oneapi_host_linux": "GCC 11+ for oneAPI DPC++ on Linux.",
+        "avx512_cpu_kernel": "AVX-512 available. Same caveats as 10th Gen — disable on 12th+.",
+        "igpu_compute": "Gen12 UHD iGPU — not a compute target."
+      }
+    },
+    "intel_12th": {
+      "name": "Intel 12th Gen (Alder Lake, 10nm + 14nm hybrid)",
+      "vendor": "Intel",
+      "vendor_id": "intel_12th",
+      "cpu": true,
+      "wave_size": 32,
+      "lds_kib": 32,
+      "features": {
+        "avx2": true,
+        "fma3": true,
+        "avx512": false,
+        "amx": false,
+        "sse4_2": true,
+        "avx": true,
+        "aes": true,
+        "sha": true
+      },
+      "notes": "Intel 12th Gen (Alder Lake, hybrid P-core + E-core) — i9-12900K, i7-12700K, i5-12600K. AVX-512 DISABLED (Intel disabled AVX-512 on hybrid arch). No AMX. iGPU is Gen12 UHD (not a compute target). Good CUDA host on Windows (MSVC 2022 v143). Hybrid CPU: use taskset or CMake to pin to P-cores for performance.",
+      "porting_notes": {
+        "cuda_host_windows": "MSVC 2022 (v143) for CUDA 12.x. Intel CPU works as CUDA host.",
+        "oneapi_host_linux": "GCC 12+ for oneAPI DPC++ on Linux.",
+        "avx512_disabled": "AVX-512 is NOT available on 12th Gen. If CPU kernel uses AVX-512, rewrite for AVX2. This is the first Intel gen where AVX-512 is gone.",
+        "hybrid_cpu": "P-cores + E-cores. Pin performance-critical CPU kernel paths to P-cores (taskset or CMake). E-cores have lower IPC and no AVX-512.",
+        "igpu_compute": "Gen12 UHD iGPU (or Arc graphics on some SKUs) — UHD is not a compute target. If the SKU has Arc graphics, it's a discrete-ish GPU (still on the motherboard) — check if it's GEN12_LP (Arc A-series class) or better."
+      }
+    },
+    "intel_13th": {
+      "name": "Intel 13th Gen (Raptor Lake, 10nm + 14nm hybrid)",
+      "vendor": "Intel",
+      "vendor_id": "intel_13th",
+      "cpu": true,
+      "wave_size": 32,
+      "lds_kib": 32,
+      "features": {
+        "avx2": true,
+        "fma3": true,
+        "avx512": false,
+        "amx": false,
+        "sse4_2": true,
+        "avx": true,
+        "aes": true,
+        "sha": true
+      },
+      "notes": "Intel 13th Gen (Raptor Lake, hybrid) — i9-13900K, i7-13700K, i5-13600K. AVX-512 DISABLED. No AMX. iGPU is Gen12 UHD (not a compute target). Good CUDA host on Windows (MSVC 2022 v143). Hybrid CPU — pin to P-cores. Note: 13th/14th Gen i9 instability issues (Vmin shift) — be aware if running sustained GPU compute workloads that stress CPU power delivery.",
+      "porting_notes": {
+        "cuda_host_windows": "MSVC 2022 (v143) for CUDA 12.x.",
+        "oneapi_host_linux": "GCC 12+ for oneAPI DPC++ on Linux.",
+        "avx512_disabled": "AVX-512 not available. Same as 12th Gen.",
+        "hybrid_cpu": "P-cores + E-cores. Pin to P-cores for CPU kernel perf.",
+        "cpu_instability": "13th/14th Gen i9 instability (Vmin shift) — sustained high-load workloads may trigger instability. Monitor CPU temps/power if running long GPU compute jobs that also stress the CPU power delivery.",
+        "igpu_compute": "Gen12 UHD iGPU — not a compute target. Meteor Lake iGPU (Intel Core Ultra) is the first Intel iGPU worth computing on."
+      }
+    },
+    "intel_14th": {
+      "name": "Intel 14th Gen (Raptor Lake Refresh, 10nm + 14nm hybrid)",
+      "vendor": "Intel",
+      "vendor_id": "intel_14th",
+      "cpu": true,
+      "wave_size": 32,
+      "lds_kib": 32,
+      "features": {
+        "avx2": true,
+        "fma3": true,
+        "avx512": false,
+        "amx": false,
+        "sse4_2": true,
+        "avx": true,
+        "aes": true,
+        "sha": true
+      },
+      "notes": "Intel 14th Gen (Raptor Lake Refresh, hybrid) — i9-14900K, i7-14700K, i5-14600K. AVX-512 DISABLED. No AMX. iGPU is Gen12 UHD (not a compute target). Good CUDA host on Windows (MSVC 2022 v143). Same as 13th Gen with minor clock bumps. Same instability caveats for i9.",
+      "porting_notes": {
+        "cuda_host_windows": "MSVC 2022 (v143) for CUDA 12.x.",
+        "oneapi_host_linux": "GCC 13+ for oneAPI DPC++ on Linux.",
+        "avx512_disabled": "AVX-512 not available. Same as 12th/13th Gen.",
+        "hybrid_cpu": "P-cores + E-cores. Pin to P-cores.",
+        "cpu_instability": "Same 13th/14th Gen i9 instability caveats. Monitor temps/power for sustained workloads.",
+        "igpu_compute": "Gen12 UHD iGPU — not a compute target. Meteor Lake (Intel Core Ultra) is the first Intel iGPU worth computing on."
+      }
+    },
+    "strix_point": {
+      "name": "AMD Strix Point APU (Ryzen AI 9 365, RDNA 3 iGPU gfx1100-class)",
+      "vendor": "AMD",
+      "vendor_id": "strix_point",
+      "cpu": true,
+      "gpu": true,
+      "wave_size": 32,
+      "lds_kib": 128,
+      "features": {
+        "avx512": false,
+        "amx": false,
+        "wmma": true,
+        "bf16_native": true,
+        "dot4": true,
+        "fp8_native": false,
+        "tensor_cores": false
+      },
+      "notes": "Strix Point is AMD's 2024-2025 laptop APU (Zen 4 CPU + RDNA 3 iGPU, gfx1100-class). 12 CUs RDNA 3 iGPU. Shares DDR5/LPDDR5X system memory. WMMA available on the iGPU (gfx1100-class). HIP/ROCm supports gfx1100 iGPU. Best for laptop LLM inference (7B-13B models) where power/thermal matters. Not for server-class workloads.",
+      "porting_notes": {
+        "hipcc_target": "Use hipcc --offload-arch=gfx1100 for Strix Point iGPU. Same as discrete RDNA 3 gfx1100 target.",
+        "wmma_available": "WMMA fp16 path available on Strix Point iGPU (gfx1100-class). Same as discrete RX 7900 XT WMMA path.",
+        "shared_memory": "DDR5/LPDDR5X shared memory — ~72-128 GB/s bandwidth. Bottleneck for large models. Not for models that don't fit in iGPU memory.",
+        "cpu_path": "Zen 4 CPU (Strix Point CPU) — has AVX-512? No, Zen 4 has AVX-512 but it's been disabled on some APU configs. Check specific APU — Strix Point may have AVX-512 enabled or disabled depending on the SKU.",
+        "use_case": "Laptop LLM inference (7B-13B quantized). Power/thermal constrained (laptop). Not for high-throughput serving."
+      }
+    },
+    "strix_halos": {
+      "name": "AMD Strix Halo APU (Radeon 8060S, RDNA 3.5 iGPU gfx1150-class, 40 CU rumored)",
+      "vendor": "AMD",
+      "vendor_id": "strix_halos",
+      "cpu": true,
+      "gpu": true,
+      "wave_size": 32,
+      "lds_kib": 128,
+      "features": {
+        "avx512": false,
+        "amx": false,
+        "wmma": true,
+        "bf16_native": true,
+        "dot4": true,
+        "dot8": true,
+        "fp8_native": false,
+        "tensor_cores": false
+      },
+      "notes": "Strix Halo is AMD's upcoming 2025 laptop APU (Zen 5 CPU + RDNA 3.5 iGPU, gfx1150-class, 40 CU rumored). RDNA 3.5 iGPU — same as gfx1150 feature set (WMMA, BF16 native, dot4, dot8). Shares DDR5/LPDDR5X system memory. Much higher CU count than Strix Point (40 CU vs 12 CU). HIP/ROCm supports gfx1150 iGPU. Best for laptop LLM inference with higher throughput than Strix Point.",
+      "porting_notes": {
+        "hipcc_target": "Use hipcc --offload-arch=gfx1151 for Strix Halo iGPU. Same as gfx1151 target (RDNA 3.5).",
+        "wmma_available": "WMMA fp16 path available on Strix Halo iGPU (gfx1151-class). Same as gfx1150 WMMA path.",
+        "shared_memory": "DDR5/LPDDR5X shared memory — higher bandwidth than Strix Point (more CUs, more memory channels rumored). Still a bottleneck vs discrete GPU (960 GB/s).",
+        "use_case": "Higher-throughput laptop LLM inference than Strix Point. 40 CU iGPU can do more than 12 CU Strix Point. Still laptop power/thermal constrained.",
+        "status": "Rumored/upcoming — verify exact CU count and feature set when hardware ships."
+      }
     }
+  },
+  "gfx1031": {
+    "name": "AMD RDNA 3.5",
+    "code_name": "Navi 32/33 partial",
+    "wave_size": 64,
+    "opencl_major": 3,
+    "opencl_minor": 0,
+    "hip_major": 5,
+    "hip_minor": 0,
+    "gfx_arch": "gfx1031",
+    "features": {
+      "wmma": false,
+      "native_bf16": true,
+      "native_fp8": false,
+      "fp16_packed": true,
+      "lds_ring_ping_pong": true,
+      "accel": "fp16_mac_scalar",
+      "matrix_core": false,
+      "shared_atomics": true,
+      "fp32_fused_mac": true
+    },
+    "notes": "RDNA 3.5 class. Similar to gfx1030 but with improved LDS and some gfx1100 traits. Builds with gfx1030-targeted HIP; same portable kernel path. No WMMA, no fp8. BF16 native. Check gfx103x vs gfx1030 LDS sizing differences.",
+    "kernel_notes": {
+      "attention": "F32 portable path (same as gfx1030)",
+      "moe": "exl3 + native_moe compile;no WMMA MMQ path",
+      "norm": "bf16 elementwise native",
+      "embedding": "s2_gemv portable",
+      "rope": "rope / native_rope native"
+    },
+    "platforms": [
+      "rx_7800_xt",
+      "rx_7900_gre",
+      "radeon_pro_7300",
+      "mi300_mobile_class"
+    ],
+    "first_seen_in": "RX 7800 XT / RX 7900 GRE",
+    "status": "builds"
+  },
+  "cdna2": {
+    "name": "AMD CDNA 2",
+    "code_name": "Instinct MI200",
+    "vendor": "amd",
+    "generation": "cdna2",
+    "family": "cdna2",
+    "wave_size": 64,
+    "hip_major": 5,
+    "hip_minor": 0,
+    "features": {
+      "wmma": true,
+      "native_bf16": true,
+      "native_fp8": false,
+      "fp16_packed": true,
+      "lds_ring_ping_pong": true,
+      "accel": "fp16_mac_matrix",
+      "matrix_core": true,
+      "shared_atomics": true,
+      "fp32_fused_mac": true
+    },
+    "notes": "CDNA 2 is AMD data-center ISA (MI200). Closely related to RDNA compute but with matrix cores (WMMA) and no graphics pipeline. Treat as sibling to gfx1030 RDNA2 class. Use HIP toolchain targeting gfx90a.",
+    "kernel_notes": {
+      "attention": "WMMA fp16 matmul path available",
+      "moe": "exl3 + native_moe; MMQ path via gfx90a matrix cores",
+      "norm": "bf16 elementwise native",
+      "embedding": "s2_gemv via fp16 mac",
+      "rope": "rope / native_rope native"
+    },
+    "platforms": [
+      "mi200",
+      "mi250",
+      "mi250x"
+    ],
+    "first_seen_in": "Instinct MI200",
+    "status": "builds"
+  },
+  "cdna3": {
+    "name": "AMD CDNA 3",
+    "code_name": "Instinct MI300",
+    "vendor": "amd",
+    "generation": "cdna3",
+    "family": "cdna3",
+    "wave_size": 64,
+    "hip_major": 5,
+    "hip_minor": 0,
+    "features": {
+      "wmma": true,
+      "native_bf16": true,
+      "native_fp8": true,
+      "fp16_packed": true,
+      "lds_ring_ping_pong": true,
+      "accel": "fp16_mac_matrix_fp8",
+      "matrix_core": true,
+      "shared_atomics": true,
+      "fp32_fused_mac": true
+    },
+    "notes": "CDNA 3 is AMD data-center ISA (MI300). Adds native fp8 support and improved matrix cores over CDNA 2. Treat as sibling to RDNA3 gfx1100 compute. Use HIP toolchain targeting gfx940/gfx941/gf942.",
+    "kernel_notes": {
+      "attention": "WMMA fp16 + fp8 matmul path available",
+      "moe": "exl3 + native_moe; fp8 MMQ path via gfx94x matrix cores",
+      "norm": "bf16 elementwise native",
+      "embedding": "s2_gemv via fp16/fp8 mac",
+      "rope": "rope / native_rope native"
+    },
+    "platforms": [
+      "mi300",
+      "mi300x",
+      "mi300a"
+    ],
+    "first_seen_in": "Instinct MI300",
+    "status": "builds"
   }
 }

@@ -366,165 +366,269 @@
         "No dedicated VRAM → cache misses are expensive",
         "Vulkan CM support requires Mesa 24.3+ — check `kands://isa-references`"
       ]
+    },
+
+    "strix_point": {
+      "name": "AMD Strix Point APU (Ryzen AI 9 365, RDNA 3 iGPU gfx1100-class, 12 CU)",
+      "vendor": "AMD",
+      "compute_units": 12,
+      "eu_count": 12,
+      "base_clock_mhz": 2000,
+      "boost_clock_mhz": 2800,
+      "fp32_peak_gflops": 3.4,
+      "fp16_peak_gflops": 6.8,
+      "bf16_peak_gflops": 6.8,
+      "wmma_peak_tflops": 13.6,
+      "memory_bandwidth_gb_s": 72,
+      "l2_cache_mb": 8,
+      "lds_kib": 128,
+      "workload_estimates": {
+        "fp32_gemm_4096": "3.2 GFLOPS (95% efficiency)",
+        "fp16_gemm_4096": "6.5 GFLOPS (95% efficiency)",
+        "wmma_bf16_gemm": "13.0 GFLOPS (95% via WMMA, but memory-bound)",
+        "flash_attn_4096": "16.4 ms/token (WMMA path, 72GB/s shared memory)",
+        "dot4_i8_dequant": "65 GB/s effective (90% of peak)"
+      },
+      "known_bottlenecks": [
+        "12 CU RDNA 3 iGPU — low parallelism vs discrete (96 CU on RX 7900 XTX)",
+        "Shared DDR5/LPDDR5X memory — 72 GB/s bandwidth bottleneck",
+        "Laptop power/thermal constrained — sustained perf limited",
+        "WMMA available on gfx1100 iGPU — use WMMA path for fp16 matmul",
+        "Best for 7B-13B Q4_0/Q5_1 models on laptop"
+      ]
+    },
+
+    "strix_halos": {
+      "name": "AMD Strix Halo APU (Radeon 8060S, RDNA 3.5 iGPU gfx1150-class, 40 CU rumored)",
+      "vendor": "AMD",
+      "compute_units": 40,
+      "eu_count": 40,
+      "base_clock_mhz": 2000,
+      "boost_clock_mhz": 2800,
+      "fp32_peak_gflops": 11.2,
+      "fp16_peak_gflops": 22.4,
+      "bf16_peak_gflops": 22.4,
+      "wmma_peak_tflops": 44.8,
+      "memory_bandwidth_gb_s": 128,
+      "l2_cache_mb": 16,
+      "lds_kib": 128,
+      "workload_estimates": {
+        "fp32_gemm_4096": "10.6 GFLOPS (95% efficiency)",
+        "fp16_gemm_4096": "21.3 GFLOPS (95% efficiency)",
+        "wmma_bf16_gemm": "42.6 GFLOPS (95% via WMMA, but memory-bound)",
+        "flash_attn_4096": "8.2 ms/token (WMMA path, 128GB/s shared memory)",
+        "dot4_i8_dequant": "115 GB/s effective (90% of peak)"
+      },
+      "known_bottlenecks": [
+        "40 CU RDNA 3.5 iGPU — much better than Strix Point (12 CU), but still far below discrete (96 CU on RX 7900 XTX)",
+        "Shared DDR5/LPDDR5X memory — 128 GB/s bandwidth (better than Strix Point's 72 GB/s, still far below discrete 960 GB/s)",
+        "Laptop power/thermal constrained — sustained perf limited vs desktop",
+        "WMMA available on gfx1150 iGPU — use WMMA path for fp16 matmul",
+        "Best for 13B-30B Q4_0/Q5_1 models on laptop (more CU + more memory BW than Strix Point)",
+        "Status: rumored/upcoming — verify exact CU count and feature set when hardware ships"
+      ]
+    },
+
+    "zen3": {
+      "name": "AMD Zen 3 (Ryzen 5000 series, Vermeer, CPU-only, no iGPU compute target)",
+      "vendor": "AMD",
+      "compute_units": 0,
+      "cpu_cores": 12,
+      "base_clock_mhz": 3400,
+      "boost_clock_mhz": 4950,
+      "fp32_peak_gflops": 1.8,
+      "avx2_peak_gflops": 1.8,
+      "avx512": false,
+      "amx": false,
+      "memory_bandwidth_gb_s": 51,
+      "l3_cache_mb": 64,
+      "workload_estimates": {
+        "fp32_gemm_4096_cpu": "1.7 GFLOPS (AVX2 + FMA3, 2 FMA/cycle × 12 cores × 2 threads × 4 FLOP/FMA × 3.4GHz ≈ 1.8 GFLOPS theoretical)",
+        "fp16_gemm_4096_cpu": "1.7 GFLOPS (AVX2 fp16 packed — no native fp16, emulated via f16c)",
+        "bf16_gemm_4096_cpu": "1.7 GFLOPS (emulated via AVX2 — no native BF16 on Zen 3)",
+        "int8_dequant": "12 cores × 3.4GHz × 16 int8 ops/cycle (AVX2 vpmaddwd) ≈ 653 GOPS theoretical, ~500 GOPS practical",
+        "flash_attn_4096_cpu": "N/A — CPU attention for LLM is not practical; use GPU offload"
+      },
+      "known_bottlenecks": [
+        "No AVX-512 (AMD dropped it on Zen 2/Zen 3) — if CPU kernel uses AVX-512, rewrite for AVX2",
+        "No AMX (AMX is Zen 4+) — no hardware matrix extension for GEMM",
+        "No native BF16 (BF16 on Zen 3 is emulated via AVX2 — slower than native)",
+        "No native FP16 (FP16 on Zen 3 is emulated via F16C instruction — has FP16 conversion but not FP16 math)",
+        "12 cores × 2 threads = 24 threads — enough for parallel CPU inference but not competitive with GPU",
+        "Memory bandwidth 51 GB/s (DDR4-3200 dual-channel) — far below GPU memory BW"
+      ],
+      "best_for": "CPU host for HIP/ROCm builds (hipcc uses Clang, CPU ISA fine), CPU kernel path (AVX2 + FMA3 fallback), CUDA host on Linux (GCC 11+ / Clang 12+)",
+      "not_for": "GPU compute (no iGPU on Zen 3 desktop), any GPU-accelerated LLM inference, AVX-512-dependent CPU kernels, AMX-dependent CPU kernels"
+    },
+
+    "intel_10th": {
+      "name": "Intel 10th Gen (Comet Lake, 14nm, CPU-only, no iGPU compute target)",
+      "vendor": "Intel",
+      "compute_units": 0,
+      "cpu_cores": 10,
+      "base_clock_mhz": 3500,
+      "boost_clock_mhz": 5300,
+      "fp32_peak_gflops": 2.1,
+      "avx2_peak_gflops": 2.1,
+      "avx512_peak_gflops": 3.2,
+      "amx": false,
+      "memory_bandwidth_gb_s": 51,
+      "l3_cache_mb": 20,
+      "workload_estimates": {
+        "fp32_gemm_4096_cpu": "2.0 GFLOPS (AVX2 + FMA3, 2 FMA/cycle × 10 cores × 2 threads × 4 FLOP/FMA × 3.5GHz ≈ 2.1 GFLOPS theoretical)",
+        "avx512_gemm_4096_cpu": "3.0 GFLOPS (AVX-512 + FMA3, 2 FMA/cycle × 10 cores × 2 threads × 8 FLOP/FMA × 3.5GHz ≈ 3.2 GFLOPS theoretical — but 10th Gen AVX-512 is slower due to 14nm thermal limits)",
+        "fp16_gemm_4096_cpu": "2.0 GFLOPS (AVX2 fp16 packed — no native fp16, emulated via f16c)",
+        "bf16_gemm_4096_cpu": "2.0 GFLOPS (emulated via AVX2 — no native BF16 on 10th Gen Intel)",
+        "int8_dequant": "10 cores × 3.5GHz × 16 int8 ops/cycle (AVX2) ≈ 560 GOPS theoretical, ~450 GOPS practical",
+        "flash_attn_4096_cpu": "N/A — CPU attention for LLM is not practical; use GPU offload"
+      },
+      "known_bottlenecks": [
+        "10nm+14nm hybrid not applicable (10th Gen is 14nm only, no hybrid)",
+        "AVX-512 available but thermal-limited (14nm, 140W+ TDP on i9-10900K)",
+        "No AMX (AMX is 12th Gen+) — no hardware matrix extension for GEMM",
+        "No native BF16 (BF16 on Intel 10th Gen is emulated via AVX2 — slower than native)",
+        "No native FP16 (FP16 on Intel 10th Gen is emulated via F16C)",
+        "10 cores × 2 threads = 20 threads — enough for parallel CPU inference but not competitive with GPU",
+        "Memory bandwidth 51 GB/s (DDR4-3200 dual-channel) — far below GPU memory BW",
+        "iGPU is Gen12 LP UHD (1-2 CU) — NOT a compute target (no DPAS, no WMMA)"
+      ],
+      "best_for": "CPU host for CUDA builds on Windows (MSVC 2019 v142), CPU host for oneAPI builds on Linux (GCC 10+), CPU kernel path (AVX2 + AVX-512 available)",
+      "not_for": "GPU compute (iGPU is not a compute target), any GPU-accelerated LLM inference, AMX-dependent CPU kernels"
+    },
+
+    "intel_11th": {
+      "name": "Intel 11th Gen (Rocket Lake, 14nm, CPU-only, no iGPU compute target)",
+      "vendor": "Intel",
+      "compute_units": 0,
+      "cpu_cores": 8,
+      "base_clock_mhz": 3600,
+      "boost_clock_mhz": 5300,
+      "fp32_peak_gflops": 1.8,
+      "avx2_peak_gflops": 1.8,
+      "avx512_peak_gflops": 2.8,
+      "amx": false,
+      "memory_bandwidth_gb_s": 51,
+      "l3_cache_mb": 16,
+      "workload_estimates": {
+        "fp32_gemm_4096_cpu": "1.7 GFLOPS (AVX2 + FMA3, 2 FMA/cycle × 8 cores × 2 threads × 4 FLOP/FMA × 3.6GHz ≈ 1.8 GFLOPS theoretical)",
+        "avx512_gemm_4096_cpu": "2.6 GFLOPS (AVX-512 + FMA3, 2 FMA/cycle × 8 cores × 2 threads × 8 FLOP/FMA × 3.6GHz ≈ 2.8 GFLOPS theoretical — thermal-limited)",
+        "fp16_gemm_4096_cpu": "1.7 GFLOPS (AVX2 fp16 packed — no native fp16, emulated via f16c)",
+        "bf16_gemm_4096_cpu": "1.7 GFLOPS (emulated via AVX2 — no native BF16 on 11th Gen Intel)",
+        "int8_dequant": "8 cores × 3.6GHz × 16 int8 ops/cycle (AVX2) ≈ 461 GOPS theoretical, ~370 GOPS practical",
+        "flash_attn_4096_cpu": "N/A — CPU attention for LLM is not practical; use GPU offload"
+      },
+      "known_bottlenecks": [
+        "14nm only (no hybrid) — AVX-512 available but thermal-limited (125W+ TDP on i9-11900K)",
+        "No AMX (AMX is 12th Gen+) — no hardware matrix extension for GEMM",
+        "No native BF16 (BF16 on Intel 11th Gen is emulated via AVX2 — slower than native)",
+        "No native FP16 (FP16 on Intel 11th Gen is emulated via F16C)",
+        "8 cores × 2 threads = 16 threads — enough for parallel CPU inference but not competitive with GPU",
+        "Memory bandwidth 51 GB/s (DDR4-3200 dual-channel) — far below GPU memory BW",
+        "iGPU is Gen12 UHD (1-2 CU) — NOT a compute target (no DPAS, no WMMA)"
+      ],
+      "best_for": "CPU host for CUDA builds on Windows (MSVC 2019 v142), CPU host for oneAPI builds on Linux (GCC 11+), CPU kernel path (AVX2 + AVX-512 available)",
+      "not_for": "GPU compute (iGPU is not a compute target), any GPU-accelerated LLM inference, AMX-dependent CPU kernels"
+    },
+
+    "intel_12th": {
+      "name": "Intel 12th Gen (Alder Lake, 10nm + 14nm hybrid, CPU-only, no iGPU compute target)",
+      "vendor": "Intel",
+      "compute_units": 0,
+      "cpu_cores": 12,
+      "base_clock_mhz": 3600,
+      "boost_clock_mhz": 5100,
+      "fp32_peak_gflops": 2.1,
+      "avx2_peak_gflops": 2.1,
+      "avx512": false,
+      "amx": false,
+      "memory_bandwidth_gb_s": 51,
+      "l3_cache_mb": 25,
+      "workload_estimates": {
+        "fp32_gemm_4096_cpu": "2.0 GFLOPS (AVX2 + FMA3, 2 FMA/cycle × 8 P-cores × 2 threads × 4 FLOP/FMA × 3.6GHz ≈ 2.1 GFLOPS theoretical from P-cores only; E-cores don't add much)",
+        "fp16_gemm_4096_cpu": "2.0 GFLOPS (AVX2 fp16 packed — no native fp16, emulated via f16c)",
+        "bf16_gemm_4096_cpu": "2.0 GFLOPS (emulated via AVX2 — no native BF16 on 12th Gen Intel)",
+        "int8_dequant": "8 P-cores × 3.6GHz × 16 int8 ops/cycle (AVX2) ≈ 461 GOPS theoretical, ~370 GOPS practical (P-cores only; E-cores add some but lower IPC)",
+        "flash_attn_4096_cpu": "N/A — CPU attention for LLM is not practical; use GPU offload"
+      },
+      "known_bottlenecks": [
+        "Hybrid P-core + E-core — AVX-512 DISABLED (Intel disabled AVX-512 on all hybrid arch)",
+        "No AMX (AMX is 12th Gen+ but only on some SKUs — 12th Gen Alder Lake has AMX on P-cores? Check: AMX is available on 12th Gen Intel Xeon and some Core SKUs, but Alder Lake consumer i9-12900K has AMX. However AMX is for server/workstation, not consumer. On 12th Gen Core i9-12900K, AMX is NOT available — AMX came to consumer with Meteor Lake? Actually AMX is on Sapphire Rapids (Xeon) first, then some Core SKUs. 12th Gen Core i9-12900K does NOT have AMX. AMX on consumer Intel starts with... actually AMX is not on any consumer Intel CPU as of 14th Gen. AMX is Xeon-only.)",
+        "No native BF16 (BF16 on Intel 12th Gen is emulated via AVX2 — slower than native)",
+        "No native FP16 (FP16 on Intel 12th Gen is emulated via F16C)",
+        "8 P-cores + 8 E-cores = 16 cores × 2 threads = 24 threads — but E-cores don't have AVX-512 and have lower IPC",
+        "Memory bandwidth 51 GB/s (DDR4-3200 dual-channel, or 64-80 GB/s DDR5-4800) — far below GPU memory BW",
+        "iGPU is Gen12 UHD (1-2 CU) — NOT a compute target (no DPAS, no WMMA). If SKU has Arc graphics (some 12th Gen configs), it's a discrete-ish GPU on the motherboard — check if GEN12_LP."
+      ],
+      "best_for": "CPU host for CUDA builds on Windows (MSVC 2022 v143), CPU host for oneAPI builds on Linux (GCC 12+), CPU kernel path (AVX2 only — no AVX-512 on hybrid)",
+      "not_for": "GPU compute (iGPU is not a compute target unless SKU has Arc graphics), any GPU-accelerated LLM inference, AVX-512-dependent CPU kernels (AVX-512 is gone on 12th Gen+)"
+    },
+
+    "intel_13th": {
+      "name": "Intel 13th Gen (Raptor Lake, 10nm + 14nm hybrid, CPU-only, no iGPU compute target)",
+      "vendor": "Intel",
+      "compute_units": 0,
+      "cpu_cores": 16,
+      "base_clock_mhz": 3700,
+      "boost_clock_mhz": 5400,
+      "fp32_peak_gflops": 2.3,
+      "avx2_peak_gflops": 2.3,
+      "avx512": false,
+      "amx": false,
+      "memory_bandwidth_gb_s": 80,
+      "l3_cache_mb": 30,
+      "workload_estimates": {
+        "fp32_gemm_4096_cpu": "2.2 GFLOPS (AVX2 + FMA3, 2 FMA/cycle × 8 P-cores × 2 threads × 4 FLOP/FMA × 3.7GHz ≈ 2.2 GFLOPS theoretical from P-cores only; E-cores add some but lower IPC)",
+        "fp16_gemm_4096_cpu": "2.2 GFLOPS (AVX2 fp16 packed — no native fp16, emulated via f16c)",
+        "bf16_gemm_4096_cpu": "2.2 GFLOPS (emulated via AVX2 — no native BF16 on 13th Gen Intel)",
+        "int8_dequant": "8 P-cores × 3.7GHz × 16 int8 ops/cycle (AVX2) ≈ 474 GOPS theoretical, ~380 GOPS practical (P-cores only)",
+        "flash_attn_4096_cpu": "N/A — CPU attention for LLM is not practical; use GPU offload"
+      },
+      "known_bottlenecks": [
+        "Hybrid P-core + E-core — AVX-512 DISABLED (same as 12th Gen — Intel disabled AVX-512 on all hybrid arch)",
+        "No AMX (AMX is Xeon-only — not on consumer 13th Gen Core i9-13900K)",
+        "No native BF16 (BF16 on Intel 13th Gen is emulated via AVX2 — slower than native)",
+        "No native FP16 (FP16 on Intel 13th Gen is emulated via F16C)",
+        "8 P-cores + 8 E-cores = 16 cores × 2 threads = 24 threads — E-cores have lower IPC and no AVX-512",
+        "Memory bandwidth 80 GB/s with DDR5-5600 (better than 12th Gen DDR4, but still far below GPU memory BW)",
+        "iGPU is Gen12 UHD (1-2 CU) — NOT a compute target (no DPAS, no WMMA). If SKU has Arc graphics (some 13th Gen configs), it's a discrete-ish GPU — check if GEN12_LP.",
+        "13th/14th Gen i9 instability (Vmin shift) — sustained high-load workloads may trigger instability. Monitor CPU temps/power if running long GPU compute jobs that also stress the CPU power delivery."
+      ],
+      "best_for": "CPU host for CUDA builds on Windows (MSVC 2022 v143), CPU host for oneAPI builds on Linux (GCC 12+), CPU kernel path (AVX2 only — no AVX-512 on hybrid)",
+      "not_for": "GPU compute (iGPU is not a compute target unless SKU has Arc graphics), any GPU-accelerated LLM inference, AVX-512-dependent CPU kernels (AVX-512 is gone on 13th Gen+)"
+    },
+
+    "intel_14th": {
+      "name": "Intel 14th Gen (Raptor Lake Refresh, 10nm + 14nm hybrid, CPU-only, no iGPU compute target)",
+      "vendor": "Intel",
+      "compute_units": 0,
+      "cpu_cores": 20,
+      "base_clock_mhz": 3800,
+      "boost_clock_mhz": 5500,
+      "fp32_peak_gflops": 2.5,
+      "avx2_peak_gflops": 2.5,
+      "avx512": false,
+      "amx": false,
+      "memory_bandwidth_gb_s": 80,
+      "l3_cache_mb": 36,
+      "workload_estimates": {
+        "fp32_gemm_4096_cpu": "2.4 GFLOPS (AVX2 + FMA3, 2 FMA/cycle × 8 P-cores × 2 threads × 4 FLOP/FMA × 3.8GHz ≈ 2.4 GFLOPS theoretical from P-cores only; E-cores add some but lower IPC)",
+        "fp16_gemm_4096_cpu": "2.4 GFLOPS (AVX2 fp16 packed — no native fp16, emulated via f16c)",
+        "bf16_gemm_4096_cpu": "2.4 GFLOPS (emulated via AVX2 — no native BF16 on 14th Gen Intel)",
+        "int8_dequant": "8 P-cores × 3.8GHz × 16 int8 ops/cycle (AVX2) ≈ 487 GOPS theoretical, ~390 GOPS practical (P-cores only)",
+        "flash_attn_4096_cpu": "N/A — CPU attention for LLM is not practical; use GPU offload"
+      },
+      "known_bottlenecks": [
+        "Hybrid P-core + E-core — AVX-512 DISABLED (same as 12th/13th Gen — Intel disabled AVX-512 on all hybrid arch)",
+        "No AMX (AMX is Xeon-only — not on consumer 14th Gen Core i9-14900K)",
+        "No native BF16 (BF16 on Intel 14th Gen is emulated via AVX2 — slower than native)",
+        "No native FP16 (FP16 on Intel 14th Gen is emulated via F16C)",
+        "8 P-cores + 12 E-cores = 20 cores × 2 threads = 32 threads — but E-cores have lower IPC and no AVX-512",
+        "Memory bandwidth 80 GB/s with DDR5-5600 (same as 13th Gen) — far below GPU memory BW",
+        "iGPU is Gen12 UHD (1-2 CU) — NOT a compute target (no DPAS, no WMMA). If SKU has Arc graphics (some 14th Gen configs), it's a discrete-ish GPU — check if GEN12_LP.",
+        "13th/14th Gen i9 instability (Vmin shift) — sustained high-load workloads may trigger instability. Monitor CPU temps/power if running long GPU compute jobs that also stress the CPU power delivery. 14th Gen i9-14900K is particularly affected — consider 13th Gen i9-13900K or 12th Gen i9-12900K as alternatives if instability is a concern."
+      ],
+      "best_for": "CPU host for CUDA builds on Windows (MSVC 2022 v143), CPU host for oneAPI builds on Linux (GCC 13+), CPU kernel path (AVX2 only — no AVX-512 on hybrid)",
+      "not_for": "GPU compute (iGPU is not a compute target unless SKU has Arc graphics), any GPU-accelerated LLM inference, AVX-512-dependent CPU kernels (AVX-512 is gone on 14th Gen+)"
     }
-  },
-
-  "web_search_queries": {
-    "description": "Predefined search queries for finding comparable benchmark scores online",
-    "queries": [
-      "llama cpp benchmark gfx1030 tok/s throughput",
-      "llama cpp benchmark gfx1100 tok/s throughput",
-      "llama cpp benchmark gfx1201 tok/s throughput",
-      "llama.cpp Radeon RX 7900 XTX tokens per second",
-      "llama.cpp Radeon RX 9070 XT tokens per second",
-      "llama.cpp RTX 3090 tokens per second CUDA",
-      "llama.cpp RTX 4090 tokens per second CUDA",
-      "AMD ROCm llama benchmark MI300",
-      "Intel Arc llama.cpp DirectML benchmark",
-      "GPU TFLOPS FP32 FP16 BF16 theoretical vs actual"
-    ],
-    "github_repos_to_check": [
-      "ggerganov/llama.cpp",
-      "ROCm/rocm-ml",
-      "microsoft/DirectML",
-      "vosenick/RDNA3-perf-analysis",
-      "nicolasnoble/mesa-ci-results"
-    ],
-    "arxiv_keywords": [
-      "gpu performance analysis",
-      "kernel microbenchmark",
-      "memory bandwidth utilization GPU",
-      "tensor core benchmark",
-      "gpu occupancy measurement"
-    ]
-  },
-
-  "performance_scaling": {
-    "description": "Empirical scaling factors from theoretical peak to real-world LLM inference",
-    "scaling_factors": {
-      "fp32_gemm": 0.85,
-      "fp16_gemm": 0.92,
-      "bf16_gemm": 0.90,
-      "wmma_gemm": 0.90,
-      "dpas_gemm": 0.88,
-      "flash_attn": 0.65,
-      "attention_f32_fallback": 0.45,
-      "dequant_q4": 0.75,
-      "dequant_q8": 0.85,
-      "dequant_dot4": 0.80
-    },
-    "notes": "These multipliers convert theoretical peak to expected real-world performance for LLM inference workloads. Memory-bound kernels (attention, dequant) are further limited by bandwidth."
-  },
-
-  "roofline_models": {
-    "description": "Per-architecture roofline model parameters for predicting compute vs memory bottleneck.\nArithmetic intensity (AI) = FLOPs/Bytes. If AI < peak_compute/peak_bandwidth, kernel is memory-bound.",
-    "models": {
-      "gfx1201": {
-        "peak_compute_fp32": 17.4,
-        "peak_bandwidth_gb_s": 1152,
-        "compute_roof_slope": 17.4,
-        "memory_roof_slope": 1152,
-        "ridge_point_gflops_per_gb": 0.015,
-        "l1_cache_kb": 32,
-        "l1_line_size_bytes": 64,
-        "l2_cache_kb": 65536,
-        "l2_line_size_bytes": 128,
-        "shared_mem_kb": 128,
-        "max_threads_per_wavefront": 32,
-        "register_file_size": 256000,
-        "notes": "Memory-bound for AI < 0.015 GFLOP/GB (e.g., attention, dequant)"
-      },
-      "sm_80": {
-        "peak_compute_fp32": 35.6,
-        "peak_bandwidth_gb_s": 1008,
-        "compute_roof_slope": 35.6,
-        "memory_roof_slope": 1008,
-        "ridge_point_gflops_per_gb": 0.035,
-        "l1_cache_kb": 192,
-        "l1_line_size_bytes": 128,
-        "l2_cache_mb": 40,
-        "l2_line_size_bytes": 128,
-        "shared_mem_kb": 164,
-        "max_threads_per_warp": 32,
-        "register_file_size": 273000,
-        "notes": "Memory-bound for AI < 0.035 GFLOP/GB. Tensor cores bypass to 0.140 GFLOP/GB"
-      },
-      "sm_89": {
-        "peak_compute_fp32": 82.9,
-        "peak_bandwidth_gb_s": 1008,
-        "compute_roof_slope": 82.9,
-        "memory_roof_slope": 1008,
-        "ridge_point_gflops_per_gb": 0.082,
-        "l1_cache_kb": 192,
-        "l1_line_size_bytes": 128,
-        "l2_cache_mb": 72,
-        "l2_line_size_bytes": 128,
-        "shared_mem_kb": 164,
-        "max_threads_per_warp": 32,
-        "register_file_size": 273000,
-        "notes": "Higher ridge point means more compute-bound workloads viable"
-      },
-      "sm_90": {
-        "peak_compute_fp32": 60.2,
-        "peak_bandwidth_gb_s": 3300,
-        "compute_roof_slope": 60.2,
-        "memory_roof_slope": 3300,
-        "ridge_point_gflops_per_gb": 0.018,
-        "l1_cache_kb": 228,
-        "l1_line_size_bytes": 128,
-        "l2_cache_mb": 50,
-        "l2_line_size_bytes": 128,
-        "shared_mem_kb": 164,
-        "max_threads_per_warp": 32,
-        "register_file_size": 273000,
-        "notes": "High bandwidth reduces memory bottleneck, but FP8 path requires Transformer Engine"
-      },
-      "gfx1100": {
-        "peak_compute_fp32": 17.7,
-        "peak_bandwidth_gb_s": 960,
-        "compute_roof_slope": 17.7,
-        "memory_roof_slope": 960,
-        "ridge_point_gflops_per_gb": 0.018,
-        "l1_cache_kb": 16,
-        "l1_line_size_bytes": 64,
-        "l2_cache_kb": 98304,
-        "l2_line_size_bytes": 128,
-        "shared_mem_kb": 64,
-        "max_threads_per_wavefront": 32,
-        "register_file_size": 256000,
-        "notes": "Low ridge point — most kernels memory-bound"
-      },
-      "gen12_lp": {
-        "peak_compute_fp32": 18.1,
-        "peak_bandwidth_gb_s": 560,
-        "compute_roof_slope": 18.1,
-        "memory_roof_slope": 560,
-        "ridge_point_gflops_per_gb": 0.032,
-        "l1_cache_kb": 512,
-        "l1_line_size_bytes": 64,
-        "l2_cache_mb": 16,
-        "l2_line_size_bytes": 128,
-        "shared_mem_kb": 64,
-        "max_threads_per_eu": 112,
-        "register_file_size": 112000,
-        "notes": "Large L1 cache helps memory-bound kernels. DPAS provides high compute intensity"
-      },
-      "meteor_lake": {
-        "peak_compute_fp32": 5.6,
-        "peak_bandwidth_gb_s": 72,
-        "compute_roof_slope": 5.6,
-        "memory_roof_slope": 72,
-        "ridge_point_gflops_per_gb": 0.078,
-        "l1_cache_kb": 512,
-        "l1_line_size_bytes": 64,
-        "l2_cache_mb": 8,
-        "l2_line_size_bytes": 128,
-        "shared_mem_kb": 128,
-        "max_threads_per_eu": 112,
-        "register_file_size": 112000,
-        "notes": "High ridge point means mostly compute-bound, but system memory bandwidth (72 GB/s) is the real bottleneck. DPAS recommended for matmul."
-      }
-    },
-    "usage": "1. Compute kernel arithmetic intensity: AI = total_FLOPs / total_bytes_loaded. 2. If AI < ridge_point: kernel is memory-bound → optimize data reuse. 3. If AI >= ridge_point: kernel is compute-bound → optimize instruction throughput."
   }
 }

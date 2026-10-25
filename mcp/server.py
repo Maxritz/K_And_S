@@ -448,6 +448,54 @@ _FEATURE_REQUIREMENTS = {
 }
 
 
+
+# ── Optimal-path helpers ────────────────────────────────────────────────────
+
+_REQUIRED_FOR_KERNEL = {
+    "flash_attn":     {"wmma": True, "dot4": True},
+    "native_qsa":     {"wmma": True, "dot4": True},
+    "bf16_gemv":      {"bf16_native": True},
+    "exl3":           {"dot4": True},
+    "kv_q8":          {"bf16_native": True},
+    "kv_q4":          {"dot4": True},
+    "router_topk":    {"dot4": True},
+    "router_sigmoid": {"dot4": True},
+    "mma":            {"tensor_cores": True},
+}
+
+
+def _score_arch_kernels(kernel_names: list[str], feats: dict) -> tuple[int, int, int]:
+    """Return (ok_count, needs_fallback_count, incompatible_count) for a kernel list."""
+    ok = fb = inc = 0
+    for kname in kernel_names:
+        req = _REQUIRED_FOR_KERNEL.get(kname)
+        if not req:
+            ok += 1
+            continue
+        missing = [f for f, need in req.items() if need and not feats.get(f)]
+        if not missing:
+            ok += 1
+        else:
+            fb += 1
+    return ok, fb, inc
+
+
+def _arch_gen_number(name: str) -> int:
+    """Extract a generation number from an arch name for sorting."""
+    if not name:
+        return 0
+    m = re.search(r"RDNA\s*(\d+)", name)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"sm_(\d+)", name)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"GEN(\d+)", name)
+    if m:
+        return int(m.group(1)) + 100  # Intel gens offset after AMD/NV
+    return 0
+
+
 def _check_kernel_against_arch(kernel: str, arch_info: dict) -> str:
     """Return 'OK', 'NEEDS_FALLBACK', or 'INCOMPATIBLE'."""
     for pattern, reqs in _FEATURE_REQUIREMENTS.items():
@@ -1124,33 +1172,45 @@ def _diff_perf_traces(trace_a: str, trace_b: str) -> str:
     return report
 
 
-def _build_tracing_plan(root: Path, components: list[str] | None, model_map: dict) -> str:
+def _build_tracing_plan(root: Path, components: list[str] | None, model_map: dict, backend: str = "cuda") -> str:
     """Build a tracing instrumentation plan by scanning the source tree."""
+    backend = backend.lower()
+    if backend in {"hip", "rocm"}:
+        backend = "hip"
+    elif backend in {"vulkan", "vk"}:
+        backend = "vulkan"
+    elif backend in {"directx", "dx", "d3d"}:
+        backend = "directx"
+    elif backend in {"openvino", "ov"}:
+        backend = "openvino"
+    else:
+        backend = "cuda"
+
     existing_strace_files = []
+    dispatch_files = []
+
     for f in root.rglob("*"):
         if not f.is_file():
             continue
-        if f.suffix.lower() not in {".cu", ".cuh", ".cpp", ".hpp"}:
+        suf = f.suffix.lower()
+        if suf not in {".cu", ".cuh", ".cpp", ".hpp", ".comp", ".hls", ".hlsl"}:
             continue
         try:
             text = f.read_text(encoding="utf-8", errors="replace")
             if "STRACE" in text:
                 existing_strace_files.append(str(f.relative_to(root)))
-        except Exception:
-            pass
-
-    dispatch_files = []
-    for f in root.rglob("*.cu"):
-        try:
-            text = f.read_text(encoding="utf-8", errors="replace")
-            lines = text.splitlines()
-            for i, line in enumerate(lines):
-                if ("<<<" in line and ">>>" in line) or "hipLaunchKernel" in line or "cudaLaunchKernel" in line:
-                    dispatch_files.append({
-                        "file": str(f.relative_to(root)),
-                        "line": i + 1,
-                        "call": line.strip()[:150],
-                    })
+            if suf == ".cu":
+                for i, line in enumerate(text.splitlines()):
+                    if ("<<<" in line and ">>>" in line) or "hipLaunchKernel" in line or "cudaLaunchKernel" in line:
+                        dispatch_files.append({"file": str(f.relative_to(root)), "line": i + 1, "call": line.strip()[:150]})
+            elif backend == "vulkan" and suf == ".comp":
+                for i, line in enumerate(text.splitlines()):
+                    if "vkCmdDispatch" in line or "vkCmdDispatchIndirect" in line:
+                        dispatch_files.append({"file": str(f.relative_to(root)), "line": i + 1, "call": line.strip()[:150]})
+            elif backend == "directx" and suf in {".hlsl", ".hls"}:
+                for i, line in enumerate(text.splitlines()):
+                    if "Dispatch" in line and ("ComputeShader" in line or "cs" in line.lower()):
+                        dispatch_files.append({"file": str(f.relative_to(root)), "line": i + 1, "call": line.strip()[:150]})
         except Exception:
             pass
 
@@ -1158,13 +1218,14 @@ def _build_tracing_plan(root: Path, components: list[str] | None, model_map: dic
         components = ["app", "glm", "ds4", "prefill", "expert", "cache", "pool", "moe", "attention"]
 
     plan = "# Tracing Instrumentation Plan\n\n"
-    plan += f"**Repository:** `{root}`\n\n"
+    plan += f"**Repository:** `{root}`\n"
+    plan += f"**Backend:** `{backend}`\n"
     plan += f"**Components to instrument:** {', '.join(components)}\n\n"
 
     plan += "## Already Instrumented\n\n"
     if existing_strace_files:
         for f in sorted(existing_strace_files):
-            plan += f"- `{f}` — has STRACE or STRACE_SCOPE calls\n"
+            plan += f"- `{f}` — has STRACE/STRACE_SCOPE calls\n"
     else:
         plan += "- No existing STRACE calls found\n"
 
@@ -1174,21 +1235,245 @@ def _build_tracing_plan(root: Path, components: list[str] | None, model_map: dic
     if len(dispatch_files) > 80:
         plan += f"... and {len(dispatch_files) - 80} more dispatch sites\n"
 
-    plan += "\n## Instrumentation Steps\n\n"
-    plan += "1. **Add include to every .cu/.cpp that dispatches kernels:**\n"
-    plan += "   ```cpp\n   #include \"strata/core/breadcrumb.hpp\"\n   ```\n\n"
+    plan += "\n## How Breadcrumb / STRACE Tracing Works\n\n"
+    plan += """Breadcrumb is a **zero-cost, env-gated** tracing layer. When no tracing env
+vars are set there are no allocations, no branches, no stderr output, and no
+measurable overhead (compiled out or inlined to nothing).
+
+| Env var | What it enables |
+|---|---|
+| `STRATA_BREADCRUMB=1` | Lightweight breadcrumb markers: each `STRACE()` / `STRACE_SCOPE()` emits a single line to stderr. |
+| `STRATA_PERF_TRACING=1` | Performance tracing: timestamps each STRACE event, emits `PERF_TRACING` summary lines at process exit. |
+| `STRATA_GLM_PROF=1` / `DS4_PROF=1` | Backend-specific prof markers (GLM / DS4). |
+
+**Markers**
+- `STRACE(comp, evt, fmt, ...)` — fires once, emits `BREADCRUMB comp=.. evt=..`.
+- `STRACE_SCOPE(comp, evt, fmt, ...)` — RAII: fires on construction and destruction, measures scope duration when perf tracing is on.
+
+**Output**
+All markers write to stderr in a single-line format so they can be tee'd or grepped:
+```
+BREADCRUMB component=attention event=dispatch name=qsa_decode_attn
+PERF_TRACING component=attention phase=summary ops=1 gpu_ms=0.42
+```
+"""
+
+    plan += "\n## Backend-Specific Tracing Setup\n\n"
+    if backend == "hip":
+        plan += """### ROCm / HIP (already wired)
+
+The HIP path already has full breadcrumb support. The emit side is in
+`strata/core/breadcrumb.cpp/hpp` and is backend-agnostic C++. Just drop the
+include and markers into any HIP kernel file.
+
+**CLI flags to add to main():**
+```cpp
+else if (a == "--breadcrumb") {
+    setenv("STRATA_BREADCRUMB", "1", 1);
+}
+else if (a == "--perf-tracing") {
+    setenv("STRATA_PERF_TRACING", "1", 1);
+    setenv("STRATA_GLM_PROF", "1", 1);  // or DS4_PROF=1 for DS4
+}
+```
+
+**PERF_TRACING summary at exit:**
+```cpp
+if (std::getenv("STRATA_PERF_TRACING")) {
+    std::fprintf(stderr, "PERF_TRACING component=X phase=summary ops=N gpu_ms=X.XX\n");
+}
+```
+"""
+    elif backend == "vulkan":
+        plan += """### Vulkan
+
+Vulkan uses the same breadcrumb repo (the C++ emit side is backend-agnostic).
+Instrument the host-side dispatch wrappers, not the SPIR-V shaders themselves.
+
+**Include:**
+```cpp
+#include "strata/core/breadcrumb.hpp"   // same header, works for any backend
+```
+
+**Markers around vkCmdDispatch / vkCmdDispatchIndirect:**
+```cpp
+STRACE("compute", "dispatch", "pipeline=%s groupX=%u groupY=%u groupZ=%u",
+       pipeline_name, groupX, groupY, groupZ);
+vkCmdDispatch(cmdBuf, groupX, groupY, groupZ);
+```
+
+**CLI flags (same as HIP, env-gated so zero-cost when off):**
+```cpp
+else if (a == "--breadcrumb") {
+    setenv("STRATA_BREADCRUMB", "1", 1);
+}
+else if (a == "--perf-tracing") {
+    setenv("STRATA_PERF_TRACING", "1", 1);
+    setenv("STRATA_VULKAN_PROF", "1", 1);   // optional, if you have Vulkan-layer prof
+}
+```
+
+**PERF_TRACING summary at exit (same format):**
+```cpp
+if (std::getenv("STRATA_PERF_TRACING")) {
+    std::fprintf(stderr, "PERF_TRACING component=X phase=summary ops=N gpu_ms=X.XX\n");
+}
+```
+
+**Notes:**
+- Vulkan validation layers + RenderDoc already give you GPU timeline data;
+breadcrumb gives you the CPU-side component/phase attribution that ties
+dispatch calls to model-level phases (prefill, decode, moe, etc.).
+- For GPU timestamps you can additionally enable `VK_LAYER_LUNARG_api_dump`
+or the NSight Graphics layer; breadcrumb is complementary, not a replacement.
+"""
+    elif backend == "directx":
+        plan += """### DirectX 12
+
+DirectX 12 also uses the same breadcrumb C++ emit side. Instrument the
+host-side ID3D12CommandList::Dispatch calls.
+
+**Include:**
+```cpp
+#include "strata/core/breadcrumb.hpp"
+```
+
+**Markers around ID3D12CommandList::Dispatch:**
+```cpp
+STRACE("compute", "dispatch", "pipeline=%s groupX=%u groupY=%u groupZ=%u",
+       pipeline_name, groupX, groupY, groupZ);
+cmdList->Dispatch(groupX, groupY, groupZ);
+```
+
+**CLI flags:**
+```cpp
+else if (a == "--breadcrumb") {
+    _putenv_s("STRATA_BREADCRUMB", "1");
+}
+else if (a == "--perf-tracing") {
+    _putenv_s("STRATA_PERF_TRACING", "1");
+    _putenv_s("STRATA_DX12_PROF", "1");
+}
+```
+
+**PERF_TRACING summary at exit:**
+```cpp
+if (std::getenv("STRATA_PERF_TRACING")) {
+    std::fprintf(stderr, "PERF_TRACING component=X phase=summary ops=N gpu_ms=X.XX\n");
+}
+```
+
+**Notes:**
+- PIX, VS Graphics Debugger, and GPUView give GPU-side timelines;
+breadcrumb adds the CPU-side component/phase labels that map dispatches
+back to model phases.
+- On Windows use `_putenv_s` / `SetEnvironmentVariable` instead of `setenv`.
+"""
+    elif backend == "openvino":
+        plan += """### OpenVINO
+
+OpenVINO is primarily a CPU/NPU inference runtime, so breadcrumb here is
+most useful for marking model-level phases (compile, load, infer, postprocess)
+rather than individual kernel dispatches (OpenVINO manages those internally).
+
+**Include:**
+```cpp
+#include "strata/core/breadcrumb.hpp"
+```
+
+**Markers around OpenVINO call sites:**
+```cpp
+STRACE_SCOPE("openvino", "compile", "model=%s device=%s", model_name, device);
+auto executable = compiled_model.create_executable();
+
+STRACE("openvino", "infer", "model=%s latency_ms=%.2f", model_name, elapsed_ms);
+auto result = infer_request.get_output_tensor();
+```
+
+**CLI flags:**
+```cpp
+else if (a == "--breadcrumb") {
+    setenv("STRATA_BREADCRUMB", "1", 1);
+}
+else if (a == "--perf-tracing") {
+    setenv("STRATA_PERF_TRACING", "1", 1);
+    setenv("STRATA_OPENVINO_PROF", "1", 1);
+}
+```
+
+**PERF_TRACING summary at exit:**
+```cpp
+if (std::getenv("STRATA_PERF_TRACING")) {
+    std::fprintf(stderr, "PERF_TRACING component=X phase=summary ops=N gpu_ms=X.XX\n");
+}
+```
+
+**Notes:**
+- OpenVINO already provides its own performance counters (`set_property(model, "PERFORMANCE_MODE", "ACCURATE")`);
+breadcrumb complements those with model-level phase attribution that OpenVINO's counters don't give you.
+- On CPU/NPU targets the "gpu_ms" field in the summary should read "elapsed_ms" or "compute_ms" — adjust the label to match the device.
+"""
+    else:
+        plan += """### CUDA
+
+The CUDA path uses the same breadcrumb repo. Instrument kernel launch sites.
+
+**CLI flags:**
+```cpp
+else if (a == "--breadcrumb") {
+    setenv("STRATA_BREADCRUMB", "1", 1);
+}
+else if (a == "--perf-tracing") {
+    setenv("STRATA_PERF_TRACING", "1", 1);
+}
+```
+
+**PERF_TRACING summary at exit:**
+```cpp
+if (std::getenv("STRATA_PERF_TRACING")) {
+    std::fprintf(stderr, "PERF_TRACING component=X phase=summary ops=N gpu_ms=X.XX\n");
+}
+```
+"""
+
+    plan += "\n## Instrumentation Steps (all backends)\n\n"
+    plan += "1. **Add the breadcrumb include** to every source file that dispatches work or has model-phase boundaries:\n"
+    if backend == "vulkan":
+        plan += "   ```cpp\n   #include \"strata/core/breadcrumb.hpp\"\n   ```\n   (host-side .cpp/.hpp — not the .comp shaders)\n\n"
+    elif backend == "directx":
+        plan += "   ```cpp\n   #include \"strata/core/breadcrumb.hpp\"\n   ```\n   (host-side .cpp/.hpp — not the .hlsl shaders)\n\n"
+    elif backend == "openvino":
+        plan += "   ```cpp\n   #include \"strata/core/breadcrumb.hpp\"\n   ```\n   (any .cpp that calls OpenVINO APIs)\n\n"
+    else:
+        plan += "   ```cpp\n   #include \"strata/core/breadcrumb.hpp\"\n   ```\n\n"
     plan += "2. **Add STRACE before each dispatch site** (from the list above):\n"
-    plan += "   ```cpp\n   STRACE(\"attention\", \"dispatch\", \"name=%s\", \"qsa_decode_attn\");\n   ```\n\n"
-    plan += "3. **Add STRACE_SCOPE at function boundaries** (RAII begin/end):\n"
+    if backend == "vulkan":
+        plan += "   ```cpp\n   STRACE(\"compute\", \"dispatch\", \"pipeline=%s groupX=%u groupY=%u groupZ=%u\", pipeline, gx, gy, gz);\n   ```\n\n"
+    elif backend == "directx":
+        plan += "   ```cpp\n   STRACE(\"compute\", \"dispatch\", \"pipeline=%s groupX=%u groupY=%u groupZ=%u\", pipeline, gx, gy, gz);\n   ```\n\n"
+    elif backend == "openvino":
+        plan += "   ```cpp\n   STRACE(\"openvino\", \"infer\", \"model=%s latency_ms=%.2f\", model_name, elapsed_ms);\n   ```\n\n"
+    else:
+        plan += "   ```cpp\n   STRACE(\"attention\", \"dispatch\", \"name=%s\", \"qsa_decode_attn\");\n   ```\n\n"
+    plan += "3. **Add STRACE_SCOPE at function/model-phase boundaries** (RAII begin/end):\n"
     plan += "   ```cpp\n   STRACE_SCOPE(\"moe\", \"expert_route\", \"layer=%d\", layer_idx);\n   ```\n\n"
-    plan += "4. **Add CLI flags to main():**\n\n"
-    plan += "   ```cpp\n"
-    plan += "   else if (a == \"--breadcrumb\") {\n"
-    plan += "       setenv(\"STRATA_BREADCRUMB\", \"1\", 1);\n"
+    plan += "4. **Add CLI flags to main():**\n"
+    plan += "   ```cpp\n   else if (a == \"--breadcrumb\") {\n"
+    if backend == "directx":
+        plan += "       _putenv_s(\"STRATA_BREADCRUMB\", \"1\");\n"
+    else:
+        plan += "       setenv(\"STRATA_BREADCRUMB\", \"1\", 1);\n"
     plan += "   }\n"
     plan += "   else if (a == \"--perf-tracing\") {\n"
     plan += "       setenv(\"STRATA_PERF_TRACING\", \"1\", 1);\n"
-    plan += "       setenv(\"STRATA_GLM_PROF\", \"1\", 1);  // or DS4_PROF=1 for DS4\n"
+    if backend == "hip":
+        plan += "       setenv(\"STRATA_GLM_PROF\", \"1\", 1);  // or DS4_PROF=1 for DS4\n"
+    elif backend == "vulkan":
+        plan += "       setenv(\"STRATA_VULKAN_PROF\", \"1\", 1);\n"
+    elif backend == "directx":
+        plan += "       _putenv_s(\"STRATA_DX12_PROF\", \"1\");\n"
+    elif backend == "openvino":
+        plan += "       setenv(\"STRATA_OPENVINO_PROF\", \"1\", 1);\n"
     plan += "   }\n"
     plan += "   ```\n\n"
     plan += "5. **Add PERF_TRACING summary at process exit:**\n"
@@ -1198,6 +1483,7 @@ def _build_tracing_plan(root: Path, components: list[str] | None, model_map: dic
     plan += "   }\n"
     plan += "   ```\n\n"
     plan += "6. **Verify zero-cost:** Unset env vars → no stderr output + no measurable overhead.\n"
+    plan += "7. **Output:** All markers go to stderr, one line per event, easy to grep/tee/redirect.\n"
 
     return plan
 
@@ -1611,7 +1897,19 @@ def _suggest_optimizations(arch_id: str, workload: str, target: float, arch_map:
     return report
 
 
-def _export_contribution(engine_name: str, arch: str, workload: str, output_path: str) -> str:
+def _save_export_contribution(report: str, output_path: str) -> bool:
+    """Persist a porting analysis report to the findings directory."""
+    from pathlib import Path as _Path
+    try:
+        out = _Path(output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(report, encoding="utf-8")
+        return True
+    except Exception as e:
+        return False
+
+
+def _export_contribution(engine_name: str, arch: str, workload: str, output_path: str = "") -> str:
     """Export findings as a reusable contribution template for the git repo."""
     hist = _load_perf_history()
     entries = hist.get("entries", [])
@@ -1620,8 +1918,10 @@ def _export_contribution(engine_name: str, arch: str, workload: str, output_path
     timestamp = now.strftime("%Y%m%d-%H%M%S")
     safe_name = engine_name.replace(r"/", "_").replace(r" ", "_").lower()
 
-    if not output_path:
-        output_path = str(_KANDS_ROOT / "findings" / f"{safe_name}.md")
+    # Always save: default to findings/ if no path given
+    findings_dir = _KANDS_ROOT / "findings"
+    findings_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_path or str(findings_dir / f"{safe_name}.md")
 
     report = f"""# Porting Contribution: {engine_name}
 
@@ -1702,14 +2002,16 @@ To add your learnings to the K_and_S git repository:
 > Replace these with your actual values before submitting.
 """
 
-    # Write to file
+    # Always enforce saving the analysis
     from pathlib import Path as _Path
     out = _Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(report, encoding="utf-8")
 
-    return f"✅ Contribution template written to `{output_path}`\n\n" \
-           f"Review the file, fill in your findings (no personal data/URLs), then:\n" \
+    # Always enforce saving the analysis to disk
+    # (file already written above at the first save point)
+    return f"✅ Analysis saved to `{output_path}`\n\n" \
+           f"Contribution template written \u2014 review and fill in your findings:\n" \
            f"1. Add it to `findings/` directory\n" \
            f"2. Update ARCH_MAP.json and PORTING_PATTERNS.json with your arch notes\n" \
            f"3. Submit a PR to the K_and_S repository"
@@ -4128,55 +4430,72 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
             results.append(mcp_types.TextContent(type="text", text="ERROR: Must provide repo_path or github_url"))
             return results
 
-        # ── Guided target selection ──
-        # When target_arch is "auto", suggest targets based on source vendor
-        if params.target_arch == "auto":
+        # ── Optimal-path auto-selection (no prompting) ──
+        # When target_arch or target_backend is "auto", pick the single best path
+        # by scoring installed toolchains + source kernel features + target arch generation.
+        # Falls through to the full _autonomous_port report below with the chosen path.
+        if params.target_arch == "auto" or params.target_backend == "auto":
+            detected_tools = _detect_installed_toolchain("auto", "auto")
+            det = detected_tools.get("detected", {})
             source_info = arch_map.get("entries", {}).get(params.source_arch, {})
             source_vendor = source_info.get("vendor", "NVIDIA")
-            # Detect installed hardware
-            detected = _detect_installed_toolchain("auto", "auto")
-            det = detected.get("detected", {})
 
-            report = "# Target Architecture Selection\n\n"
-            report += f"**Source arch:** `{params.source_arch}` — {source_info.get('name', 'unknown')}\n\n"
+            # Kernel names from the already-scanned source (gpu_kernels is set above in _autonomous_port body)
+            _kernel_names = [k["path"].split("/")[-1].replace(".cu", "").replace(".cpp", "").replace(".comp", "")
+                             for k in gpu_kernels]
 
-            # Suggest targets by vendor (skip source vendor unless cross-porting)
-            suggestions = {
-                "NVIDIA": ["gfx1030", "gfx1100", "gfx1150", "gfx1200", "gfx1201", "meteor_lake"],
-                "AMD": ["sm_89", "sm_80", "gen12_lp", "arc_b580"],
-                "Intel": ["sm_89", "gfx1100", "gfx1201"],
-            }
-            vendor_suggestions = suggestions.get(source_vendor, ["gfx1201", "sm_89", "meteor_lake"])
+            backend_scores: dict[str, int] = {}
+            for bk in ("hip", "cuda", "vulkan", "directx", "sycl"):
+                score = 0
+                tk = det.get({"hip":"rocm","cuda":"cuda","vulkan":"vulkan","directx":"directx","sycl":"oneapi"}[bk], {})
+                has_compiler = bool(tk.get("hipcc") or tk.get("nvcc") or tk.get("glslc") or
+                                    tk.get("icpx") or tk.get("path") or tk.get("windows_path") or
+                                    tk.get("linux_path"))
+                if has_compiler:
+                    score += 25
+                if tk.get("env_var", {}).get("exists"):
+                    score += 10
+                if source_vendor == "NVIDIA" and bk == "hip":
+                    score += 15
+                elif source_vendor == "AMD" and bk == "cuda":
+                    score += 15
+                elif source_vendor != "AMD" and bk != "hip":
+                    score += 5
+                src_feats = source_info.get("features", source_info)
+                if src_feats.get("wmma") and bk in ("hip","cuda","sycl"):
+                    score += 8
+                if src_feats.get("bf16_native") and bk in ("hip","cuda","sycl"):
+                    score += 5
+                backend_scores[bk] = score
 
-            report += "## Detected toolchains on this machine:\n\n"
-            for tool_key, tool_info in det.items():
-                if isinstance(tool_info, dict):
-                    for sub_key in ("path", "hipcc", "nvcc", "glslc", "icpx"):
-                        val = tool_info.get(sub_key)
-                        if val:
-                            report += f"- **{tool_key}** `{val}` ✅\n"
-                elif isinstance(tool_info, str):
-                    report += f"- **{tool_key}** `{tool_info}` ✅\n"
+            cross_scores: list[tuple[int, str, str, int, int, int]] = []
+            same_scores: list[tuple[int, str, str, int, int, int]] = []
+            for aid, einfo in arch_map.get("entries", {}).items():
+                feats = einfo.get("features", einfo)
+                ok, fb, inc = _score_arch_kernels(_kernel_names, feats)
+                feat_cnt = sum(1 for f in ("wmma","bf16_native","dot4","tensor_cores") if feats.get(f))
+                gen_num = _arch_gen_number(einfo.get("name", ""))
+                s = ok*10 - fb*3 + feat_cnt*2 + gen_num
+                rec = (s, aid, einfo.get("name", aid), ok, fb, inc)
+                if einfo.get("vendor", "").lower() == source_vendor.lower():
+                    same_scores.append(rec)
+                else:
+                    cross_scores.append(rec)
+            cross_scores.sort(reverse=True)
+            same_scores.sort(reverse=True)
+            arch_scores = cross_scores if cross_scores else same_scores
 
-            report += "\n## Suggested target architectures:\n\n"
-            for arch_id in vendor_suggestions:
-                info = arch_map.get("entries", {}).get(arch_id, {})
-                if info:
-                    report += f"- `{arch_id}` — {info.get('name', '?')} ({info.get('vendor', '?')})\n"
+            chosen_backend = max(backend_scores, key=backend_scores.get)
+            chosen_arch = arch_scores[0][1] if arch_scores else params.target_arch
+            chosen_info = arch_map.get("entries", {}).get(chosen_arch, {})
+            chosen_arch_name = chosen_info.get("name", chosen_arch)
 
-            report += "\n## Next steps:\n\n"
-            report += f"Call `autonomous_port` again with `target_arch=<one-of-above>`.\n"
-            report += f"Example: `autonomous_port(github_url='{params.github_url or params.repo_path}', source_arch='{params.source_arch}', target_arch='gfx1201')`\n"
-            report += "\nOr use `compare_archs(arch_a='{src}', arch_b='gfx1201')` to compare two architectures first.\n".format(src=params.source_arch)
+            params.target_backend = chosen_backend
+            params.target_arch = chosen_arch
+            detected_info["target_backend"] = chosen_backend
+            detected_info["target_arch"] = chosen_arch
 
-            # Prepend security header
-            if security_warnings:
-                report += "\n## Security Safeguards\n\n"
-                for w in security_warnings:
-                    report += f"- {w}\n"
 
-            results.append(mcp_types.TextContent(type="text", text=report))
-            return results
 
         report = await _autonomous_port(params, arch_map)
         # Prepend security header if any warnings
