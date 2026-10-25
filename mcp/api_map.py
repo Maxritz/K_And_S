@@ -90,13 +90,19 @@ def arch_bucket(arch: str) -> str:
         pass  # fall through to prefix rules with the registry vendor known
     # prefix fallback (unknown arch)
     if a.startswith("gfx103"):
-        return "amd_rdna2"
+        return "amd_rdna2"   # gfx1030/gfx1031/gfx1032/gfx1034 — RDNA2/RDNA 3.5
     if a.startswith("gfx11"):
         return "amd_rdna3"
     if a.startswith("gfx12"):
         return "amd_rdna4"
     if a.startswith("gfx9"):
-        return "amd_cdna"
+        return "amd_cdna"   # cdna* — AMD data-center ISA
+    if a.startswith("cdna"):
+        return "amd_cdna"   # cdna* — AMD data-center ISA (non-gfx arch id)
+    if a.startswith("cdna2"):
+        return "amd_cdna2"   # cdna2 — MI200 class
+    if a.startswith("cdna3"):
+        return "amd_cdna3"   # cdna3 — MI300 class
     if a.startswith(("sm_", "compute_")):
         return "nvidia_sm80"
     if a.startswith(("spir", "intel", "gen")):

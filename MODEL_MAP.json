@@ -1,72 +1,205 @@
 {
-  "description": "Model family → kernel/dispatch matrix.  Maps each model family to the engine binary, the kernels it exercises, and whether new kernels or re-tuning is needed for each target architecture.",
-
+  "description": "Model family \u2192 kernel/dispatch matrix.  Maps each model family to the engine binary, the kernels it exercises, and whether new kernels or re-tuning is needed for each target architecture.",
   "model_families": {
-
     "deepseek-v4.1-flash": {
       "engine": "maya-ds4",
       "architecture": "deepseek-v4.1-flash",
-      "quant_formats": ["exl3-2.9bpw", "exl3-3.5bpw", "q8_0"],
+      "quant_formats": [
+        "exl3-2.9bpw",
+        "exl3-3.5bpw",
+        "q8_0"
+      ],
       "source_repo": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
       "kernels_needed": {
-        "attention": ["native_flash_attn", "qsa_decode_attn", "qsa_prompt_attn"],
-        "router":    ["router_top10", "router_sigmoid", "native_router"],
-        "moe_gate_up": ["exl3", "exl3_legacy", "native_moe", "s2_expert_grouped"],
-        "moe_down":  ["exl3", "exl3_legacy", "native_moe", "s2_expert_grouped"],
-        "kv_cache":  ["kv_q4", "kv_q8", "kv_stream"],
-        "embedding": ["s_gemv", "s2_gemv", "s2_gemv_fast", "s2_gemv_q8", "s2_gemv_quads"],
-        "norm":      ["elementwise", "bf16_gemv", "cvec", "gr", "gdn"],
-        "sampler":   ["sampler", "quantize_act"],
-        "rope":      ["rope", "native_rope"],
-        "vision":    ["ds4_kernels", "ds4_vision", "ds4_gguf"],
-        "shared":    ["shared_expert"],
-        "ple":       ["ple", "native_ple_postops"]
+        "attention": [
+          "native_flash_attn",
+          "qsa_decode_attn",
+          "qsa_prompt_attn"
+        ],
+        "router": [
+          "router_top10",
+          "router_sigmoid",
+          "native_router"
+        ],
+        "moe_gate_up": [
+          "exl3",
+          "exl3_legacy",
+          "native_moe",
+          "s2_expert_grouped"
+        ],
+        "moe_down": [
+          "exl3",
+          "exl3_legacy",
+          "native_moe",
+          "s2_expert_grouped"
+        ],
+        "kv_cache": [
+          "kv_q4",
+          "kv_q8",
+          "kv_stream"
+        ],
+        "embedding": [
+          "s_gemv",
+          "s2_gemv",
+          "s2_gemv_fast",
+          "s2_gemv_q8",
+          "s2_gemv_quads"
+        ],
+        "norm": [
+          "elementwise",
+          "bf16_gemv",
+          "cvec",
+          "gr",
+          "gdn"
+        ],
+        "sampler": [
+          "sampler",
+          "quantize_act"
+        ],
+        "rope": [
+          "rope",
+          "native_rope"
+        ],
+        "vision": [
+          "ds4_kernels",
+          "ds4_vision",
+          "ds4_gguf"
+        ],
+        "shared": [
+          "shared_expert"
+        ],
+        "ple": [
+          "ple",
+          "native_ple_postops"
+        ]
       },
       "kernels_new": [],
       "dispatch_points": {
         "generate.cpp:4238": "main() entry; selects maya-ds4 binary",
         "ds4_main.cpp:1030-1067": "decode path profiling (prof_line)",
-        "src/ds4/ds4_model.cu":  "layer composition for DS4-specific ops"
+        "src/ds4/ds4_model.cu": "layer composition for DS4-specific ops"
       },
       "arch_notes": {
         "gfx1030": "Builds; uses portable F32 attention kernels (no WMMA); validated on Radeon PRO V620",
         "gfx1100": "Validated; full kernel set including WMMA attention path",
-        "gfx1201": "Validated; uses same portable kernels as gfx1100 but with different LDS layout"
+        "gfx1201": "Validated; uses same portable kernels as gfx1100 but with different LDS layout",
+        "gfx1031": "Builds; uses portable F32 attention kernels (no WMMA); validated on Radeon PRO V620 (gfx1031 builds with same portable kernel path; no WMMA)"
       }
     },
-
     "glm-5.3-flash": {
       "engine": "maya",
       "architecture": "glm5-next",
-      "quant_formats": ["iq1_m", "iq2_xxs", "iq2_s", "iq3_xxs", "iq4", "q4_0", "q5_0", "q8_0"],
+      "quant_formats": [
+        "iq1_m",
+        "iq2_xxs",
+        "iq2_s",
+        "iq3_xxs",
+        "iq4",
+        "q4_0",
+        "q5_0",
+        "q8_0"
+      ],
       "source_repo": "https://huggingface.co/zai-org/GLM-5.3-Flash",
       "kernels_needed": {
-        "attention": ["glm_dsa", "native_flash_attn", "qsa", "qsa_select", "qsa_decode_attn", "qsa_prompt_attn"],
-        "moe_gate_up": ["glm_ffn", "glm_fast", "exl3", "exl3_legacy", "native_moe"],
-        "moe_down":  ["glm_ffn", "glm_fast", "exl3", "exl3_legacy", "native_moe"],
-        "router":    ["router_top10", "router_sigmoid", "native_router", "glm_dsa"],
-        "linear_attn": ["gdn", "native_gdn", "fused_gdn", "glm_hc"],
-        "sparse_attn_indexer": ["glm_dsa", "native_qsa_indexer", "native_qsa_score"],
-        "kv_cache":  ["kv_q4", "kv_q8", "kv_stream", "glm_kv_stream"],
-        "embedding": ["s_gemv", "s2_gemv", "s2_gemv_fast", "s2_gemv_q8", "s2_gemv_quads", "native_gr_norm"],
-        "norm":      ["elementwise", "bf16_gemv", "cvec", "gr", "glm_kda", "native_gr_postops"],
-        "sampler":   ["sampler", "quantize_act"],
-        "rope":      ["rope", "native_rope"],
-        "vision":    ["glm_fast", "glm_dflash"],
-        "shared":    ["shared_expert"],
-        "ple":       ["ple", "ngram"],
-        "dequant":   ["dequant_bf16", "dequant_s2", "iq_kernels"],
-        "mmq_prefill": ["moe_mmq", "moe_fused_rdna4"]
+        "attention": [
+          "glm_dsa",
+          "native_flash_attn",
+          "qsa",
+          "qsa_select",
+          "qsa_decode_attn",
+          "qsa_prompt_attn"
+        ],
+        "moe_gate_up": [
+          "glm_ffn",
+          "glm_fast",
+          "exl3",
+          "exl3_legacy",
+          "native_moe"
+        ],
+        "moe_down": [
+          "glm_ffn",
+          "glm_fast",
+          "exl3",
+          "exl3_legacy",
+          "native_moe"
+        ],
+        "router": [
+          "router_top10",
+          "router_sigmoid",
+          "native_router",
+          "glm_dsa"
+        ],
+        "linear_attn": [
+          "gdn",
+          "native_gdn",
+          "fused_gdn",
+          "glm_hc"
+        ],
+        "sparse_attn_indexer": [
+          "glm_dsa",
+          "native_qsa_indexer",
+          "native_qsa_score"
+        ],
+        "kv_cache": [
+          "kv_q4",
+          "kv_q8",
+          "kv_stream",
+          "glm_kv_stream"
+        ],
+        "embedding": [
+          "s_gemv",
+          "s2_gemv",
+          "s2_gemv_fast",
+          "s2_gemv_q8",
+          "s2_gemv_quads",
+          "native_gr_norm"
+        ],
+        "norm": [
+          "elementwise",
+          "bf16_gemv",
+          "cvec",
+          "gr",
+          "glm_kda",
+          "native_gr_postops"
+        ],
+        "sampler": [
+          "sampler",
+          "quantize_act"
+        ],
+        "rope": [
+          "rope",
+          "native_rope"
+        ],
+        "vision": [
+          "glm_fast",
+          "glm_dflash"
+        ],
+        "shared": [
+          "shared_expert"
+        ],
+        "ple": [
+          "ple",
+          "ngram"
+        ],
+        "dequant": [
+          "dequant_bf16",
+          "dequant_s2",
+          "iq_kernels"
+        ],
+        "mmq_prefill": [
+          "moe_mmq",
+          "moe_fused_rdna4"
+        ]
       },
       "kernels_new": [
-        "glm_dsa (DSA indexer + absorbed-MLA attention — Phase 2, complete but new)",
-        "glm_kda (KDA linear attention — Phase 2, complete but new)",
-        "glm_hc (mHC Sinkhorn hyper-connection — Phase 2, complete but new)",
-        "router_sigmoid (sigmoid scoring for GLM router — Phase 2, complete but new)"
+        "glm_dsa (DSA indexer + absorbed-MLA attention \u2014 Phase 2, complete but new)",
+        "glm_kda (KDA linear attention \u2014 Phase 2, complete but new)",
+        "glm_hc (mHC Sinkhorn hyper-connection \u2014 Phase 2, complete but new)",
+        "router_sigmoid (sigmoid scoring for GLM router \u2014 Phase 2, complete but new)"
       ],
       "dispatch_points": {
         "generate.cpp:4240": "main() entry for GLM path",
-        "generate.cpp:4537": "glm_pack_generate() — --glm-pack dispatch",
+        "generate.cpp:4537": "glm_pack_generate() \u2014 --glm-pack dispatch",
         "generate.cpp:4953": "architecture detection (glm5-next vs qwen4exp)",
         "src/core/glm_model.cu:10295": "layer composition with stage timing",
         "src/core/glm_fast_path.cu": "fast-path decode kernel captures",
@@ -78,45 +211,101 @@
         "gfx1101": "Community-validated; same kernel set as gfx1100",
         "gfx1102": "Experimental; no WMMA; portable kernels only",
         "gfx1201": "Builds; validated for DeepSeek-V4.1; GLM kernels compile but model run unreported",
-        "gfx1200": "Community-validated for DeepSeek; GLM unreported"
+        "gfx1200": "Community-validated for DeepSeek; GLM unreported",
+        "gfx1031": "Builds; no WMMA so F32 attention fallback; no rocWMMA headers in ROCm 7+ (gfx1031 builds with same portable kernel path; no WMMA)"
       }
     },
-
     "qwen3-moe-32b": {
       "engine": "maya",
       "architecture": "qwen4exp",
-      "quant_formats": ["q2_0", "q3_k_small", "q4_0", "q5_1", "q8_0"],
+      "quant_formats": [
+        "q2_0",
+        "q3_k_small",
+        "q4_0",
+        "q5_1",
+        "q8_0"
+      ],
       "source_repo": "https://huggingface.co/Qwen",
       "kernels_needed": {
-        "attention": ["qsa", "qsa_select", "qsa_decode_attn", "qsa_prompt_attn", "native_flash_attn"],
-        "router":    ["router_top10", "native_router"],
-        "moe_gate_up": ["exl3", "exl3_legacy", "native_moe", "s2_expert_grouped"],
-        "moe_down":  ["exl3", "exl3_legacy", "native_moe", "s2_expert_grouped"],
-        "kv_cache":  ["kv_q4", "kv_q8", "kv_stream"],
-        "embedding": ["s_gemv", "s2_gemv", "s2_gemv_fast"],
-        "norm":      ["elementwise", "cvec", "gr", "native_gr_norm", "native_gr_postops"],
-        "sampler":   ["sampler", "quantize_act"],
-        "rope":      ["rope", "native_rope"],
-        "shared":    ["shared_expert"],
-        "ple":       ["ple"],
-        "dequant":   ["dequant_bf16", "dequant_s2", "iq_kernels"]
+        "attention": [
+          "qsa",
+          "qsa_select",
+          "qsa_decode_attn",
+          "qsa_prompt_attn",
+          "native_flash_attn"
+        ],
+        "router": [
+          "router_top10",
+          "native_router"
+        ],
+        "moe_gate_up": [
+          "exl3",
+          "exl3_legacy",
+          "native_moe",
+          "s2_expert_grouped"
+        ],
+        "moe_down": [
+          "exl3",
+          "exl3_legacy",
+          "native_moe",
+          "s2_expert_grouped"
+        ],
+        "kv_cache": [
+          "kv_q4",
+          "kv_q8",
+          "kv_stream"
+        ],
+        "embedding": [
+          "s_gemv",
+          "s2_gemv",
+          "s2_gemv_fast"
+        ],
+        "norm": [
+          "elementwise",
+          "cvec",
+          "gr",
+          "native_gr_norm",
+          "native_gr_postops"
+        ],
+        "sampler": [
+          "sampler",
+          "quantize_act"
+        ],
+        "rope": [
+          "rope",
+          "native_rope"
+        ],
+        "shared": [
+          "shared_expert"
+        ],
+        "ple": [
+          "ple"
+        ],
+        "dequant": [
+          "dequant_bf16",
+          "dequant_s2",
+          "iq_kernels"
+        ]
       },
       "kernels_new": [],
       "dispatch_points": {
         "generate.cpp:1466": "reads qwen4exp.* metadata from GGUF",
-        "generate.cpp:4953": "architecture check: if glm5-next → error, else qwen4exp native path",
+        "generate.cpp:4953": "architecture check: if glm5-next \u2192 error, else qwen4exp native path",
         "native_expert.hpp:34": "Q2_0 pack path (compile-time geometry: n_embd=2560, n_ff=640, n_expert=512)"
       },
       "arch_notes": {
         "all_hip": "Supported via standard HIP build; Q2_0 pack uses compile-time-constant expert kernel",
-        "gfx1030": "Builds with portable kernels; no WMMA"
+        "gfx1030": "Builds with portable kernels; no WMMA",
+        "gfx1031": "Builds with portable kernels; no WMMA (gfx1031 builds with same portable kernel path; no WMMA)"
       }
     },
-
     "deepseek-v2": {
       "engine": "maya-ds4",
       "architecture": "deepseek2-moe",
-      "quant_formats": ["q4_0", "q8_0"],
+      "quant_formats": [
+        "q4_0",
+        "q8_0"
+      ],
       "source_repo": "https://huggingface.co/deepseek-ai",
       "kernels_needed": [
         "Same as deepseek-v4.1-flash but with MLA instead of absorbed-MLA and different head counts",
@@ -134,19 +323,28 @@
         "ds4_model.cu:10295": "V2 stage timing"
       },
       "arch_notes": {
-        "note": "V2 not yet a first-class DS4 variant; V4.1 is the primary target. V2 would need new kernels for its specific MLA config."
+        "note": "V2 not yet a first-class DS4 variant; V4.1 is the primary target. V2 would need new kernels for its specific MLA config.",
+        "gfx1031": "Builds with portable kernels (no WMMA). Same HIP toolchain as gfx1030. Validate against gfx1030 baseline."
       }
     },
-
     "deepseek-v3": {
       "engine": "maya-ds4",
       "architecture": "deepseek2-moe",
-      "quant_formats": ["q4_0", "q8_0", "exl3"],
+      "quant_formats": [
+        "q4_0",
+        "q8_0",
+        "exl3"
+      ],
       "source_repo": "https://huggingface.co/deepseek-ai/DeepSeek-V3",
-      "kernels_needed": ["Same as V4.1 but with V3's exact dimensions (n_head=128, q_lora_rank=1536)"],
-      "kernels_new": ["Minor kernel variants for V3's exact head_dim and routing"],
+      "kernels_needed": [
+        "Same as V4.1 but with V3's exact dimensions (n_head=128, q_lora_rank=1536)"
+      ],
+      "kernels_new": [
+        "Minor kernel variants for V3's exact head_dim and routing"
+      ],
       "arch_notes": {
-        "note": "V3 is the predecessor to V4; most kernels are shared but dimensions differ. Check exact KV cache layout."
+        "note": "V3 is the predecessor to V4; most kernels are shared but dimensions differ. Check exact KV cache layout.",
+        "gfx1031": "Builds with portable kernels (no WMMA). Same HIP toolchain as gfx1030. Validate against gfx1030 baseline."
       }
     }
   }
