@@ -25,5 +25,9 @@ mcp/state/analysis/
 .DS_Store
 Thumbs.db
 
+# Runtime porting artifacts (ephemeral scratch - never committed).
+# Durable learnings go to learnings/ instead (see learnings/README.md).
+findings/
+
 # Test repos (cloned for testing, not committed)
 test_repos/

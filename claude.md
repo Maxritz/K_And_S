@@ -28,7 +28,8 @@ This is a GPU kernel porting codebase targeting AMD RDNA and CDNA architectures 
 - `MODEL_MAP.json` — Model family → kernel/dispatch matrix mapping
 - `TARGET_LANGUAGES.json` — Target language metadata for GPU porting
 - `docs/` — Doxygen-style audit templates and documentation
-- `findings/` — Porting contribution reports and portfolio
+- `learnings/` — Durable, committed knowledge distilled from ports (one file per topic)
+- `findings/` — Ephemeral run artifacts (porting reports) — git-ignored scratch, never committed
 
 ---
 
@@ -92,12 +93,13 @@ This is a GPU kernel porting codebase targeting AMD RDNA and CDNA architectures 
 
 ## Contribution Export
 
-After porting work is complete, export findings with:
+After porting work is complete, export learnings with:
 ```
 export_contribution(engine_name="{{ENGINE}}", arch="{{TARGET_ARCH}}")
 ```
 
-This generates a report in `findings/portfolio.md` with:
+This generates a template in `learnings/<engine>.md` with (durable, committed —
+findings/ is ephemeral scratch and stays out of git):
 - Architecture chosen and rationale
 - Kernels ported and fidelity grades
 - Feature gaps and workarounds

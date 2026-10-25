@@ -2005,10 +2005,12 @@ def _export_contribution(engine_name: str, arch: str, workload: str, output_path
     timestamp = now.strftime("%Y%m%d-%H%M%S")
     safe_name = engine_name.replace(r"/", "_").replace(r" ", "_").lower()
 
-    # Always save: default to findings/ if no path given
-    findings_dir = _KANDS_ROOT / "findings"
-    findings_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_path or str(findings_dir / f"{safe_name}.md")
+    # Always save: default to learnings/ if no path given.
+    # learnings/ holds durable, committed knowledge; findings/ is ephemeral
+    # run scratch (git-ignored) — see learnings/README.md.
+    learnings_dir = _KANDS_ROOT / "learnings"
+    learnings_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_path or str(learnings_dir / f"{safe_name}.md")
 
     report = f"""# Porting Contribution: {engine_name}
 
@@ -2075,7 +2077,7 @@ Anyone can use this as a starting point for porting a similar engine to `{arch}`
 
 To add your learnings to the K_and_S git repository:
 
-1. Save this file to `findings/{safe_name}.md`
+1. Save this file to `learnings/{safe_name}.md`
 2. Update `ARCH_MAP.json` with any new arch notes you discovered
 3. Update `PORTING_PATTERNS.json` if you found a new transformation pattern
 4. Update `PERF_BENCHMARKS.json` with your real-world benchmark numbers
@@ -2099,7 +2101,7 @@ To add your learnings to the K_and_S git repository:
     # (file already written above at the first save point)
     return f"✅ Analysis saved to `{output_path}`\n\n" \
            f"Contribution template written \u2014 review and fill in your findings:\n" \
-           f"1. Add it to `findings/` directory\n" \
+           f"1. Add it to `learnings/` directory\n" \
            f"2. Update ARCH_MAP.json and PORTING_PATTERNS.json with your arch notes\n" \
            f"3. Submit a PR to the K_and_S repository"
 
@@ -2450,8 +2452,8 @@ def _search_online(query: str, max_results: int) -> str:
 
     report += "\n---\n\n"
     report += "## Save as Template\n\n"
-    report += "Copy this output to `findings/YYYY-MM-DD_<query>.md` for future reference.\n"
-    report += "Use `export_contribution(engine_name=...)` to turn findings into a reusable template.\n"
+    report += "Copy this output to `learnings/YYYY-MM-DD_<query>.md` for future reference.\n"
+    report += "Use `export_contribution(engine_name=...)` to turn learnings into a reusable template.\n"
 
     return report
 

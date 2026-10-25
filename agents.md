@@ -193,3 +193,26 @@ Read `kands://diagnostics` for full method documentation.
 - **Never ignore the current date** — search tools use date for filtering
 - **Never modify files out of scope** — check `kands://goal` for guardrails
 - **Never hardcode toolchain paths** — use `detect_toolchain()` to find what's actually installed
+- **Never commit `findings/`** — it is ephemeral run scratch (git-ignored); purge freely. Durable knowledge goes to `learnings/` (see below)
+- **Never duplicate a learning under a new filename** — revise `learnings/<topic>.md` in place
+
+## Findings vs Learnings Policy
+
+Two kinds of output, two different homes:
+
+| | `findings/` | `learnings/` |
+|---|---|---|
+| What | Raw run artifacts (`porting-report-*.md`), one per run | Distilled knowledge, one file per engagement/topic |
+| Git | Ignored — never committed | Tracked — committed |
+| Lifetime | Ephemeral; recreate on every run | Durable; refine in place, never purge |
+
+After a port completes:
+
+1. The report lands in `findings/` automatically — leave it there, it is scratch.
+2. If something non-obvious was learned, distill it into `learnings/<topic>.md`:
+   measured facts only, evidence labels (PASS / FAIL / NOT RUN / UNVALIDATED) carried
+   over, no timestamps in the filename, no verbatim report dumps.
+3. Before committing, confirm `git status` shows no `findings/` entries. If it does:
+   `git rm -r --cached findings/`.
+
+See `learnings/README.md` for the full rule.
