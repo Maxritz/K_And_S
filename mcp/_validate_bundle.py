@@ -14,6 +14,7 @@ json_files = [
     r'h:\K_and_S\MODEL_FORMATS.json',
     r'h:\K_and_S\CROSS_PORT.json',
     r'h:\K_and_S\MODEL_MAP.json',
+    r'h:\K_and_S\BACKEND_REQUIREMENTS.json',
 ]
 for f in json_files:
     fname = os.path.basename(f)
@@ -21,6 +22,18 @@ for f in json_files:
         data = json.loads(open(f).read())
     except Exception as e:
         errors.append(f'JSON {fname}: {e}')
+
+# Backend readiness profiles must each declare a ReBAR path with a fallback.
+try:
+    reqs = json.loads(open(r'h:\K_and_S\BACKEND_REQUIREMENTS.json').read())
+    for name, spec in reqs.get('backends', {}).items():
+        rebar = spec.get('rebar', {})
+        if 'supported' not in rebar or not rebar.get('fallback'):
+            errors.append(f'BACKEND_REQUIREMENTS.json: {name} has no rebar.supported/fallback')
+        if not spec.get('requirements'):
+            errors.append(f'BACKEND_REQUIREMENTS.json: {name} has no requirements')
+except Exception as e:
+    errors.append(f'BACKEND_REQUIREMENTS.json structure: {e}')
 
 # Check server.py
 try:
@@ -64,6 +77,18 @@ try:
     # Verify verify_numerical_equivalence tool exists
     tool_names = [t.name for t in tools]
     print(f'Has verify_numerical_equivalence: {"verify_numerical_equivalence" in tool_names}')
+
+    # Verify the backend readiness step is wired into discovery.
+    print(f'Has backend_profile module: {hasattr(s, "backend_profile")}')
+    if not hasattr(s, 'backend_profile'):
+        errors.append('server.py: backend_profile not imported')
+    disc = [t for t in tools if t.name == 'discover_kernels'][0]
+    disc_schema = (getattr(disc, 'inputSchema', None)
+                   or getattr(disc, 'input_schema', None) or {})
+    disc_props = disc_schema.get('properties', {}) if isinstance(disc_schema, dict) else {}
+    print(f'  discover target_backend in schema: {"target_backend" in disc_props}')
+    if 'target_backend' not in disc_props:
+        errors.append('discover_kernels: no target_backend parameter')
 
     # Verify autonomous_port has security params.
     # The SDK model may expose the field as `inputSchema` (wire name) or

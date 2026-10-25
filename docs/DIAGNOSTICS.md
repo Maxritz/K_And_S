@@ -1,6 +1,6 @@
 # Diagnostics & Verification Framework
 
-> **Date context:** This bundle was last updated `2026-10-23`.
+> **Date context:** This bundle was last updated `2026-10-25`.
 > ArXiv/GitHub reference searches use the **current system date** for date filtering.
 > The MCP server exposes `kands://status` with live date/time for all tools and agents.
 
@@ -234,6 +234,45 @@ TODO:<file>:<line>: [sev:P0|P1|P2] <issue> | fix: <candidate> | test: <repro>
 | Dependency trap | Serial execution, critical path, hidden synchronisation |
 | Accuracy trap | Output differences, numerical error, precision-related performance |
 | Regression trap | Before/after timings, workload sensitivity and performance variance |
+
+---
+
+## Ponytail-Diag, Forward: Porting Discovery
+
+The diagnostic method is not only for failures. Run it *before* the port, with
+"the port is not finished" as the top event, and it produces the requirement
+model instead of a root cause.
+
+| Diag element | Forward use in discovery |
+|---|---|
+| Data/state model | What the source depends on (runtime API, PTX, intrinsics, features) and what the target provides |
+| Control/data flow | Build → artifact → load → launch → read; the requirement that gates each edge |
+| Branches / truth tables | Requirement present/absent x fallback available/not: which combination ships |
+| Hypotheses (H1-H4) | Candidate explanations for a missing capability, each with the probe that discriminates |
+| Fishbone | Toolchain, host/OS, capability, memory/sync, artifact, PCIe topology |
+| Barrier analysis | What should have stopped an unsupported plan (the gate row) |
+| FTA | Port does not build / artifact is wrong / results differ / streams slowly |
+| TODO with P0/P1/P2 | `READINESS:` rows below the Pareto line, ordered by score |
+
+The verdict vocabulary is the evidence vocabulary from the quality gates:
+**PASS**, **FAIL**, **NOT RUN**, **UNVALIDATED**. A requirement that cannot be
+probed is UNVALIDATED, never assumed present.
+
+```
+READINESS: toolchain.hipcc = FAIL — no hipcc for gfx1201. probe: hipcc --version. fallback: build on a Linux ROCm host
+READINESS: capability.matrix = PASS — ARCH_MAP.json gfx1201.wmma = True
+READINESS: pcie.rebar = UNVALIDATED — no machine-readable source on windows. fallback: staging ring + chunked copy
+```
+
+A row whose status is not PASS either selects its declared fallback or stops the
+port. For PCIe ReBAR the fallback is always available (staging buffer plus
+chunked copy, hot tensors resident), so the port can proceed — but the plan
+records that it ran without a large BAR, and no claim of zero-copy streaming is
+allowed without a PASS.
+
+Run it with `discover_kernels(repo=..., target_backend="hip", target_arch="gfx1201")`,
+or let `autonomous_port` include it in Phase 0. The data lives in
+`BACKEND_REQUIREMENTS.json`; the code is `mcp/backend_profile.py`.
 
 ---
 

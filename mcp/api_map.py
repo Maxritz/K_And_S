@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import re
+from bisect import bisect_right
 from pathlib import Path
 from typing import Any
 
@@ -97,15 +98,16 @@ def arch_bucket(arch: str) -> str:
         return "amd_rdna4"
     if a.startswith("gfx9"):
         return "amd_cdna"   # cdna* — AMD data-center ISA
-    if a.startswith("cdna"):
-        return "amd_cdna"   # cdna* — AMD data-center ISA (non-gfx arch id)
     if a.startswith("cdna2"):
         return "amd_cdna2"   # cdna2 — MI200 class
     if a.startswith("cdna3"):
         return "amd_cdna3"   # cdna3 — MI300 class
-    if a.startswith(("sm_", "compute_")):
-        return "nvidia_sm80"
-    if a.startswith(("spir", "intel", "gen")):
+    if a.startswith("cdna"):
+        return "amd_cdna"   # cdna* — AMD data-center ISA (non-gfx arch id)
+    m = re.match(r"(?:sm|compute)_(\d+)", a)
+    if m:
+        return f"nvidia_sm{m.group(1)}"
+    if a.startswith(("spir", "intel", "gen", "arc", "xe")):
         return "intel_xe"
     if vendor:
         return f"{vendor}_unknown"
@@ -478,45 +480,148 @@ FEATURES: dict[str, dict[str, Any]] = {
 # --------------------------------------------------------------------------- scanning
 _COMMENT_RE = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 
+#: Qualifiers and preprocessor tokens that look like intrinsics but are not
+#: porting targets. Without this list every kernel reports a wall of noise and
+#: the real unverified calls drown.
+_NOT_AN_INTRINSIC = {
+    "__global__", "__device__", "__host__", "__shared__", "__constant__",
+    "__managed__", "__restrict__", "__restrict", "__forceinline__", "__inline__",
+    "__noinline__", "__launch_bounds__", "__align__", "__grid_constant__",
+    "__builtin_expect", "__cplusplus", "__cuda_arch__", "__hip__",
+    "__hip_device_compile__", "__has_include", "__attribute__", "__declspec",
+    "__pragma", "__file__", "__line__", "__func__", "__va_args__", "__counter__",
+    "__date__", "__time__", "__stdc__", "__clang__", "__gnuc__", "__alignof__",
+}
+
+_KNOWN_IDS = (set(RUNTIME_APIS) | set(INTRINSICS_MAP)
+              | {k for _group in PTX_MAP.values() for k in _group})
+
+#: Longest key first, with non-identifier boundaries, so `cudaMalloc` no longer
+#: matches inside `cudaMallocAsync` and every call is counted once, as itself.
+_KNOWN_SYMBOL_RE = re.compile(
+    r"(?<![A-Za-z0-9_])("
+    + "|".join(re.escape(s) for s in sorted(_KNOWN_IDS, key=len, reverse=True))
+    + r")(?![A-Za-z0-9_])"
+)
+
+#: Calls that are used but absent from the tables. These become `unverified`
+#: rows: the point is that an unknown instruction must be visible, not silent.
+_API_CALL_RE = re.compile(r"(?<![A-Za-z0-9_])((?:cuda|cu|hip)[A-Z][A-Za-z0-9_]*)\s*\(")
+_INTRINSIC_CALL_RE = re.compile(r"(?<![A-Za-z0-9_])(__[A-Za-z][A-Za-z0-9_]*)\s*\(")
+_ASM_OPEN_RE = re.compile(r"\basm\s*(?:volatile\s*)?\(")
+_ASM_LITERAL_RE = re.compile(r'"((?:[^"\\]|\\.)*)"')
+_PTX_MNEMONIC_RE = re.compile(r"^\s*([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)")
+
+
+def _asm_templates(text: str):
+    """Yield (body, offset) for each ``asm(...)``, string- and paren-aware.
+
+    A semicolon inside the template is ordinary PTX, not the end of the
+    statement, and an operand may itself contain parentheses (``"=r"(x)``).
+    A flat regex stops at the first of either and silently loses the block,
+    which is how an uninventoried instruction stays invisible.
+    """
+    for match in _ASM_OPEN_RE.finditer(text):
+        i, start = match.end(), match.end()
+        depth, quote = 1, ""
+        while i < len(text) and depth:
+            ch = text[i]
+            if quote:
+                if ch == "\\":
+                    i += 2
+                    continue
+                if ch == quote:
+                    quote = ""
+            elif ch in "\"'":
+                quote = ch
+            elif ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+            i += 1
+        if depth == 0:
+            yield text[start:i - 1], start
+
+
 
 def _strip(src: str) -> str:
     return _COMMENT_RE.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), src)
 
 
-def scan_usage(files: list[str]) -> dict[str, list[dict[str, Any]]]:
-    """api/intrinsic/ptx/feature id -> [{file, line}] usage sites."""
+def _unknown_ptx(text: str, newlines: list[int]) -> list[tuple[str, int]]:
+    """Inline-asm mnemonics with no entry in PTX_MAP.
+
+    Multi-line asm templates are joined first, because a shape string split over
+    two C literals is still one instruction the port depends on.
+    """
+    out: list[tuple[str, int]] = []
+    for template, offset in _asm_templates(text):
+        template = template.split(":", 1)[0]
+        body = " ".join(_ASM_LITERAL_RE.findall(template)).strip()
+        if not body:
+            continue
+        m = _PTX_MNEMONIC_RE.match(body)
+        if not m:
+            continue
+        mnemonic = m.group(1)
+        if any(mnemonic == k or mnemonic.startswith(k) or k.startswith(mnemonic)
+               for k in _KNOWN_IDS):
+            continue
+        out.append((mnemonic, bisect_right(newlines, offset) + 1))
+    return out
+
+
+def scan_usage(files: list[str], unreadable: list[str] | None = None) -> dict[str, list[dict[str, Any]]]:
+    """api/intrinsic/ptx/feature id -> [{file, line}] usage sites.
+
+    Known symbols are matched by token, so prefix families do not double-count.
+    Symbols used but missing from the tables are reported as ``api:``,
+    ``intrinsic:`` and ``ptx:`` ids, which ``resolve`` marks ``unverified``.
+    """
     hits: dict[str, list[dict[str, Any]]] = {}
 
     def add(key: str, path: str, line: int) -> None:
-        hits.setdefault(key, []).append({"file": path, "line": line})
-
-    ptx_flat: dict[str, str] = {}
-    for cat, group in PTX_MAP.items():
-        for ptx in group:
-            ptx_flat[ptx] = cat
+        sites = hits.setdefault(key, [])
+        if not sites or sites[-1]["line"] != line or sites[-1]["file"] != path:
+            sites.append({"file": path, "line": line})
 
     for f in files:
         p = Path(f)
         if not p.is_file():
+            if unreadable is not None:
+                unreadable.append(str(p))
             continue
         try:
             text = _strip(p.read_text(encoding="utf-8", errors="replace"))
-        except Exception:
+        except OSError:
+            if unreadable is not None:
+                unreadable.append(str(p))
             continue
-        lines = text.splitlines()
-        for ln, text_line in enumerate(lines, 1):
-            for api in RUNTIME_APIS:
-                if api in text_line:
-                    add(api, str(p), ln)
-            for intr in INTRINSICS_MAP:
-                if intr in text_line:
-                    add(intr, str(p), ln)
-            for ptx in ptx_flat:
-                if ptx in text_line:
-                    add(ptx, str(p), ln)
-            for feat, spec in FEATURES.items():
-                if re.search(spec["pattern"], text_line):
-                    add(feat, str(p), ln)
+        newlines = [i for i, ch in enumerate(text) if ch == "\n"]
+
+        def line_of(pos: int) -> int:
+            return bisect_right(newlines, pos) + 1
+
+        for m in _KNOWN_SYMBOL_RE.finditer(text):
+            add(m.group(1), str(p), line_of(m.start()))
+
+        for m in _API_CALL_RE.finditer(text):
+            tok = m.group(1)
+            if tok not in _KNOWN_IDS:
+                add(f"api:{tok}", str(p), line_of(m.start()))
+
+        for m in _INTRINSIC_CALL_RE.finditer(text):
+            tok = m.group(1)
+            if tok.lower() not in _NOT_AN_INTRINSIC and tok not in _KNOWN_IDS:
+                add(f"intrinsic:{tok}", str(p), line_of(m.start()))
+
+        for feat, spec in FEATURES.items():
+            for m in re.finditer(spec["pattern"], text, re.I):
+                add(feat, str(p), line_of(m.start()))
+
+        for mnemonic, line in _unknown_ptx(text, newlines):
+            add(f"ptx:{mnemonic}", str(p), line)
+
     return hits
 
 
@@ -532,11 +637,43 @@ def _norm(t: Any) -> tuple[str, str, str]:
     return repl, status, note
 
 
+def _vendor(arch: str) -> str:
+    return str(arch_info(arch).get("vendor", "")).lower()
+
+
+def _bucket_keys(arch: str) -> list[str]:
+    """Buckets to try, most specific first, without leaking NVIDIA fallbacks.
+
+    Falling back to the ``nvidia`` entry for a non-NVIDIA target is how a
+    blocker used to disappear: TMA on Intel resolved as ``auto/native`` only
+    because the vendor bucket was missing from the table.
+    """
+    keys = [arch_bucket(arch)]
+    if _vendor(arch) == "nvidia":
+        keys.append("nvidia")
+    return keys
+
+
+def _pick(entry: dict[str, Any], arch: str) -> tuple[tuple[str, str, str] | None, bool]:
+    """Mapping entry for the target, and whether a target-specific key was found."""
+    for key in _bucket_keys(arch):
+        if key in entry:
+            return _norm(entry[key]), True
+    return None, False
+
+
 def resolve(api_id: str, target_arch: str) -> dict[str, Any]:
     """Replacement + status for one api/intrinsic/ptx/feature on a target."""
     bucket = arch_bucket(target_arch)
     out: dict[str, Any] = {"id": api_id, "bucket": bucket, "target": target_arch,
                            "replacement": "", "status": "manual", "note": "", "category": ""}
+
+    if api_id.startswith(("api:", "intrinsic:", "ptx:", "feature:")):
+        kind, _, sym = api_id.partition(":")
+        out.update(replacement="—", status="manual", category="unverified",
+                   note=(f"`{sym}` ({kind}) is used in the source but absent from the "
+                         "reference table; probe it on the target before relying on it"))
+        return out
 
     if api_id in RUNTIME_APIS:
         repl, status, note = _norm(RUNTIME_APIS[api_id])
@@ -556,17 +693,27 @@ def resolve(api_id: str, target_arch: str) -> dict[str, Any]:
 
     for cat, group in PTX_MAP.items():
         if api_id in group:
-            entry = group[api_id]
-            pick = _norm(entry.get(bucket) or entry.get("nvidia") or ("", "manual", ""))
+            pick, found = _pick(group[api_id], target_arch)
+            if not found:
+                out.update(replacement="—", status="manual", category=cat,
+                           note=(f"no entry for `{bucket}`; verify the replacement on "
+                                 "the target, do not assume native"))
+                return out
             out.update(replacement=pick[0] or "—", status=pick[1],
                        note=pick[2], category=cat)
             return out
 
     if api_id in FEATURES:
         spec = FEATURES[api_id]
-        raw = spec.get(bucket) or spec.get("nvidia") or ("manual", "")
-        # feature entries are (status, note): there is no replacement string
-        if isinstance(raw, str):
+        raw = None
+        for key in _bucket_keys(target_arch):
+            if key in spec:
+                raw = spec[key]
+                break
+        if raw is None:
+            status, note = ("manual",
+                            f"no entry for `{bucket}`; verify on the target")
+        elif isinstance(raw, str):
             status, note = raw, ""
         else:
             raw = tuple(raw)
@@ -586,7 +733,8 @@ def resolve(api_id: str, target_arch: str) -> dict[str, Any]:
 
 def build_reference(files: list[str], source_arch: str, target_arch: str) -> dict[str, Any]:
     """Assemble the pre-porting reference: inventory, tables, usage, blockers."""
-    hits = scan_usage(files)
+    unreadable: list[str] = []
+    hits = scan_usage(files, unreadable)
     rows = []
     for api_id, sites in hits.items():
         r = resolve(api_id, target_arch)
@@ -601,6 +749,7 @@ def build_reference(files: list[str], source_arch: str, target_arch: str) -> dic
         by_status[r["status"]] = by_status.get(r["status"], 0) + 1
 
     blockers = [r for r in rows if r.get("blocker") and r["status"] == "none"]
+    unverified = [r for r in rows if r["category"] == "unverified"]
 
     inv: dict[str, int] = {}
     for f in files:
@@ -613,8 +762,10 @@ def build_reference(files: list[str], source_arch: str, target_arch: str) -> dic
         "bucket": arch_bucket(target_arch),
         "file_inventory": dict(sorted(inv.items(), key=lambda kv: -kv[1])),
         "file_count": len(files),
+        "unreadable_files": unreadable,
         "symbols_found": len(rows),
         "by_status": by_status,
+        "unverified_count": len(unverified),
         "blockers": [{"id": b["id"], "note": b["note"], "files": b["files"]} for b in blockers],
         "rows": rows,
     }
@@ -639,12 +790,29 @@ def render_reference(ref: dict[str, Any], max_rows_per_section: int = 60) -> str
             L.append(f"| `{ext or '(none)'}` | {n} |")
         L.append("")
 
+    bad = ref.get("unreadable_files") or []
+    if bad:
+        L.append("## Files that could not be read\n")
+        for f in bad[:20]:
+            L.append(f"- `{f}`")
+        if len(bad) > 20:
+            L.append(f"- ... and {len(bad) - 20} more")
+        L.append("\nThe inventory below excludes these. A path typo produces a "
+                 "clean-looking report, so fix them before trusting the counts.\n")
+
+    if ref["file_count"] and not ref["symbols_found"] and not bad:
+        L.append("**No known symbol was found in these files.** That is a statement "
+                 "about the scanner, not about the code: check the paths and the "
+                 "extensions before treating the tree as empty.\n")
+
     L.append("## Status summary\n")
     L.append("| status | symbols |")
     L.append("|---|---|")
     for s in STATUS:
         if s in ref["by_status"]:
             L.append(f"| {_STATUS_MARK[s]} | {ref['by_status'][s]} |")
+    if ref.get("unverified_count"):
+        L.append(f"| Unverified (not in table) | {ref['unverified_count']} |")
     L.append("")
 
     if ref["blockers"]:
@@ -657,7 +825,8 @@ def render_reference(ref: dict[str, Any], max_rows_per_section: int = 60) -> str
         L.append("\nA blocker is not a partial gap: the feature has no equivalent on "
                  "this target and the kernel must be restructured or dropped.\n")
 
-    SECTIONS = [("runtime", "CUDA runtime / driver API"),
+    SECTIONS = [("unverified", "Used in source — not in the reference table"),
+                ("runtime", "CUDA runtime / driver API"),
                 ("intrinsic", "CUDA device intrinsics"),
                 ("matrix", "PTX — matrix multiply"),
                 ("async-copy", "PTX — async copy"),
@@ -688,6 +857,8 @@ def render_reference(ref: dict[str, Any], max_rows_per_section: int = 60) -> str
     L.append("- **Partial** — maps, but behaviour or coverage differs; verify.")
     L.append("- **Manual** — a replacement exists but the source must be edited.")
     L.append("- **No equivalent** — restructure the kernel; do not stub it.")
+    L.append("- **Unverified** — used in the source but absent from the table. It is "
+             "listed so it cannot pass as clean code; probe it before trusting it.")
     L.append("\nSame symbol can differ by architecture: `mma.sync` is manual on every "
              "AMD target, but *which* intrinsic replaces it changes at RDNA2/RDNA3/RDNA4 "
              "and again on CDNA.")

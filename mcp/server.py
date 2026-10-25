@@ -169,9 +169,9 @@ def _load_json(path: Path) -> dict:
 # ── Extension map for source discovery ─────────────────────────────────────
 
 _EXTENSION_MAP = {
-    ".cu":  ("gpu_cuda",  "CUDA/HIP kernel source"),
-    ".cuh": ("gpu_cuda",  "CUDA/HIP kernel header"),
-    ".hip": ("gpu_cuda",  "HIP kernel source"),
+    ".cu":  ("gpu_cuda",  "CUDA kernel source"),
+    ".cuh": ("gpu_cuda",  "CUDA kernel header"),
+    ".hip": ("gpu_hip",   "HIP kernel source"),
     ".comp":("gpu_vulkan","Vulkan compute shader"),
     ".vert": ("gpu_vulkan","Vulkan vertex shader"),
     ".frag": ("gpu_vulkan","Vulkan fragment shader"),
@@ -182,11 +182,40 @@ _EXTENSION_MAP = {
     ".metal":("gpu_metal", "Metal shader"),
     ".hlsl": ("gpu_dx",    "Direct3D HLSL shader"),
     ".cl":   ("gpu_opencl","OpenCL kernel"),
+    ".sycl": ("gpu_sycl",  "SYCL kernel source"),
+    ".dpcpp":("gpu_sycl",  "SYCL (DPC++) kernel source"),
 }
 
 _CUDA_EXTS = {".cu", ".cuh", ".hip"}
-_SHADER_EXTS = {".comp", ".vert", ".frag", ".geom", ".spv", ".metal", ".hlsl", ".cl"}
-_ALL_EXTS = _CUDA_EXTS | _SHADER_EXTS | {".cpp", ".hpp"}
+_SYCL_EXTS = {".sycl", ".dpcpp"}
+_SHADER_EXTS = {".comp", ".vert", ".frag", ".geom", ".tesc", ".tese",
+                ".metal", ".hlsl", ".cl"}
+_BINARY_EXTS = {".spv"}
+_CPP_EXTS = {".cpp", ".cc", ".cxx", ".hpp", ".hh"}
+_ALL_EXTS = _CUDA_EXTS | _SYCL_EXTS | _SHADER_EXTS | _BINARY_EXTS | _CPP_EXTS
+
+#: Directories that never hold first-party kernel sources. Build output is the
+#: important one: it contains copies, which double the inventory and inflate the
+#: porting map with files nobody will edit.
+_SKIP_DIRS = {
+    ".git", ".hg", ".svn", "__pycache__", "node_modules", ".vs", ".vscode",
+    ".idea", ".cache", "build", "builds", "out", "dist", "obj", "cmakefiles",
+    "_deps", "cmake-build-debug", "cmake-build-release", ".mypy_cache",
+    ".pytest_cache", ".tox", "venv", ".venv", "site-packages",
+}
+
+#: How much of a file is read to decide what it is. Enough for the include block
+#: and the first kernels, small enough to stay fast on a large tree.
+_SNIFF_BYTES = 65536
+
+#: Content markers. Extension alone cannot separate CUDA from HIP (both .cu) and
+#: cannot tell a device kernel in a .cpp from host plumbing. Deliberately narrow:
+#: a weak marker in a comment is how a whole tree gets misclassified.
+_HIP_MARKERS = ("__hip", "hip/hip_runtime", "hip_runtime.h", "hipLaunch",
+                "hipMalloc", "hipMemcpy", "hipStream", "hipDeviceSynchronize")
+_SYCL_MARKERS = ("sycl::", "#include <sycl", "sycl/sycl.hpp", "dpcpp")
+_AVX512_MARKERS = ("__m512", "__mm512_", "_mm512_", "avx512")
+_AVX2_MARKERS = ("__m256i", "__m256", "__mm256_", "_mm256_", "avx2")
 
 
 # ── Pydantic argument models ────────────────────────────────────────────────
@@ -196,6 +225,15 @@ class DiscoverParams(BaseModel):
     ext_filter: Optional[list[str]] = Field(
         default=None,
         description="Optional extension filter, e.g. ['.cu'] or ['.comp', '.metal']"
+    )
+    target_backend: str = Field(
+        "", description="Optional target backend ('hip', 'cuda', 'vulkan', 'directx12', "
+                        "'sycl', 'metal'). When set, appends a readiness diagnosis for it."
+    )
+    target_arch: str = Field("", description="Optional target arch ID used by the readiness diagnosis.")
+    host_os: str = Field("", description="Host OS the port will build on (default: this machine).")
+    probe_host: bool = Field(
+        True, description="Probe this host for tools/PCIe ReBAR. false = report UNVALIDATED instead of guessing."
     )
 
 class ArchCheckParams(BaseModel):
@@ -387,48 +425,97 @@ RES_FINDINGS_PREFIX = "kands://findings/"
 
 # ── Source scanning ─────────────────────────────────────────────────────────
 
+def _read_head(f: Path, limit: int = _SNIFF_BYTES) -> str:
+    """Lowercased start of a text file, or "" for binary/unreadable files."""
+    try:
+        with f.open("rb") as fh:
+            raw = fh.read(limit)
+    except OSError:
+        return ""
+    if b"\x00" in raw:              # SPIR-V and friends: not sniffable text
+        return ""
+    return raw.decode("utf-8", errors="replace").lower()
+
+
+def _sniff_gpu_backend(head: str) -> tuple[str, str] | None:
+    """GPU backend implied by file content, or None if it is not GPU code."""
+    if any(m in head for m in _SYCL_MARKERS):
+        return ("gpu_sycl", "SYCL kernel source")
+    if any(m in head for m in _HIP_MARKERS):
+        return ("gpu_hip", "HIP kernel source")
+    if "__global__" in head or "__device__" in head:
+        return ("gpu_cuda", "CUDA kernel source")
+    if "numthreads" in head:
+        return ("gpu_dx", "Direct3D HLSL shader")
+    if "kernel void" in head or "__kernel" in head:
+        return ("gpu_opencl", "OpenCL kernel")
+    return None
+
+
 def _scan_sources(root: Path, ext_filter: list[str] | None = None) -> list[dict]:
-    """Walk a source tree and return all GPU / shader / CPU kernel files."""
+    """Walk a source tree and return all GPU / shader / CPU kernel files.
+
+    Classification is content-aware. A ``.cu`` file is CUDA or HIP depending on
+    what it contains, and a ``.cpp`` is only a kernel if it holds device code or
+    SIMD intrinsics rather than host plumbing. Build-output and VCS directories
+    are pruned, so a copy in ``build/`` is not counted twice.
+    """
+    import os as _os
+
+    root = Path(root)
+    if root.is_file():
+        root = root.parent
+    exts = {e.lower() for e in ext_filter} if ext_filter else set(_ALL_EXTS)
     results: list[dict] = []
-    exts = set(ext_filter) if ext_filter else set(_ALL_EXTS)
 
-    for f in root.rglob("*"):
-        if not f.is_file():
-            continue
-        ext = f.suffix.lower()
-        if ext not in exts:
-            continue
-        # Skip CPU files if not explicitly requested (they're noise for GPU porters)
-        if ext == ".cpp" and "cpu" not in str(f).lower():
-            continue
-
-        backend, kind = _determine_backend_kind(f, ext)
-        if backend is None:
-            continue
-
-        results.append({
-            "path": str(f.relative_to(root)),
-            "backend": backend,
-            "kind": kind,
-        })
+    for dirpath, dirnames, filenames in _os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if d.lower() not in _SKIP_DIRS)
+        for name in sorted(filenames):
+            f = Path(dirpath) / name
+            ext = f.suffix.lower()
+            if ext not in exts:
+                continue
+            backend, kind = _determine_backend_kind(f, ext)
+            if backend is None:
+                continue
+            results.append({
+                "path": f.relative_to(root).as_posix(),
+                "backend": backend,
+                "kind": kind,
+            })
 
     results.sort(key=lambda r: r["path"])
     return results
 
 
 def _determine_backend_kind(f: Path, ext: str) -> tuple[str | None, str | None]:
-    """Determine the backend and kind based on file extension and path."""
-    if ext in _EXTENSION_MAP:
-        return _EXTENSION_MAP[ext]
-    if ext == ".cpp":
-        parts = f.parts
-        if "cpu" in [p.lower() for p in parts]:
-            name = f.name.lower()
-            if "avx512" in name or "kq" in name:
-                return ("cpu_x86_avx512", "CPU kernel (AVX-512)")
-            if "avx2" in name:
-                return ("cpu_x86_avx2", "CPU kernel (AVX2)")
+    """Classify one file by extension, then by content."""
+    base = _EXTENSION_MAP.get(ext)
+    if base is not None:
+        backend, kind = base
+        if ext in _CUDA_EXTS:
+            # .hip is HIP by definition; .cu/.cuh type is decided by content
+            if ext == ".hip":
+                return ("gpu_hip", "HIP kernel source")
+            sniffed = _sniff_gpu_backend(_read_head(f))
+            if sniffed:
+                return sniffed
+        return (backend, kind)
+
+    if ext in _CPP_EXTS:
+        head = _read_head(f)
+        sniffed = _sniff_gpu_backend(head)
+        if sniffed:
+            # device code compiled through a .cpp: HIP/SYCL convention, or
+            # nvcc -x cu. It is a kernel, not host plumbing.
+            return sniffed
+        if any(m in head for m in _AVX512_MARKERS):
+            return ("cpu_x86_avx512", "CPU kernel (AVX-512)")
+        if any(m in head for m in _AVX2_MARKERS):
+            return ("cpu_x86_avx2", "CPU kernel (AVX2)")
+        if "cpu" in [p.lower() for p in f.parts] or "cpu" in f.name.lower():
             return ("cpu_x86", "CPU kernel (x86)")
+        return (None, None)
     return (None, None)
 
 
@@ -816,7 +903,7 @@ def _bundle_status() -> dict:
     json_files = [
         "ARCH_MAP.json", "MODEL_MAP.json", "TK_TOOLS.json", "CROSS_PORT.json",
         "AI_FRAMEWORKS.json", "MODEL_FORMATS.json", "PORTING_PATTERNS.json",
-        "PERF_BENCHMARKS.json",
+        "PERF_BENCHMARKS.json", "BACKEND_REQUIREMENTS.json",
     ]
     data_freshness = []
     for fname in json_files:
@@ -971,7 +1058,7 @@ then `read kands://porting-patterns` for transformation patterns.
     json_files = [
         "ARCH_MAP.json", "MODEL_MAP.json", "TK_TOOLS.json", "CROSS_PORT.json",
         "AI_FRAMEWORKS.json", "MODEL_FORMATS.json", "PORTING_PATTERNS.json",
-        "PERF_BENCHMARKS.json",
+        "PERF_BENCHMARKS.json", "BACKEND_REQUIREMENTS.json",
     ]
     data_freshness = []
     for fname in json_files:
@@ -2371,55 +2458,74 @@ def _search_online(query: str, max_results: int) -> str:
 
 # ── Autonomous Port orchestration ─────────────────────────────────────────────
 
-def _auto_detect_source_arch(root: Path, arch_map: dict) -> str:
-    """Scan repo to detect the source GPU architecture from code patterns."""
-    findings = _scan_sources(root)
+def _auto_detect_source_arch(root: Path, arch_map: dict,
+                            findings: list[dict] | None = None) -> str:
+    """Detect the source GPU architecture from code patterns.
+
+    Classification is content-aware (see ``_scan_sources``), so the HIP and SYCL
+    paths are reachable rather than dead branches. CUDA versions are normalised
+    first: ``__CUDA_ARCH__ 900`` and ``-arch=sm_90`` both mean sm_90, not "newer
+    than sm_89, call it Ada".
+    """
+    root = Path(root)
+    if findings is None:
+        findings = _scan_sources(root)
     if not findings:
-        return "sm_80"  # Default to modern CUDA
+        return "sm_80"  # default to modern CUDA
 
-    # Check if repo is CUDA, HIP, or SYCL
-    has_cuda = any(f["backend"] == "gpu_cuda" for f in findings)
-    has_hip = any(f["backend"] == "gpu_hip" for f in findings)
-    has_sycl = any(f["backend"] == "gpu_sycl" for f in findings)
+    gpu = [f for f in findings if f["backend"].startswith("gpu")]
+    backends = {f["backend"] for f in gpu}
+    texts: list[str] = []
+    for f in gpu:
+        try:
+            texts.append((root / f["path"]).read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+    blob = "\n".join(texts)
+    known = arch_map.get("entries", {})
 
-    if has_cuda:
-        # Scan source for CUDA version markers or arch specifiers
-        import re as _re
-        cuda_arches = []
-        for f in findings:
-            if f["backend"] == "gpu_cuda":
-                try:
-                    with open(root / f["path"], "r", errors="ignore") as fh:
-                        content = fh.read()
-                        # Look for arch flags or __CUDA_ARCH__ version
-                        for m in _re.finditer(r'__CUDA_ARCH__\s*[><=]=?\s*(\d+)', content):
-                            cuda_arches.append(int(m.group(1)))
-                        if "-arch=sm_" in content or "nvcc -arch=sm_" in content:
-                            for m in _re.finditer(r'sm_(\d+)', content):
-                                cuda_arches.append(int(m.group(1)) * 10)
-                except:
-                    pass
-        # Default to sm_80 (Ampere) for CUDA repos without specific markers
-        if cuda_arches:
-            max_arch = max(cuda_arches)
-            if max_arch >= 900:
-                return "sm_89"  # Ada
-            elif max_arch >= 800:
-                return "sm_80"  # Ampere
-            elif max_arch >= 700:
-                return "sm_75"  # Turing
-        return "sm_80"  # Default modern CUDA
-    if has_hip:
-        return "gfx1100"
-    if has_sycl:
+    if "gpu_sycl" in backends:
+        low = blob.lower()
+        if "arc" in low or "battlemage" in low or "alchemist" in low:
+            return "gen12_hp"
+        if "meteor" in low or "core ultra" in low:
+            return "meteor_lake"
         return "gen12_lp"
+
+    if "gpu_hip" in backends:
+        gfx = [int(m) for m in re.findall(r"gfx(\d{3,4})", blob)]
+        if gfx:
+            candidate = f"gfx{max(gfx)}"
+            if candidate in known:
+                return candidate
+        return "gfx1100"
+
+    # CUDA: collect every architecture marker, then normalise.
+    raw: list[int] = []
+    for pattern in (r"__CUDA_ARCH__\s*[<>=!]+\s*(\d+)",
+                    r"-arch[= ]sm_(\d+)",
+                    r"\bsm_(\d{2,3})\b"):
+        raw.extend(int(m) for m in re.findall(pattern, blob))
+    arches = []
+    for a in raw:
+        if a >= 100:            # __CUDA_ARCH__ style: 800, 900, 1200
+            a //= 10
+        if 50 <= a <= 200:
+            arches.append(a)
+    if not arches:
+        return "sm_80"           # CUDA repo with no arch markers
+
+    top = max(arches)
+    for cand in ("sm_120", "sm_90", "sm_89", "sm_86", "sm_80", "sm_75"):
+        if top >= int(cand[3:]) and cand in known:
+            return cand
     return "sm_80"
 
 
 def _infer_project_type(root: Path) -> str:
-    """Analyse repo to guess the project type (llm, game, sdk, compute)."""
+    """Analyse a repo to guess the project type (llm, game, sdk, compute)."""
     import os as _os
-    # Check for common files/patterns
+
     markers = {
         "llm": ["model.py", "attention.py", "transformer.py", "llama.cpp", "kernels.py", "ggml.h", "flash_attn", "embedding", "tokenizer", "vocab.json"],
         "game": ["renderer.cpp", "shader", "pipeline", "vulkan", "directx", "engine.cpp", "scene.cpp", "mesh.cpp", "material"],
@@ -2427,42 +2533,40 @@ def _infer_project_type(root: Path) -> str:
         "compute": ["cuda_utils", "kernel_utils", "bitonic_sort", "reduce.cu", "scan.cu"],
         "inference": ["inference.py", "model_inference", "predict.py", "runtime.py"],
     }
-    found_types = []
-    all_files = []
-    for root_path, dirs, files in _os.walk(root):
-        for f in files:
-            all_files.append(f)
+    ml_keywords = ("neural", "encoding", "mlp", "optimizer", "fully_fused", "hash_grid")
+    readable = {".c", ".cc", ".cpp", ".cu", ".cuh", ".h", ".hpp", ".py",
+                ".rs", ".md", ".json", ".txt", ".toml", ".yaml", ".yml"}
 
-    # Check content for ML-specific keywords
-    ml_keywords = ["neural", "encoding", "mlp", "optimizer", "fully_fused", "hash_grid"]
-    if not found_types:
-        for f in all_files[:500]:
+    all_files: list[str] = []
+    content_hits = False
+    checked = 0
+
+    for dirpath, dirnames, filenames in _os.walk(root):
+        dirnames[:] = [d for d in dirnames if d.lower() not in _SKIP_DIRS]
+        for name in filenames:
+            all_files.append(name)
+            if content_hits or checked >= 500:
+                continue
+            checked += 1
+            if _os.path.splitext(name)[1].lower() not in readable:
+                continue
             try:
-                with open(_os.path.join(root, root_path, f), "r", errors="ignore") as fh:
-                    content = fh.read()
-                    if any(kw in content for kw in ml_keywords):
-                        found_types.append("llm")
-                        break
-            except:
-                pass
+                with open(_os.path.join(dirpath, name), "r", errors="ignore") as fh:
+                    if any(kw in fh.read(_SNIFF_BYTES) for kw in ml_keywords):
+                        content_hits = True
+            except OSError:
+                continue
 
+    found_types: list[str] = ["llm"] if content_hits else []
+    lowered = [n.lower() for n in all_files]
     for label, keywords in markers.items():
-        for kw in keywords:
-            if any(kw.lower() in f.lower() for f in all_files):
-                found_types.append(label)
-                break
+        if any(any(kw.lower() in name for name in lowered) for kw in keywords):
+            found_types.append(label)
 
-    if "llm" in found_types:
-        return "llm"
-    if "game" in found_types:
-        return "game"
-    if "sdk" in found_types:
-        return "sdk"
-    if "compute" in found_types:
-        return "compute"
-    if "inference" in found_types:
-        return "inference"
-    return "compute"  # Default fallback
+    for label in ("llm", "game", "sdk", "compute", "inference"):
+        if label in found_types:
+            return label
+    return "compute"  # default fallback
 
 
 def _detect_local_gpu_arch(arch_map: dict) -> str | None:
@@ -2671,22 +2775,22 @@ async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
     root = Path(params.repo_path)
     entries = arch_map.get("entries", {})
 
-    # Scan source tree for kernels (needed early for Phase 0 Due Diligence)
+    # Scan source tree once for kernels (needed early for Phase 0 Due Diligence).
+    # Every later phase reuses these findings; re-walking produced a second,
+    # sometimes different, inventory in the same report.
     all_kernels = _scan_sources(root)
     gpu_kernels = [k for k in all_kernels if k["backend"].startswith("gpu")]
     cpu_kernels = [k for k in all_kernels if k["backend"].startswith("cpu")]
-    source_findings = findings = all_kernels
 
     # ── Auto-detect missing parameters ──
     detected_info = {}
 
     if params.source_arch == "auto" or params.target_arch == "auto" or params.project_type == "auto" or params.target_language == "auto" or params.target_backend == "auto":
-        findings = _scan_sources(root)
-        detected_info["findings_count"] = len(findings)
-        detected_info["backends"] = list(set(f["backend"] for f in findings)) if findings else []
+        detected_info["findings_count"] = len(all_kernels)
+        detected_info["backends"] = sorted({f["backend"] for f in all_kernels})
 
     if params.source_arch == "auto":
-        params.source_arch = _auto_detect_source_arch(root, arch_map)
+        params.source_arch = _auto_detect_source_arch(root, arch_map, all_kernels)
         detected_info["source_arch"] = params.source_arch
 
     if params.project_type == "auto":
@@ -2702,6 +2806,7 @@ async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
         if root.exists():
             import os as _os
             for root_path, dirs, files in _os.walk(root):
+                dirs[:] = [d for d in dirs if d.lower() not in _SKIP_DIRS]
                 for f in files:
                     source_files.append(f)
         params.target_language = _infer_target_language(source_files, params.project_type)
@@ -2727,20 +2832,61 @@ async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
     if not target_info:
         return f"Error: target arch '{params.target_arch}' not found in ARCH_MAP.json"
 
-    # ── Scan source for CUDA constructs (from git source, not hardcoded) ──
-    import re as _re
-    _cuda_constructs = {"wmma": False, "mma": False, "nvrtc": False, "cudaGraph": False,
-                        "cudaMallocManaged": False, "__syncthreads": False,
-                        "tensor_core": False}
-    for f in root.rglob("*.cu"):
-        try:
-            _txt = f.read_text(errors="replace")
-            for k in _cuda_constructs:
-                _cuda_constructs[k] = _cuda_constructs[k] or (k in _txt)
-        except Exception:
-            pass
-    _used_constructs = [k for k, v in _cuda_constructs.items() if v]
-    _manual_count = len([c for c in _used_constructs if c in ("wmma", "mma", "tensor_core", "nvrtc", "cudaGraph")])
+    # ── Pre-port reference over the discovered GPU sources ──
+    # One inventory, from api_map, instead of an ad-hoc substring scan. The old
+    # scan counted "mma" inside "wmma" and could not see a symbol that was
+    # missing from its own list, so its manual count was not a work estimate.
+    gpu_paths = [str(root / k["path"]) for k in gpu_kernels]
+    try:
+        pre_ref = (api_map.build_reference(gpu_paths, params.source_arch, params.target_arch)
+                   if gpu_paths else None)
+    except Exception:
+        pre_ref = None
+
+    if pre_ref:
+        _by_status = pre_ref["by_status"]
+        _symbols = pre_ref["symbols_found"]
+        _blockers = pre_ref["blockers"]
+        _manual_count = _by_status.get("manual", 0) + _by_status.get("none", 0)
+        _used_constructs = [r["id"] for r in pre_ref["rows"]
+                            if r["status"] in ("manual", "none")]
+        _unverified = sum(1 for r in pre_ref["rows"] if r["category"] == "unverified")
+    else:
+        _by_status, _symbols, _blockers = {}, 0, []
+        _manual_count, _used_constructs, _unverified = 0, [], 0
+
+    if _blockers or _manual_count >= 20:
+        _effort = "HIGH"
+    elif _manual_count >= 5:
+        _effort = "MEDIUM"
+    else:
+        _effort = "LOW"
+
+    _backends = sorted({k["backend"] for k in all_kernels})
+    if _blockers:
+        _blocker_md = ("| feature | why it blocks | files |\n|---|---|---|\n" + "\n".join(
+            "| **{}** | {} | {} |".format(
+                b["id"], b["note"] or "—", ", ".join(Path(f).name for f in b["files"][:3]))
+            for b in _blockers)
+            + "\n\nA blocker is not a partial gap: resolve the design before editing kernels.")
+    else:
+        _blocker_md = "None found in the discovered sources."
+
+    # ── What the target backend needs, before any kernel is edited ──
+    # Same rigor as a diagnosis, run forward: requirements, probes, Pareto,
+    # explicit fallbacks. A failure here changes the plan, not the code.
+    try:
+        _backend_diag = backend_profile.diagnose(
+            params.target_backend,
+            target_arch=params.target_arch,
+            host_os="" if params.target_os == "auto" else params.target_os,
+            findings=all_kernels,
+            source_arch=params.source_arch,
+        )
+        _backend_md = _render_backend_profile(_backend_diag).split("\n", 1)[-1]
+        _backend_md = _backend_md.replace("\n### ", "\n#### ")
+    except Exception as exc:  # a readiness model failure must not hide the rest of Phase 0
+        _backend_md = (f"\n_Readiness diagnosis unavailable: `{type(exc).__name__}: {exc}`_\n")
 
     report = f"""# Autonomous Porting Report
 
@@ -2762,32 +2908,29 @@ async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
 > _"Every port starts with a yes/no decision."_
 
 ### 1. Source Inventory
-- **Repo:** `{params.repo_path.split('/')[-1]}` (cloned at `{params.repo_path}`)
-- **Kernels found:** {len(gpu_kernels)} GPU kernels
-- **Source language:** CUDA C++ (.cu files)
-- **CUDA constructs used in source:** {', '.join(_used_constructs) if _used_constructs else 'basic element-wise ops'}
-- **Manual constructs (wmma/mma/nvrtc/cudaGraph in code):** {_manual_count}
+- **Repo:** `{Path(params.repo_path).name}` (at `{params.repo_path}`)
+- **Kernel/shader files found:** {len(all_kernels)} ({len(gpu_kernels)} GPU, {len(cpu_kernels)} CPU)
+- **Backends detected:** {', '.join(_backends) if _backends else 'none'}
+- **Symbols inventoried for the target:** {_symbols}
 
 ### 2. Target Feasibility
 - **Source arch supports:** {', '.join(k for k,v in source_info.items() if v is True and k in ('wmma','tensor_cores','dot4','dot8','bf16_native','fp8_native')) or 'basic compute'}
-- **Source code uses:** {', '.join(_used_constructs) or 'basic element-wise ops'}
+- **Symbol status on `{params.target_arch}`:** auto {_by_status.get('auto', 0)} · partial {_by_status.get('partial', 0)} · manual {_by_status.get('manual', 0)} · no equivalent {_by_status.get('none', 0)}
+- **Symbols absent from the reference table:** {_unverified} (each needs `probe_isa` before it is trusted)
+- **Constructs needing source work:** {', '.join(_used_constructs[:10]) if _used_constructs else 'none detected'}
 
-### 3. Should We Port? (Value Check)
-| Question | Answer |
-|---|---|
-| Does the port add value? | Yes — enables cross-platform GPU support |
-| Can target achieve reasonable perf? | Yes — simple compute-bound kernel |
-| Does target support required features? | {("Yes" if params.target_backend in ("hip", "cuda", "directx", "vulkan", "sycl") else "Unknown")} |
+### 3. Hard Blockers
+{_blocker_md}
 
-### 4. Effort Estimate: LOW (1-2 hours)
-- 3 small kernels (~10 lines each)
-- 0 manual-only constructs
-- Straightforward memory operations
+### 4. Backend Readiness — `{params.target_backend}`
+{_backend_md}
+### 5. Effort Estimate: {_effort}
+- {len(gpu_kernels)} GPU source file(s), {_manual_count} symbol(s) needing source work, {len(_blockers)} hard blocker(s)
+- Derived from the inventory above; re-run `build_function_reference` for call sites.
 
 ---
 
 ## Phase 0 — Auto-Detected Parameters
-
 """
     if detected_info:
         report += "The following parameters were auto-detected (not explicitly provided by user):\n\n"
@@ -2860,10 +3003,8 @@ async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
     if not model_dirs:
         report += "- No standard model directories found\n"
 
-    # Phase 2: Discover kernels
-    all_kernels = _scan_sources(root)
-    gpu_kernels = [k for k in all_kernels if k["backend"].startswith("gpu")]
-    cpu_kernels = [k for k in all_kernels if k["backend"].startswith("cpu")]
+    # Phase 2: kernel discovery — reuse the inventory taken at the top of this
+    # call. Re-walking here produced a second, possibly different, file list.
     report += f"""
 
 ---
@@ -3559,13 +3700,17 @@ _build_reference = api_map.build_reference
 _render_reference = api_map.render_reference
 _lookup_api = api_map.lookup_api
 
+import backend_profile  # noqa: E402
+_diagnose_backend = backend_profile.diagnose
+_render_backend_profile = backend_profile.render
+
 
 def _tools() -> list[mcp_types.Tool]:
     """All available MCP tools."""
     return [
         mcp_types.Tool(
             name="discover_kernels",
-            description="Scan any repository (git repo or source tree) for GPU kernel, shader, and CPU kernel source files. Returns a categorized list.",
+            description="Scan any repository (git repo or source tree) for GPU kernel, shader, and CPU kernel source files. Returns a categorized list. With target_backend set, also diagnoses what that backend needs (tools, host, capabilities, PCIe ReBAR), ranks it by impact x likelihood, and states the fallback.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -3573,6 +3718,22 @@ def _tools() -> list[mcp_types.Tool]:
                     "ext_filter": {
                         "type": "array", "items": {"type": "string"},
                         "description": "Optional extension filter, e.g. ['.cu']"
+                    },
+                    "target_backend": {
+                        "type": "string",
+                        "description": "Optional target backend for the readiness diagnosis: hip, cuda, vulkan, directx12, sycl, metal"
+                    },
+                    "target_arch": {
+                        "type": "string",
+                        "description": "Optional target arch ID for the readiness diagnosis, e.g. gfx1201, sm_80"
+                    },
+                    "host_os": {
+                        "type": "string",
+                        "description": "Host OS the port will build on: windows, linux, macos (default: this machine)"
+                    },
+                    "probe_host": {
+                        "type": "boolean",
+                        "description": "Probe this host for tools and PCIe ReBAR. false reports UNVALIDATED rather than guessing"
                     },
                 },
                 "required": ["repo"],
@@ -4176,6 +4337,23 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
                 summary += f"\n**Total: {len(findings)} kernel/shader files**\n"
                 results.append(mcp_types.TextContent(type="text", text=summary))
                 results.append(mcp_types.TextContent(type="text", text=json.dumps(findings, indent=2)))
+
+                # Optional readiness diagnosis: what the target backend needs before
+                # any kernel is edited. Rows are probed, ranked, and given a fallback;
+                # an unprobed row stays UNVALIDATED rather than passing silently.
+                target_backend = str(arguments.get("target_backend") or "").strip()
+                if target_backend:
+                    diag = backend_profile.diagnose(
+                        target_backend,
+                        target_arch=str(arguments.get("target_arch") or ""),
+                        host_os=str(arguments.get("host_os") or ""),
+                        findings=findings,
+                        probe_host=bool(arguments.get("probe_host", True)),
+                    )
+                    results.append(mcp_types.TextContent(
+                        type="text", text=backend_profile.render(diag)))
+                    results.append(mcp_types.TextContent(
+                        type="text", text=json.dumps(backend_profile.slim(diag), indent=2)))
 
     elif name == "check_arch_compatibility":
         kernel_list = arguments.get("kernel_list", [])

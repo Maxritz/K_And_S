@@ -24,7 +24,25 @@ This is not just a tool. It is a knowledge base that travels with you. When you 
 ## What You Can Do With It
 
 ### Discover and Audit
-Point K_and_S at any codebase. It will scan every `.cu`, `.hip`, `.comp`, `.hlsl`, `.cpp` file and tell you exactly what GPU code exists and what backend it targets. No more hunting through thousands of files.
+Point K_and_S at any codebase. It classifies every `.cu`, `.hip`, `.cuh`, `.sycl`, `.comp`, `.tesc`, `.hlsl`, `.metal` and `.cpp` file by **what is inside it**, not just by its extension: HIP that lives in a `.cu`, device code compiled through a `.cpp`, or AVX-512 intrinsics in a file whose path never mentions "cpu". Build output, `node_modules` and VCS directories are pruned, so a copy under `build/` is not counted twice.
+
+### What the target needs before you port
+Discovery can also answer the question that decides the schedule: *what does this port need for `hip`/`cuda`/`vulkan`/`directx12`/`sycl`/`metal`?* Pass `target_backend` to `discover_kernels` (optionally `target_arch`, `host_os`) and it appends a readiness diagnosis.
+
+Each requirement gets one evidence label and never a guess:
+
+| label | meaning |
+|---|---|
+| **PASS** | probed and present |
+| **FAIL** | probed and absent — use the fallback or stop |
+| **NOT RUN** | needs a build or a manual step |
+| **UNVALIDATED** | could not be probed; treat it as absent until proven |
+
+Rows are weighted `impact (1-5) x likelihood (0-1)` and ranked by Pareto: the rows that reach 80% of the total score are the vital few, and that is the order to resolve them in. Manual and host rows stay visible instead of passing silently. Every non-PASS row carries the fallback to take.
+
+**PCIe ReBAR is a first-class row.** When the backend can use a large BAR (`hipHostMalloc` + `hipMemAdvise`, `cudaHostAllocMapped`, a host-visible device-local Vulkan heap, D3D12 GPU upload heaps, SYCL USM host allocations), the diagnosis probes the host: sysfs `resource*_resize` on Linux, an explicit driver report if one exists, otherwise a documented manual check. If ReBAR is not PASS, the fallback is a staging buffer plus chunked copy — and the report says so, so the port is never described as zero-copy when it is not. Apple metal has no discrete BAR window, which is recorded as not applicable rather than as a failed probe.
+
+`autonomous_port` runs the same diagnosis automatically in its Phase 0.
 
 ### Check Compatibility
 Before you start porting, see if your target architecture supports everything your source needs. Does your target have tensor cores? DP4a? Native BF16? Will Vulkan cooperative matrices work (they do not on AMD, use DP4a instead). K_and_S tells you upfront so you do not waste weeks on a dead end.

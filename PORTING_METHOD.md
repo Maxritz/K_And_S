@@ -15,8 +15,26 @@
 | 0.2 Identify build system | `ls CMakeLists.txt setup.py setup.sh *.vcxproj meson.build` | Build tool name |
 | 0.3 Identify GPU backend | grep for `cuda`, `hip`, `vulkan`, `metal`, `opencl` | Backend name |
 | 0.4 Scan environment | `read kands://status` for toolkits + env vars | Available: ROCm/CUDA/Vulkan/DirectX/oneAPI paths |
-| 0.5 Set goal + guardrails | `set_goal(goal="...", target_arch="...", ...)` | kands://goal state |
-| 0.6 Establish build | Build at least one target (e.g. `--help`) | Build OK / Fail |
+| 0.5 Diagnose the target backend | `discover_kernels(repo=..., target_backend=..., target_arch=..., host_os=...)` | Requirement rows, Pareto vital few, PCIe ReBAR gate |
+| 0.6 Set goal + guardrails | `set_goal(goal="...", target_arch="...", ...)` | kands://goal state |
+| 0.7 Establish build | Build at least one target (e.g. `--help`) | Build OK / Fail |
+
+### Phase 0 Gate: Backend Readiness
+
+Step 0.5 answers *what the target needs before the first kernel is edited*. Every
+requirement row is probed and ends in exactly one label: **PASS**, **FAIL**,
+**NOT RUN** or **UNVALIDATED**. Rows are weighted `impact (1-5) x likelihood
+(0-1)`; the Pareto vital few (80% of the total score) is the resolution order.
+A non-PASS row is not a detail to remember later: it either selects its declared
+fallback or stops the port until it is resolved or explicitly waived.
+
+PCIe ReBAR is part of the gate for every backend that can use a large BAR
+(`hip`, `cuda`, `vulkan`, `directx12`, `sycl`). A non-PASS ReBAR selects the
+staging + chunked-copy fallback and that choice is recorded in the plan; it is
+never assumed and never described as zero-copy without evidence. Metal has no
+discrete BAR window, which is recorded as not applicable.
+
+`autonomous_port` runs the same diagnosis in its Phase 0.
 
 ### Phase 0 Rule: No Placeholder Stub Code
 

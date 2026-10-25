@@ -18,6 +18,7 @@ json_files = [
     r'h:\K_and_S\mcp\state\goal.json',
     r'h:\K_and_S\mcp\state\perf_history.json',
     r'h:\K_and_S\mcp\claude_desktop_config.json',
+    r'h:\K_and_S\BACKEND_REQUIREMENTS.json',
 ]
 for f in json_files:
     fname = os.path.basename(f)
@@ -28,7 +29,8 @@ for f in json_files:
 
 # 2. Validate Python files
 import ast
-for f in [r'h:\K_and_S\mcp\server.py', r'h:\K_and_S\mcp\reference_search.py']:
+for f in [r'h:\K_and_S\mcp\server.py', r'h:\K_and_S\mcp\reference_search.py',
+          r'h:\K_and_S\mcp\backend_profile.py', r'h:\K_and_S\mcp\api_map.py']:
     try:
         ast.parse(open(f).read())
     except Exception as e:

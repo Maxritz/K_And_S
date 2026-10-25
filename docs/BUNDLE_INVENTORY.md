@@ -14,6 +14,7 @@ This document tracks all files in the K_and_S bundle for audit and contribution 
 | `PORTING_PATTERNS.json` | — | CUDA↔HIP↔SYCL↔Vulkan↔DirectX + sync_patterns (TDR/fence) |
 | `PERF_BENCHMARKS.json` | — | Theoretical perf estimates + roofline models (7 arches) |
 | `AI_FRAMEWORKS.json` | 12 frameworks | TileLang, HipKittens, ThunderKittens, Triton-Windows, ExecuTorch, TorchInductor |
+| `BACKEND_REQUIREMENTS.json` | 6 backends | Target-backend readiness: requirement rows, probes, fallbacks, impact x likelihood weights, PCIe ReBAR support |
 
 ## Documentation (Markdown)
 
@@ -34,6 +35,9 @@ This document tracks all files in the K_and_S bundle for audit and contribution 
 | Path | Purpose |
 |---|---|
 | `mcp/isa_tools.py` | Instruction probing, artifact verification (bundle-aware), build gates, `code_object_report` |
+| `mcp/porting_map.py` | Construct-to-construct porting map with fidelity grades + replacement probing |
+| `mcp/api_map.py` | Pre-port reference: used runtime/PTX/intrinsic symbols, per-target status, unverified symbols |
+| `mcp/backend_profile.py` | Discovery-phase backend readiness: requirement probes, Pareto ranking, ReBAR gate, fallbacks |
 | `mcp/server.py` | Main MCP server (37 tools, 21 resources, MCP 2.x, runtime toolchain detection) |
 | `mcp/reference_search.py` | ArXiv + GitHub search utilities |
 | `mcp/pyproject.toml` | `pip install -e .` packaging |
@@ -52,6 +56,7 @@ This document tracks all files in the K_and_S bundle for audit and contribution 
 - **21** MCP resources (incl. `kands://porting-lessons`, `kands://radical-experiments`)
 - **Phase 0-8** methodology (incl. Phase 8: Share/Contribute)
 - **3** diagnostic methods (Ponytail-diag, sherlock-it, CPU-as-oracle)
+- **6** backend readiness profiles (`BACKEND_REQUIREMENTS.json`), each with an explicit PCIe ReBAR path and fallback
 
 ## Design Principles
 
