@@ -1,39 +1,5 @@
-"""
-backend_profile — discovery-phase answer to "what does this port need for <backend>?"
-
-Why this exists
----------------
-A port used to start from the source inventory alone: how many kernels, which
-CUDA calls, what the target arch supports. That answers *what is in the tree*,
-not *what the target needs before the first kernel is edited*. The difference is
-how a plan survives contact with the machine: the matrix instruction is there in
-the table but the compiler that emits it is not installed, the host BAR is too
-small for the working set, or the target OS cannot run the backend at all.
-
-The method is the diagnostic method applied forward, not a bug hunt:
-
-    enumerate requirements -> probe each one -> rank by impact x likelihood
-    -> name the vital few -> state the fallback -> gate the port on evidence
-
-Every row ends in one of four labels, never in a guess:
-
-    PASS          probed and present
-    FAIL          probed and absent; use the fallback or stop
-    NOT RUN       needs a build or a manual step before it can pass
-    UNVALIDATED   could not be probed; treat as absent until proven
-
-ReBAR is a first-class row (``pcie.rebar``): a larger BAR is a real speedup for
-weight streaming, and every backend that can use it also has a documented
-fallback (staging + chunked copy). A FAIL or UNVALIDATED ReBAR never blocks the
-port; it selects the fallback and records which path ran.
-
-Requirements live in ``BACKEND_REQUIREMENTS.json``. Nothing here hardcodes a
-vendor: an unknown backend reports what it needs to be described, and an
-unlisted arch leaves capability rows UNVALIDATED instead of assuming support.
-"""
-
+# mcp/backend_profile.py — backend readiness diagnosis
 from __future__ import annotations
-
 import json
 import glob
 import os
@@ -50,9 +16,16 @@ LABELS = ("PASS", "FAIL", "NOT RUN", "UNVALIDATED")
 
 #: Coarse host names used by the requirements file and by ``host_os``.
 _OS_ALIASES = {
-    "win": "windows", "win32": "windows", "win64": "windows", "windows": "windows",
-    "nt": "windows", "linux": "linux", "mac": "macos", "macos": "macos",
-    "darwin": "macos", "osx": "macos",
+    "win": "windows",
+    "win32": "windows",
+    "win64": "windows",
+    "windows": "windows",
+    "nt": "windows",
+    "linux": "linux",
+    "mac": "macos",
+    "macos": "macos",
+    "darwin": "macos",
+    "osx": "macos",
 }
 
 #: PCI vendor ids, for the Linux sysfs ReBAR probe.
@@ -81,8 +54,6 @@ _REBAR_MANUAL = {
 
 _REQUIREMENTS_FILE = "BACKEND_REQUIREMENTS.json"
 
-
-# --------------------------------------------------------------------------- data
 
 def _bundle_root() -> Path:
     return Path(__file__).resolve().parent.parent
@@ -132,7 +103,16 @@ def _norm_os(value: str) -> str:
     return _OS_ALIASES.get(str(value).strip().lower(), str(value).strip().lower())
 
 
-# --------------------------------------------------------------------------- probes
+def _get_nested(info: dict, key: str):
+    """Get a value from a nested dict using 'key.subkey' notation."""
+    parts = key.split(".")
+    for part in parts:
+        if isinstance(info, dict) and part in info:
+            info = info[part]
+        else:
+            return None
+    return info
+
 
 def probe_rebar(target_backend: str, host_os: str = "", *, probe_host: bool = True) -> dict[str, Any]:
     """ReBAR support for the target backend on this host.
@@ -161,12 +141,16 @@ def probe_rebar(target_backend: str, host_os: str = "", *, probe_host: bool = Tr
     }
 
     if not spec:
-        out["evidence"].append(f"no ReBAR entry for backend `{backend}` in {_REQUIREMENTS_FILE}")
+        evidence = [f"no ReBAR entry for backend `{backend}` in {_REQUIREMENTS_FILE}"]
+        out["evidence"] = evidence
         return out
 
     if not out["supported"]:
-        out.update(status="NOT RUN", confidence="documented",
-                   evidence=[f"not applicable: {out['benefit'] or 'this backend has no discrete BAR window'}"])
+        out.update(
+            status="NOT RUN",
+            confidence="documented",
+            evidence=[f"not applicable: {out['benefit'] or 'this backend has no discrete BAR window'}"],
+        )
         return out
 
     if not probe_host:
@@ -176,13 +160,13 @@ def probe_rebar(target_backend: str, host_os: str = "", *, probe_host: bool = Tr
 
     if os_name == "linux":
         res = _probe_rebar_linux(backend)
-        if res:
+        if res is not None:
             out.update(res)
             return out
 
     if os_name in ("linux", "windows"):
         res = _probe_rebar_nvidia_smi()
-        if res:
+        if res is not None:
             out.update(res)
             return out
 
@@ -191,7 +175,7 @@ def probe_rebar(target_backend: str, host_os: str = "", *, probe_host: bool = Tr
     return out
 
 
-def _probe_rebar_linux(backend: str) -> dict[str, Any] | None:
+def _probe_rebar_linux(backend: str):
     """Read the resizable-BAR capability from sysfs for the backend's vendor."""
     devs = Path("/sys/bus/pci/devices")
     if not devs.is_dir():
@@ -257,8 +241,8 @@ def _probe_tool(req: dict[str, Any]) -> tuple[str, str, list[str]]:
         found = shutil.which(str(name))
         if found:
             return "PASS", "probed", evidence + [f"found `{found}`"]
-    # Some SDK tools are never on PATH (the DXC in the Windows SDK is the
-    # common case); a declared glob avoids reporting a false FAIL.
+    # Some SDK tools are never on PATH (the DXC in the Windows SDK is the common case);
+    # a declared glob avoids reporting a false FAIL.
     for pattern in req.get("paths", []) or []:
         matches = glob.glob(os.path.expandvars(str(pattern)))
         if matches:
@@ -269,6 +253,7 @@ def _probe_tool(req: dict[str, Any]) -> tuple[str, str, list[str]]:
 
 
 def _arch_record(arch: str) -> dict[str, Any]:
+    """Read arch info from api_map; fallback to empty dict on import failure."""
     try:
         import api_map  # local import: server imports this module before api_map in some paths
         return api_map.arch_info(arch) if arch else {}
@@ -276,8 +261,19 @@ def _arch_record(arch: str) -> dict[str, Any]:
         return {}
 
 
-def _probe_capability(req: dict[str, Any], target_arch: str,
-                      source_arch: str) -> tuple[str, str, list[str]]:
+def _probe_capability(req: dict[str, Any], target_arch: str, source_arch: str) -> tuple[str, str, list[str]]:
+    """Probe a capability from ARCH_MAP.json, supporting nested fields like `features.wmma`.
+
+    Reads the value at ``field`` from ``ARCH_MAP.json {target_arch}``.
+    If the field contains a dot (e.g. ``features.wmma``), it traverses the nested
+    structure.  Otherwise it does a simple ``info.get(field)`` lookup.
+
+    Returns ``(status, confidence, evidence)`` where:
+      - status is one of PASS / FAIL / NOT RUN / UNVALIDATED
+      - confidence is one of documented / probed / none
+      - evidence lists the ARCH_MAP key/value that was read, plus optionally
+        the source arch value.
+    """
     field = str(req.get("field", ""))
     if not field:
         return "NOT RUN", "none", ["no capability field declared; run the listed probe"]
@@ -285,13 +281,18 @@ def _probe_capability(req: dict[str, Any], target_arch: str,
     if not info:
         return ("UNVALIDATED", "none",
                 [f"`{target_arch or '(no target arch)'}` is not in ARCH_MAP.json; probe on the device"])
-    if field not in info:
-        return "UNVALIDATED", "none", [f"ARCH_MAP.json has no `{field}` for `{target_arch}`"]
-    value = info.get(field)
+    # Support nested fields like "features.wmma" or "vulkan.cooperative_matrix"
+    if "." in field:
+        value = _get_nested(info, field)
+    else:
+        value = info.get(field)
+    if value is None:
+        return "UNVALIDATED", "none", [f"ARCH_MAP.json {target_arch}.{field} is not set"]
     src = _arch_record(source_arch) if source_arch else {}
+    src_value = _get_nested(src, field) if "." in field else src.get(field) if src else None
     evidence = [f"ARCH_MAP.json {target_arch}.{field} = {value}"]
-    if src and field in src:
-        evidence.append(f"source `{source_arch}.{field} = {src.get(field)}`")
+    if src and src_value is not None:
+        evidence.append(f"source `{source_arch}.{field} = {src_value}`")
     if "expect" not in req:
         # Informational flag (e.g. wave size): there is no pass/fail to report.
         return "NOT RUN", "documented", evidence
@@ -329,7 +330,7 @@ def _probe_requirement(req: dict[str, Any], *, target_arch: str, source_arch: st
     if kind == "manual":
         if not probe_host:
             return "NOT RUN", "none", ["manual probe not run"]
-        return "NOT RUN", "none", [f"manual: {req.get('probe', 'run the listed probe')}"]
+        return "NOT RUN", "none", ["manual: " + req.get('probe', 'run the listed probe')]
 
     if kind == "info":
         field = str(req.get("field", ""))
@@ -350,8 +351,6 @@ def _probe_requirement(req: dict[str, Any], *, target_arch: str, source_arch: st
     return "UNVALIDATED", "none", [f"unknown requirement kind `{kind}`"]
 
 
-# --------------------------------------------------------------------------- scoring
-
 def pareto(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """Rank by impact x likelihood and cut the vital few at 80% cumulative score."""
     scored = [r for r in rows if float(r.get("score", 0)) > 0]
@@ -370,11 +369,9 @@ def pareto(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "tail": [str(r["id"]) for r in scored if not r.get("vital")]}
 
 
-# --------------------------------------------------------------------------- diagnosis
-
 def diagnose(target_backend: str, target_arch: str = "", host_os: str = "",
-             findings: list[dict[str, Any]] | None = None, *, probe_host: bool = True,
-             source_arch: str = "") -> dict[str, Any]:
+             findings: list[dict[str, Any]] | None = None, *,
+             probe_host: bool = True, source_arch: str = "") -> dict[str, Any]:
     """Requirement model, probes and Pareto ranking for one target backend.
 
     ``findings`` is the discovery inventory (``path``/``backend``/``kind``). It is
@@ -388,7 +385,7 @@ def diagnose(target_backend: str, target_arch: str = "", host_os: str = "",
             "requested": target_backend,
             "known_backends": known_backends(),
             "error": (f"`{target_backend}` is not described in {_REQUIREMENTS_FILE}; "
-                      "add its requirements before planning against it"),
+                      f"add its requirements before planning against it"),
             "rows": [],
         }
 
@@ -503,7 +500,7 @@ def render(diag: dict[str, Any]) -> str:
     if not diag.get("known"):
         return (f"## Backend Readiness — `{diag.get('requested', '?')}`\n\n"
                 f"**This backend is not described yet.** {diag.get('error', '')}\n\n"
-                f"Known backends: {', '.join(diag.get('known_backends', [])) or 'none'}.\n")
+                f"Known backends: {', '.join(diag.get('known_backends', [])) or 'none'}\n")
 
     rows = diag["rows"]
     counts = diag["counts"]
@@ -531,31 +528,33 @@ def render(diag: dict[str, Any]) -> str:
     L.append("### Pareto — the vital few\n")
     L.append("`score = impact (1-5) x likelihood (0-1)`; the vital few are the rows "
              "that reach 80% of the total. Fix order is this table, not the order "
-             "the requirements were written.\n")
-    L.append("| # | requirement | kind | I x L | score | cum. | status |")
-    L.append("|---|---|---|---|---|---|---|")
+             "the requirements were written. \n")
+    L.append("| # | requirement | kind | I x L | score | cum. | status |\n")
+    L.append("|---|---|---|---|---|---|---|\n")
     ordered = sorted(rows, key=lambda r: (-float(r["score"]), str(r["id"])))
     for i, r in enumerate(ordered, 1):
         vital = "**" if r.get("vital") else ""
         L.append(f"| {i} | {vital}`{r['id']}`{vital} | {r['kind']} | "
-                 f"{r['impact']:g} x {r['likelihood']:g} | {r['score']:g} | "
+                 f"{r['impact']:g} x {r['likelihood']:g} | "
+                 f"{r['score']:g} | "
                  f"{r.get('cumulative', 0):.0%} | {_MARK.get(r['status'], '')} {r['status']} |")
     L.append("")
     if ranking["tail"]:
         L.append(f"Beyond the 80% line: {', '.join(f'`{t}`' for t in ranking['tail'])} "
-                 "— real, but not what you fix first.\n")
+                 f"— real, but not what you fix first. \n")
 
     L.append("### Requirement detail\n")
-    L.append("| requirement | what it needs | probe | status | evidence | fallback |")
-    L.append("|---|---|---|---|---|---|")
+    L.append("| requirement | what it needs | probe | status | evidence | fallback |\n")
+    L.append("|---|---|---|---|---|---|\n")
     for r in ordered:
         ev = "; ".join(r.get("evidence", [])) or "—"
         fb = r.get("fallback") or "—"
         L.append(f"| `{r['id']}` | {r['need']} | {r['probe']} | "
-                 f"{_MARK.get(r['status'], '')} {r['status']} | {ev} | {fb} |")
+                 f"{_MARK.get(r['status'], '')} {r['status']} | "
+                 f"{ev} | {fb} |")
     L.append("")
     L.append("`documented` evidence comes from `ARCH_MAP.json`, not from a run on "
-             "the device; `probed` rows were measured on this host.\n")
+             "the device; `probed` rows were measured on this host. \n")
 
     L.append("### ReBAR gate — PCIe resizable BAR (pcie-rebar)\n")
     rebar_state = rebar["status"]

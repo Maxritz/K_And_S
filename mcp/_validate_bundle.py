@@ -1,20 +1,27 @@
 #!/usr/bin/env python
-"""Validate the K_and_S bundle after all edits."""
+"""Validate the K_and_S bundle after all edits.
+
+Root paths come from this file's location, so the validator runs on any machine
+(and on any OS) instead of only where ``h:\\K_and_S`` exists.
+"""
 import json, ast, sys, os
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MCP = os.path.join(ROOT, "mcp")
 
 errors = []
 
 # Check JSON files
 json_files = [
-    r'h:\K_and_S\ARCH_MAP.json',
-    r'h:\K_and_S\PERF_BENCHMARKS.json',
-    r'h:\K_and_S\PORTING_PATTERNS.json',
-    r'h:\K_and_S\TK_TOOLS.json',
-    r'h:\K_and_S\AI_FRAMEWORKS.json',
-    r'h:\K_and_S\MODEL_FORMATS.json',
-    r'h:\K_and_S\CROSS_PORT.json',
-    r'h:\K_and_S\MODEL_MAP.json',
-    r'h:\K_and_S\BACKEND_REQUIREMENTS.json',
+    os.path.join(ROOT, "ARCH_MAP.json"),
+    os.path.join(ROOT, "PERF_BENCHMARKS.json"),
+    os.path.join(ROOT, "PORTING_PATTERNS.json"),
+    os.path.join(ROOT, "TK_TOOLS.json"),
+    os.path.join(ROOT, "AI_FRAMEWORKS.json"),
+    os.path.join(ROOT, "MODEL_FORMATS.json"),
+    os.path.join(ROOT, "CROSS_PORT.json"),
+    os.path.join(ROOT, "MODEL_MAP.json"),
+    os.path.join(ROOT, "BACKEND_REQUIREMENTS.json"),
 ]
 for f in json_files:
     fname = os.path.basename(f)
@@ -25,7 +32,7 @@ for f in json_files:
 
 # Backend readiness profiles must each declare a ReBAR path with a fallback.
 try:
-    reqs = json.loads(open(r'h:\K_and_S\BACKEND_REQUIREMENTS.json').read())
+    reqs = json.loads(open(os.path.join(ROOT, "BACKEND_REQUIREMENTS.json")).read())
     for name, spec in reqs.get('backends', {}).items():
         rebar = spec.get('rebar', {})
         if 'supported' not in rebar or not rebar.get('fallback'):
@@ -37,12 +44,12 @@ except Exception as e:
 
 # Check server.py
 try:
-    ast.parse(open(r'h:\K_and_S\mcp\server.py').read())
+    ast.parse(open(os.path.join(MCP, "server.py")).read())
 except Exception as e:
     errors.append(f'server.py: {e}')
 
 # Import and test server
-sys.path.insert(0, r'h:\K_and_S\mcp')
+sys.path.insert(0, MCP)
 try:
     import server as s
     tools = s._tools()
@@ -110,14 +117,14 @@ except Exception as e:
 
 # Check reference_search.py
 try:
-    ast.parse(open(r'h:\K_and_S\mcp\reference_search.py').read())
+    ast.parse(open(os.path.join(MCP, "reference_search.py")).read())
 except Exception as e:
     errors.append(f'reference_search.py: {e}')
 
 # Check pyproject.toml
 try:
     import tomllib
-    with open(r'h:\K_and_S\mcp/pyproject.toml', 'rb') as f:
+    with open(os.path.join(MCP, "pyproject.toml"), 'rb') as f:
         tomllib.load(f)
 except Exception as e:
     errors.append(f'pyproject.toml: {e}')

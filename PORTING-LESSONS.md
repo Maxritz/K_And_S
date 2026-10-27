@@ -52,6 +52,7 @@ device executes it later.
 | G3 | delete the output artifact before every build | a stale `.hsaco` made a probe report kernels the current source could not produce |
 | G4 | assert the exported symbol inventory matches the expected kernel list | "it compiled" and "the runtime can call it" are different claims |
 | G5 | run the model and check the text, not just the exit code | compiling and producing coherent output are different claims |
+| G6 | `postport_recheck` before any performance claim, and again after every change | a port can be correct, build clean, and still spend 92% of its time in dispatch overhead; the recheck is what turns "it feels slow" into a number |
 
 If a gate cannot be expressed, the port is not ready to start.
 
@@ -668,5 +669,73 @@ Available in this MCP:
 | `lookup_construct` | one construct → target substitution + grade |
 | `verify_porting_map` | probe every mapped replacement, fold results back |
 | `code_object_report` | artifact truth: wave size, registers, spills, LDS per block, residency, instruction mix |
+| `postport_recheck` | post-port safeguards from measurements: dispatch overhead share, dispatch count vs source, fusion legality, workgroup ceiling, utilisation, source parity, extension advertised/enabled/used |
 
-Use them in that order: capability, probe, map, gate, build, run, in that order.
+Use them in that order: capability, probe, map, gate, build, run, recheck — and
+re-run the recheck after every change, because the delta is the result.
+
+## 16. Per-dispatch cost is a design parameter, not a constant
+
+A Vulkan engine ported from AMD to Intel, same kernels, same quantisation:
+
+| quantity | value |
+|---|---|
+| throughput on the source platform | 32-34 tok/s |
+| throughput on the target | **20.65 tok/s** |
+| dispatches per token | ~263 (116 of them GEMV) |
+| measured cost of one dispatch on the target | ~385 us (AMD: ~100 us) |
+| arithmetic the GPU actually needs per GEMV | ~15 us |
+| overhead share of a 48.4 ms token | **92%** |
+| utilisation of peak | **0.03%** |
+
+Every number in that table says the same thing: the kernels were fine and the
+*structure* was wrong for the target. The engine had been designed where a
+dispatch cost 100 us and carried that shape to a driver where it cost 385 us.
+No amount of inner-loop work recovers 44.7 ms of submit overhead.
+
+The transferable rules, which is the point:
+
+1. **Measure the dispatch cost before you optimise anything.** Time N trivial
+   dispatches with the pipeline bound once. Do not take the number from a
+   traced run: tracing inflates per-dispatch cost.
+2. **Compute `overhead x dispatches` against iteration time.** Over half is a
+   structural problem, not a kernel problem. Under a quarter is where
+   micro-optimisation starts paying.
+3. **Compare the dispatch count with the source platform.** A port that
+   multiplies dispatches pays a cost the source never did, even at parity per
+   dispatch.
+4. **Fusion is legal only where the dependency is per-element or per-row.**
+
+   | producer | consumer reads | fusable? |
+   |---|---|---|
+   | gate GEMV | up GEMV | per-element | yes |
+   | gate+up | silu | per-element | yes |
+   | silu | down GEMV | **all** silu values | no: needs a barrier = a new dispatch |
+   | norm | gate GEMV | per-row | yes |
+   | QKV | score | all Q and K | no |
+
+   On a compute API with no device-wide barrier (Vulkan compute), the "no" rows
+   are unavailable at any workgroup size. A shader that reads a whole producer
+   output without one reads garbage.
+5. **The workgroup ceiling is a measurement.** This driver was unstable above
+   256; the fused shader shipped at 1024 and was 47% slower. Sweep the sizes
+   with the real shader.
+6. **Utilisation gives the diagnosis its scale.** 0.03% of peak is not a slow
+   kernel, it is a starved one. Compare achieved against the spec peak for the
+   datatype, not against the previous platform's absolute number.
+7. **Extension available is not extension used.** Descriptor buffers, push
+   descriptors, shader objects and timeline semaphores were all advertised;
+   buffer device address was enabled and never used. Enabled-but-unused is a
+   claim, not a speedup.
+8. **Attribute a uniform slowdown correctly.** When every kernel is slower by
+   the same proportion, the cost is between the kernels (dispatch, copy, sync),
+   not inside one of them.
+
+Barrier analysis for this port: what should have stopped it was a performance
+model that carries per-dispatch cost. Existence: **no** (there was no such
+model). Bypass: n/a — it was a design gap, not a skipped check. That gap is now
+`postport_recheck`, and the pre-port rows `efficiency.dispatch_overhead`,
+`structure.dispatch_count`, `structure.fusion_legality`,
+`limits.workgroup_size`, `efficiency.peak_utilisation`,
+`efficiency.source_parity` and `extensions.available_vs_used` put it in front of
+every port of every backend.

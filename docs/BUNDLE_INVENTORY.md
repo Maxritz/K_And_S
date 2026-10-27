@@ -37,8 +37,11 @@ This document tracks all files in the K_and_S bundle for audit and contribution 
 | `mcp/isa_tools.py` | Instruction probing, artifact verification (bundle-aware), build gates, `code_object_report` |
 | `mcp/porting_map.py` | Construct-to-construct porting map with fidelity grades + replacement probing |
 | `mcp/api_map.py` | Pre-port reference: used runtime/PTX/intrinsic symbols, per-target status, unverified symbols |
-| `mcp/backend_profile.py` | Discovery-phase backend readiness: requirement probes, Pareto ranking, ReBAR gate, fallbacks |
-| `mcp/server.py` | Main MCP server (37 tools, 21 resources, MCP 2.x, runtime toolchain detection) |
+| `mcp/backend_profile.py` | Discovery-phase backend readiness: requirement probes (incl. device capabilities and BAR window sizes), Pareto ranking, ReBAR gate, fallbacks, `directive()`, `analyze()` |
+| `mcp/preport_docs.py` | Writes the mandatory pre-port analysis document set (`00`-`05` + `diagnosis.json`); `check()` reports missing/partial/stale |
+| `mcp/postport_check.py` | Post-port recheck from measurements: dispatch-overhead share, dispatch count vs source, fusion legality, workgroup ceiling, utilisation, source parity, extension advertised/enabled/used; keeps the previous run for a delta |
+| `mcp/arch_facts.py` | Arch facts with provenance: device capability probe (`nvidia-smi`/`rocminfo`/`vulkaninfo`), CPU ISA probe, cross-OS GPU identity, user/remote/ARCH_MAP feeds, flat-or-nested blocks |
+| `mcp/server.py` | Main MCP server (39 tools, 21 resources, MCP 2.x, runtime toolchain detection) |
 | `mcp/reference_search.py` | ArXiv + GitHub search utilities |
 | `mcp/pyproject.toml` | `pip install -e .` packaging |
 | `mcp/claude_desktop_config.json` | Ready-to-use MCP client config |
@@ -52,11 +55,13 @@ This document tracks all files in the K_and_S bundle for audit and contribution 
 - **5** model families (DeepSeek, GLM, Qwen, LLaMA, etc.)
 - **7** GPU toolkits + **6** host toolchains (incl. Strawberry Perl)
 - **5** model file formats (GGUF, Safetensors, ONNX, HDF5, MLC)
-- **37** MCP tools (incl. `detect_toolchain`, `search_online`, `code_object_report`, `probe_isa`, `build_porting_map`)
+- **39** MCP tools (incl. `detect_toolchain`, `search_online`, `code_object_report`, `probe_isa`, `build_porting_map`, `write_preport_analysis`, `postport_recheck`)
 - **21** MCP resources (incl. `kands://porting-lessons`, `kands://radical-experiments`)
 - **Phase 0-8** methodology (incl. Phase 8: Share/Contribute)
 - **3** diagnostic methods (Ponytail-diag, sherlock-it, CPU-as-oracle)
-- **6** backend readiness profiles (`BACKEND_REQUIREMENTS.json`), each with an explicit PCIe ReBAR path and fallback
+- **7** backend readiness profiles (`BACKEND_REQUIREMENTS.json`, incl. `cpu` with per-OS and per-ISA rows), each with an explicit PCIe ReBAR path and fallback
+- **7** mandatory pre-port analysis documents per target (`docs/pre-port/<backend>-<arch>/`)
+- **7** backend-agnostic safeguards (`BACKEND_REQUIREMENTS.json#safeguards`), enforced by `postport_recheck`
 
 ## Design Principles
 

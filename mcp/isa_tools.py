@@ -391,12 +391,37 @@ def probe_instruction(target: str, stmt: str, name: str = "", *,
     return result
 
 
-def probe_many(target: str, candidates: list[dict], *,
+def probe_many(target: str, candidates: list[Any], *,
                backend: str = "auto") -> list[dict[str, Any]]:
-    """Probe a list of ``{"name", "stmt"}`` dicts, each in its own TU."""
-    return [probe_instruction(target, c["stmt"], c.get("name", ""),
-                              backend=backend, prelude=c.get("prelude", ""))
-            for c in candidates]
+    """Probe candidates, each in its own translation unit.
+
+    A candidate is either a ``{"name", "stmt"}`` record (what ``porting_map``
+    produces) or a bare string, which *is* the statement:
+
+        "acc = __builtin_amdgcn_udot4(a, b, acc, false);"
+
+    The probe template provides ``int a, b, acc``, so a statement can use them.
+    Strings are accepted because the tool schema has always advertised them, and
+    a string used to raise ``TypeError: string indices must be integers`` before
+    the compiler was ever invoked.
+    """
+    rows: list[dict[str, Any]] = []
+    for candidate in candidates:
+        if isinstance(candidate, str):
+            rows.append(probe_instruction(target, candidate, "", backend=backend))
+        elif isinstance(candidate, dict) and candidate.get("stmt"):
+            rows.append(probe_instruction(target, str(candidate["stmt"]),
+                                          str(candidate.get("name", "")),
+                                          backend=backend,
+                                          prelude=str(candidate.get("prelude", ""))))
+        else:
+            rows.append({
+                "candidate": str(candidate)[:60], "backend": backend, "target": target,
+                "ok": False, "mnemonics": [], "size": 0,
+                "error": ("a candidate must be a C statement string or a "
+                          "{\"name\", \"stmt\"} object with a non-empty stmt"),
+            })
+    return rows
 
 
 # --------------------------------------------------------------------------- scanning

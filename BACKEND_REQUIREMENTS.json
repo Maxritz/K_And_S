@@ -1,6 +1,6 @@
 {
-  "description": "Discovery-phase backend readiness model. For a target backend, lists what the port actually needs, how to probe it on the host, the fallback when it is absent, and the impact x likelihood weight used for the Pareto ranking. Values are requirements of the backend, not claims about a specific machine: the probe decides PASS/FAIL, and an unprobed row is UNVALIDATED, never assumed.",
-  "last_updated": "2026-10-25",
+  "description": "Discovery-phase backend readiness model. For a target backend, lists what the port actually needs, how to probe it on the host, the fallback when it is absent, and the impact x likelihood weight used for the Pareto ranking. Values are requirements of the backend, not claims about a specific machine: the probe decides PASS/FAIL, and an unprobed row is UNVALIDATED, never assumed. A row may carry `host_os` or `host_arch` (x86 / arm / gpu) to say where it applies: on any other host it is NOT RUN (not applicable), never FAIL, so one model covers Windows, Linux and macOS instead of three files. The `safeguards` list is backend-agnostic: it is appended to every backend's rows as advisory checks (they cannot be answered before code exists) and is evaluated for real by `postport_recheck`. They encode lessons that cost a port its performance: per-dispatch overhead, dispatch count, fusion legality, workgroup limits, utilisation, source parity, and available-vs-used extensions.",
+  "last_updated": "2026-10-27",
   "scoring": {
     "impact": "1-5. How much a miss hurts: 5 = port cannot ship, 1 = cosmetic.",
     "likelihood": "0-1. How often this bites on a real port of this kind.",
@@ -16,8 +16,15 @@
     "hip": {
       "name": "AMD HIP / ROCm",
       "vendor": "AMD",
-      "aliases": ["hip", "rocm", "amd"],
-      "host_os": ["windows", "linux"],
+      "aliases": [
+        "hip",
+        "rocm",
+        "amd"
+      ],
+      "host_os": [
+        "windows",
+        "linux"
+      ],
       "rebar": {
         "supported": true,
         "api": "hipHostMalloc/hipHostGetDevicePointer (fine-grained, host-visible) + hipMemAdvise",
@@ -25,66 +32,140 @@
         "fallback": "page-locked staging ring + chunked hipMemcpyAsync, double-buffered; keep hot tensors resident in device memory"
       },
       "requirements": [
-        {"id": "toolchain.hipcc", "kind": "tool", "category": "toolchain",
-         "need": "hipcc that accepts the target gfx", "probe": "hipcc --version",
-         "env": ["ROCM_PATH", "HIP_PATH"], "names": ["hipcc", "hipcc.exe"],
-         "impact": 5, "likelihood": 0.9,
-         "fallback": "build the hsaco on a Linux ROCm host and ship the code object; never hand-encode ISA",
-         "source": "TK_TOOLS.json#gpu_toolkits.rocm"},
-        {"id": "toolchain.rocminfo", "kind": "tool", "category": "toolchain",
-         "need": "agent enumeration to confirm the target gfx is present", "probe": "rocminfo",
-         "names": ["rocminfo", "rocminfo.exe"],
-         "impact": 3, "likelihood": 0.5,
-         "fallback": "read the PCI id and map it to gfx manually, then record it",
-         "source": "TK_TOOLS.json#gpu_toolkits.rocm"},
-        {"id": "toolchain.objdump", "kind": "tool", "category": "toolchain",
-         "need": "disassemble the produced hsaco to verify what was emitted", "probe": "roc-objdump --version",
-         "names": ["roc-objdump", "llvm-objdump"],
-         "impact": 4, "likelihood": 0.6,
-         "fallback": "use llvm-objdump from the LLVM install; a build that cannot be inspected is not verified",
-         "source": "mcp/isa_tools.py#code_object_report"},
-        {"id": "capability.dot4", "kind": "capability", "category": "capability",
-         "field": "dot4", "expect": true,
-         "need": "4-way int8 dot for quantised kernels", "probe": "probe_isa(amd_mixed_dot)",
-         "impact": 4, "likelihood": 0.6,
-         "fallback": "raw v_dot4_i32_i8 may have no gfx12 encoding; use amd_mixed_dot, else scalar expand",
-         "source": "PORTING-LESSONS.md#2"},
-        {"id": "capability.matrix", "kind": "capability", "category": "capability",
-         "field": "wmma", "expect": true,
-         "need": "a matrix path (MFMA on CDNA, WMMA on RDNA3+)", "probe": "probe_isa(wmma/mfma candidate)",
-         "impact": 5, "likelihood": 0.6,
-         "fallback": "DP4a or scalar FMA reconstruction; a matrix kernel restructured is a design change, not a flag",
-         "source": "PORTING-LESSONS.md#2"},
-        {"id": "capability.wave", "kind": "info", "category": "capability",
-         "field": "wave_size",
-         "need": "wave size known before touching shuffle/lane logic", "probe": "compare_archs(source, target)",
-         "impact": 4, "likelihood": 0.5,
-         "fallback": "rewrite warp intrinsics for the target width; do not pass a wave-size flag and assume it applied",
-         "source": "PORTING-LESSONS.md#7"},
-        {"id": "runtime.finegrained", "kind": "manual", "category": "runtime",
-         "need": "fine-grained host-visible allocation behaviour confirmed", "probe": "run one host-mapped copy on target",
-         "impact": 4, "likelihood": 0.5,
-         "fallback": "fall back to coarse-grained + explicit copies; record which path ran",
-         "source": "PORTING_PATTERNS.json#memory_models.hip"},
-        {"id": "artifact.hsaco", "kind": "artifact", "category": "artifact",
-         "need": "code object inspected: SIMD width, VGPRs, spills, LDS, exported symbols",
-         "probe": "code_object_report(path, arch)",
-         "impact": 4, "likelihood": 0.7,
-         "fallback": "a module that compiles but lacks the called symbol is a failure; check the symbol inventory",
-         "source": "PORTING-LESSONS.md#1"},
-        {"id": "host.windows_rocm", "kind": "os", "category": "host",
-         "need": "a working ROCm/HIP stack on the chosen host OS",
-         "probe": "hipcc --version on the build host",
-         "impact": 3, "likelihood": 0.6,
-         "fallback": "build on Linux and ship the code object, or use the Windows ROCm build that is actually installed",
-         "source": "TK_TOOLS.json#gpu_toolkits.rocm"}
+        {
+          "id": "toolchain.hipcc",
+          "kind": "tool",
+          "category": "toolchain",
+          "need": "hipcc that accepts the target gfx",
+          "probe": "hipcc --version",
+          "env": [
+            "ROCM_PATH",
+            "HIP_PATH"
+          ],
+          "names": [
+            "hipcc",
+            "hipcc.exe"
+          ],
+          "impact": 5,
+          "likelihood": 0.9,
+          "fallback": "build the hsaco on a Linux ROCm host and ship the code object; never hand-encode ISA",
+          "source": "TK_TOOLS.json#gpu_toolkits.rocm"
+        },
+        {
+          "id": "toolchain.rocminfo",
+          "kind": "tool",
+          "category": "toolchain",
+          "need": "agent enumeration to confirm the target gfx is present",
+          "probe": "rocminfo",
+          "names": [
+            "rocminfo",
+            "rocminfo.exe"
+          ],
+          "impact": 3,
+          "likelihood": 0.5,
+          "fallback": "read the PCI id and map it to gfx manually, then record it",
+          "source": "TK_TOOLS.json#gpu_toolkits.rocm"
+        },
+        {
+          "id": "toolchain.objdump",
+          "kind": "tool",
+          "category": "toolchain",
+          "need": "disassemble the produced hsaco to verify what was emitted",
+          "probe": "roc-objdump --version",
+          "names": [
+            "roc-objdump",
+            "llvm-objdump"
+          ],
+          "impact": 4,
+          "likelihood": 0.6,
+          "fallback": "use llvm-objdump from the LLVM install; a build that cannot be inspected is not verified",
+          "source": "mcp/isa_tools.py#code_object_report"
+        },
+        {
+          "id": "capability.dot4",
+          "kind": "capability",
+          "category": "capability",
+          "field": "dot4",
+          "expect": true,
+          "need": "4-way int8 dot for quantised kernels",
+          "probe": "probe_isa(amd_mixed_dot)",
+          "impact": 4,
+          "likelihood": 0.6,
+          "fallback": "raw v_dot4_i32_i8 may have no gfx12 encoding; use amd_mixed_dot, else scalar expand",
+          "source": "PORTING-LESSONS.md#2"
+        },
+        {
+          "id": "capability.matrix",
+          "kind": "capability",
+          "category": "capability",
+          "field": "wmma",
+          "expect": true,
+          "need": "a matrix path (MFMA on CDNA, WMMA on RDNA3+)",
+          "probe": "probe_isa(wmma/mfma candidate)",
+          "impact": 5,
+          "likelihood": 0.6,
+          "fallback": "DP4a or scalar FMA reconstruction; a matrix kernel restructured is a design change, not a flag",
+          "source": "PORTING-LESSONS.md#2"
+        },
+        {
+          "id": "capability.wave",
+          "kind": "info",
+          "category": "capability",
+          "field": "wave_size",
+          "need": "wave size known before touching shuffle/lane logic",
+          "probe": "compare_archs(source, target)",
+          "impact": 4,
+          "likelihood": 0.5,
+          "fallback": "rewrite warp intrinsics for the target width; do not pass a wave-size flag and assume it applied",
+          "source": "PORTING-LESSONS.md#7"
+        },
+        {
+          "id": "runtime.finegrained",
+          "kind": "manual",
+          "category": "runtime",
+          "need": "fine-grained host-visible allocation behaviour confirmed",
+          "probe": "run one host-mapped copy on target",
+          "impact": 4,
+          "likelihood": 0.5,
+          "fallback": "fall back to coarse-grained + explicit copies; record which path ran",
+          "source": "PORTING_PATTERNS.json#memory_models.hip"
+        },
+        {
+          "id": "artifact.hsaco",
+          "kind": "artifact",
+          "category": "artifact",
+          "need": "code object inspected: SIMD width, VGPRs, spills, LDS, exported symbols",
+          "probe": "code_object_report(path, arch)",
+          "impact": 4,
+          "likelihood": 0.7,
+          "fallback": "a module that compiles but lacks the called symbol is a failure; check the symbol inventory",
+          "source": "PORTING-LESSONS.md#1"
+        },
+        {
+          "id": "host.windows_rocm",
+          "kind": "os",
+          "category": "host",
+          "need": "a working ROCm/HIP stack on the chosen host OS",
+          "probe": "hipcc --version on the build host",
+          "impact": 3,
+          "likelihood": 0.6,
+          "fallback": "build on Linux and ship the code object, or use the Windows ROCm build that is actually installed",
+          "source": "TK_TOOLS.json#gpu_toolkits.rocm"
+        }
       ]
     },
     "cuda": {
       "name": "NVIDIA CUDA",
       "vendor": "NVIDIA",
-      "aliases": ["cuda", "nvidia", "nvcc"],
-      "host_os": ["windows", "linux"],
+      "aliases": [
+        "cuda",
+        "nvidia",
+        "nvcc"
+      ],
+      "host_os": [
+        "windows",
+        "linux"
+      ],
       "rebar": {
         "supported": true,
         "api": "cudaHostAllocMapped / cudaHostRegister + cudaHostGetDevicePointer",
@@ -92,47 +173,101 @@
         "fallback": "pinned staging buffers + chunked cudaMemcpyAsync, hot tensors resident"
       },
       "requirements": [
-        {"id": "toolchain.nvcc", "kind": "tool", "category": "toolchain",
-         "need": "nvcc for the target compute capability", "probe": "nvcc --version",
-         "env": ["CUDA_PATH", "CUDA_HOME"], "names": ["nvcc", "nvcc.exe"],
-         "impact": 5, "likelihood": 0.9,
-         "fallback": "match the toolkit to the driver; a newer toolkit than the driver supports produces a load failure, not a compile error",
-         "source": "TK_TOOLS.json#gpu_toolkits.cuda"},
-        {"id": "toolchain.cuobjdump", "kind": "tool", "category": "toolchain",
-         "need": "inspect the cubin the build produced", "probe": "cuobjdump --version",
-         "names": ["cuobjdump", "cuobjdump.exe"],
-         "impact": 3, "likelihood": 0.5,
-         "fallback": "nvdisasm on the extracted cubin",
-         "source": "mcp/isa_tools.py#code_object_report"},
-        {"id": "capability.matrix", "kind": "capability", "category": "capability",
-         "field": "tensor_cores", "expect": true,
-         "need": "tensor cores for an mma.sync port", "probe": "probe_isa(mma candidate)",
-         "impact": 4, "likelihood": 0.5,
-         "fallback": "fp32 FMA path; keep it selectable, not a silent downgrade",
-         "source": "ARCH_MAP.json"},
-        {"id": "runtime.graphs", "kind": "manual", "category": "runtime",
-         "need": "graph capture behaviour confirmed on this driver", "probe": "capture one launch graph",
-         "impact": 3, "likelihood": 0.5,
-         "fallback": "rebuild with events; a failed capture must re-run the work, not drop it",
-         "source": "PORTING-LESSONS.md#8"},
-        {"id": "memory.managed", "kind": "manual", "category": "runtime",
-         "need": "managed-memory oversubscription behaviour measured", "probe": "one oversubscribed allocation",
-         "impact": 3, "likelihood": 0.4,
-         "fallback": "explicit device/host copies with a residency plan",
-         "source": "PORTING_PATTERNS.json#memory_models.cuda"},
-        {"id": "artifact.cubin", "kind": "artifact", "category": "artifact",
-         "need": "cubin inspected: registers, spills, shared memory, symbols",
-         "probe": "code_object_report(path, arch)",
-         "impact": 4, "likelihood": 0.6,
-         "fallback": "assert the exported kernel list before trusting a successful build",
-         "source": "PORTING-LESSONS.md#1"}
+        {
+          "id": "toolchain.nvcc",
+          "kind": "tool",
+          "category": "toolchain",
+          "need": "nvcc for the target compute capability",
+          "probe": "nvcc --version",
+          "env": [
+            "CUDA_PATH",
+            "CUDA_HOME"
+          ],
+          "names": [
+            "nvcc",
+            "nvcc.exe"
+          ],
+          "impact": 5,
+          "likelihood": 0.9,
+          "fallback": "match the toolkit to the driver; a newer toolkit than the driver supports produces a load failure, not a compile error",
+          "source": "TK_TOOLS.json#gpu_toolkits.cuda"
+        },
+        {
+          "id": "toolchain.cuobjdump",
+          "kind": "tool",
+          "category": "toolchain",
+          "need": "inspect the cubin the build produced",
+          "probe": "cuobjdump --version",
+          "names": [
+            "cuobjdump",
+            "cuobjdump.exe"
+          ],
+          "impact": 3,
+          "likelihood": 0.5,
+          "fallback": "nvdisasm on the extracted cubin",
+          "source": "mcp/isa_tools.py#code_object_report"
+        },
+        {
+          "id": "capability.matrix",
+          "kind": "capability",
+          "category": "capability",
+          "field": "tensor_cores",
+          "expect": true,
+          "need": "tensor cores for an mma.sync port",
+          "probe": "probe_isa(mma candidate)",
+          "impact": 4,
+          "likelihood": 0.5,
+          "fallback": "fp32 FMA path; keep it selectable, not a silent downgrade",
+          "source": "ARCH_MAP.json"
+        },
+        {
+          "id": "runtime.graphs",
+          "kind": "manual",
+          "category": "runtime",
+          "need": "graph capture behaviour confirmed on this driver",
+          "probe": "capture one launch graph",
+          "impact": 3,
+          "likelihood": 0.5,
+          "fallback": "rebuild with events; a failed capture must re-run the work, not drop it",
+          "source": "PORTING-LESSONS.md#8"
+        },
+        {
+          "id": "memory.managed",
+          "kind": "manual",
+          "category": "runtime",
+          "need": "managed-memory oversubscription behaviour measured",
+          "probe": "one oversubscribed allocation",
+          "impact": 3,
+          "likelihood": 0.4,
+          "fallback": "explicit device/host copies with a residency plan",
+          "source": "PORTING_PATTERNS.json#memory_models.cuda"
+        },
+        {
+          "id": "artifact.cubin",
+          "kind": "artifact",
+          "category": "artifact",
+          "need": "cubin inspected: registers, spills, shared memory, symbols",
+          "probe": "code_object_report(path, arch)",
+          "impact": 4,
+          "likelihood": 0.6,
+          "fallback": "assert the exported kernel list before trusting a successful build",
+          "source": "PORTING-LESSONS.md#1"
+        }
       ]
     },
     "vulkan": {
       "name": "Vulkan compute (GLSL/SPIR-V)",
       "vendor": "cross-vendor",
-      "aliases": ["vulkan", "vk", "glsl", "spirv"],
-      "host_os": ["windows", "linux"],
+      "aliases": [
+        "vulkan",
+        "vk",
+        "glsl",
+        "spirv"
+      ],
+      "host_os": [
+        "windows",
+        "linux"
+      ],
       "rebar": {
         "supported": true,
         "api": "VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | HOST_VISIBLE_BIT heap",
@@ -140,54 +275,124 @@
         "fallback": "host-visible staging buffer + device-local copy, one chunk in flight per queue slot"
       },
       "requirements": [
-        {"id": "toolchain.glslc", "kind": "tool", "category": "toolchain",
-         "need": "GLSL to SPIR-V compiler", "probe": "glslc --version",
-         "env": ["VULKAN_SDK"], "names": ["glslc", "glslc.exe"],
-         "impact": 5, "likelihood": 0.8,
-         "fallback": "glslangValidator; both must target the same SPIR-V version the driver accepts",
-         "source": "TK_TOOLS.json#gpu_toolkits.vulkan"},
-        {"id": "runtime.loader", "kind": "tool", "category": "runtime",
-         "need": "a working Vulkan loader and driver", "probe": "vulkaninfo --summary",
-         "names": ["vulkaninfo", "vulkaninfo.exe"],
-         "impact": 4, "likelihood": 0.5,
-         "fallback": "install the ICD for the target vendor; a missing ICD looks like an unsupported feature",
-         "source": "TK_TOOLS.json#gpu_toolkits.vulkan"},
-        {"id": "toolchain.spirvval", "kind": "tool", "category": "toolchain",
-         "need": "validate the produced SPIR-V before shipping it", "probe": "spirv-val --version",
-         "names": ["spirv-val", "spirv-val.exe"],
-         "impact": 3, "likelihood": 0.5,
-         "fallback": "let the driver report; a driver error names no line, so keep the module small",
-         "source": "ISA_REFERENCES.md"},
-        {"id": "capability.coopmat", "kind": "manual", "category": "capability",
-         "need": "cooperative matrix support confirmed on the target driver",
-         "probe": "probe_isa(VK_KHR_cooperative_matrix path)",
-         "impact": 5, "likelihood": 0.7,
-         "fallback": "DP4a via GL_KHR_shader_integer_dot_product; CooperativeMatrix is broken on AMD Vulkan",
-         "source": "README.md#supported-hardware"},
-        {"id": "capability.subgroup", "kind": "manual", "category": "capability",
-         "need": "subgroup size and ops known before porting shuffles", "probe": "vulkaninfo subgroup properties",
-         "impact": 4, "likelihood": 0.5,
-         "fallback": "workgroup shared-memory reduction instead of subgroup ops",
-         "source": "PORTING_PATTERNS.json#cuda_to_vulkan"},
-        {"id": "sync.timeline", "kind": "manual", "category": "sync",
-         "need": "timeline semaphore / fence model mapped to the source stream model",
-         "probe": "one capture with two queues",
-         "impact": 3, "likelihood": 0.4,
-         "fallback": "single queue with explicit barriers; slower but ordered",
-         "source": "PORTING_PATTERNS.json#sync_patterns"},
-        {"id": "artifact.spirv", "kind": "artifact", "category": "artifact",
-         "need": "SPIR-V module validated and disassembled",
-         "probe": "spirv-dis + spirv-val",
-         "impact": 3, "likelihood": 0.5,
-         "fallback": "treat an unvalidated module as unverified",
-         "source": "PORTING-LESSONS.md#7"}
+        {
+          "id": "toolchain.glslc",
+          "kind": "tool",
+          "category": "toolchain",
+          "need": "GLSL to SPIR-V compiler",
+          "probe": "glslc --version",
+          "env": [
+            "VULKAN_SDK"
+          ],
+          "names": [
+            "glslc",
+            "glslc.exe"
+          ],
+          "impact": 5,
+          "likelihood": 0.8,
+          "fallback": "glslangValidator; both must target the same SPIR-V version the driver accepts",
+          "source": "TK_TOOLS.json#gpu_toolkits.vulkan"
+        },
+        {
+          "id": "runtime.loader",
+          "kind": "tool",
+          "category": "runtime",
+          "need": "a working Vulkan loader and driver",
+          "probe": "vulkaninfo --summary",
+          "names": [
+            "vulkaninfo",
+            "vulkaninfo.exe"
+          ],
+          "impact": 4,
+          "likelihood": 0.5,
+          "fallback": "install the ICD for the target vendor; a missing ICD looks like an unsupported feature",
+          "source": "TK_TOOLS.json#gpu_toolkits.vulkan"
+        },
+        {
+          "id": "toolchain.spirvval",
+          "kind": "tool",
+          "category": "toolchain",
+          "need": "validate the produced SPIR-V before shipping it",
+          "probe": "spirv-val --version",
+          "names": [
+            "spirv-val",
+            "spirv-val.exe"
+          ],
+          "impact": 3,
+          "likelihood": 0.5,
+          "fallback": "let the driver report; a driver error names no line, so keep the module small",
+          "source": "ISA_REFERENCES.md"
+        },
+        {
+          "id": "capability.coopmat",
+          "kind": "capability",
+          "category": "capability",
+          "need": "VK_KHR_cooperative_matrix usable for matmul (tensor path)",
+          "probe": "vulkaninfo --summary: VK_KHR_cooperative_matrix; else ARCH_MAP vulkan.cooperative_matrix",
+          "impact": 5,
+          "likelihood": 0.9,
+          "fallback": "DP4a-style SPIR-V (VK_KHR_shader_integer_dot_product) matmul",
+          "source": "README 'CooperativeMatrix is broken on AMD Vulkan' + ARCH_MAP.json#vulkan",
+          "field": [
+            "vulkan.cooperative_matrix",
+            "cooperative_matrix",
+            "coopmat"
+          ],
+          "expect": true
+        },
+        {
+          "id": "capability.subgroup",
+          "kind": "info",
+          "category": "capability",
+          "need": "subgroup width the shader will be written against",
+          "probe": "vulkaninfo subgroupSize, or the device's own report",
+          "impact": 4,
+          "likelihood": 0.5,
+          "fallback": "declare SUBGROUP_SIZE at build time and assert it at load",
+          "source": "PORTING_PATTERNS.json#cuda_to_vulkan",
+          "field": [
+            "subgroup_size",
+            "vulkan.subgroup_size"
+          ]
+        },
+        {
+          "id": "sync.timeline",
+          "kind": "manual",
+          "category": "sync",
+          "need": "timeline semaphore / fence model mapped to the source stream model",
+          "probe": "one capture with two queues",
+          "impact": 3,
+          "likelihood": 0.4,
+          "fallback": "single queue with explicit barriers; slower but ordered",
+          "source": "PORTING_PATTERNS.json#sync_patterns"
+        },
+        {
+          "id": "artifact.spirv",
+          "kind": "artifact",
+          "category": "artifact",
+          "need": "SPIR-V module validated and disassembled",
+          "probe": "spirv-dis + spirv-val",
+          "impact": 3,
+          "likelihood": 0.5,
+          "fallback": "treat an unvalidated module as unverified",
+          "source": "PORTING-LESSONS.md#7"
+        }
       ]
     },
     "directx12": {
       "name": "DirectX 12 compute (HLSL/DXIL)",
       "vendor": "cross-vendor",
-      "aliases": ["directx", "directx12", "dx", "dx12", "d3d12", "hlsl"],
-      "host_os": ["windows"],
+      "aliases": [
+        "directx",
+        "directx12",
+        "dx",
+        "dx12",
+        "d3d12",
+        "hlsl"
+      ],
+      "host_os": [
+        "windows"
+      ],
       "rebar": {
         "supported": true,
         "api": "D3D12_HEAP_TYPE_GPU_UPLOAD / custom heap with CPU-visible VRAM (Agility SDK), DXGI budget query",
@@ -195,49 +400,94 @@
         "fallback": "D3D12_HEAP_TYPE_UPLOAD staging + CopyBufferRegion into DEFAULT heap, chunked per fence value"
       },
       "requirements": [
-        {"id": "toolchain.dxc", "kind": "tool", "category": "toolchain",
-         "need": "DXC to compile HLSL to DXIL", "probe": "dxc --version",
-         "names": ["dxc", "dxc.exe"],
-         "paths": ["C:\\Program Files (x86)\\Windows Kits\\10\\bin\\*\\x64\\dxc.exe"],
-         "impact": 5, "likelihood": 0.8,
-         "fallback": "fxc only reaches SM 5.1; compute shader model 6.x needs DXC",
-         "source": "TK_TOOLS.json#gpu_toolkits.directx12"},
-        {"id": "sdk.agility", "kind": "manual", "category": "toolchain",
-         "need": "Agility SDK headers for enhanced barriers and GPU upload heaps",
-         "probe": "vcpkg list | findstr directxheaders  (or check the NuGet/Agility SDK package)",
-         "impact": 4, "likelihood": 0.6,
-         "fallback": "target the OS inbox D3D12 version and drop the newer features explicitly",
-         "source": "TK_TOOLS.json#gpu_toolkits.directx12.directx12_agility_sdk"},
-        {"id": "host.windows", "kind": "os", "category": "host",
-         "need": "Windows host (D3D12 is Windows-only)",
-         "probe": "platform check",
-         "impact": 5, "likelihood": 1.0,
-         "fallback": "use Vulkan on non-Windows; do not emulate D3D12",
-         "source": "TK_TOOLS.json#gpu_toolkits.directx12.linux"},
-        {"id": "capability.barriers", "kind": "manual", "category": "capability",
-         "need": "enhanced barrier support queried, not assumed", "probe": "CheckFeatureSupport(OPTIONS12)",
-         "impact": 3, "likelihood": 0.5,
-         "fallback": "legacy resource-state transitions; correct but more transitions",
-         "source": "TK_TOOLS.json#gpu_toolkits.directx12"},
-        {"id": "runtime.budget", "kind": "manual", "category": "runtime",
-         "need": "DXGI memory budget queried before sizing the working set",
-         "probe": "IDXGIAdapter3::QueryVideoMemoryInfo",
-         "impact": 4, "likelihood": 0.5,
-         "fallback": "size from the modelled budget and stream the remainder",
-         "source": "TK_TOOLS.json#gpu_toolkits.directx12.rebar"},
-        {"id": "artifact.dxil", "kind": "artifact", "category": "artifact",
-         "need": "DXIL container inspected for the target shader model",
-         "probe": "dxc -dumpbin",
-         "impact": 3, "likelihood": 0.5,
-         "fallback": "unvalidated DXIL is unverified; check the shader model in the container",
-         "source": "PORTING-LESSONS.md#7"}
+        {
+          "id": "toolchain.dxc",
+          "kind": "tool",
+          "category": "toolchain",
+          "need": "DXC to compile HLSL to DXIL",
+          "probe": "dxc --version",
+          "names": [
+            "dxc",
+            "dxc.exe"
+          ],
+          "paths": [
+            "C:\\Program Files (x86)\\Windows Kits\\10\\bin\\*\\x64\\dxc.exe"
+          ],
+          "impact": 5,
+          "likelihood": 0.8,
+          "fallback": "fxc only reaches SM 5.1; compute shader model 6.x needs DXC",
+          "source": "TK_TOOLS.json#gpu_toolkits.directx12"
+        },
+        {
+          "id": "sdk.agility",
+          "kind": "manual",
+          "category": "toolchain",
+          "need": "Agility SDK headers for enhanced barriers and GPU upload heaps",
+          "probe": "vcpkg list | findstr directxheaders  (or check the NuGet/Agility SDK package)",
+          "impact": 4,
+          "likelihood": 0.6,
+          "fallback": "target the OS inbox D3D12 version and drop the newer features explicitly",
+          "source": "TK_TOOLS.json#gpu_toolkits.directx12.directx12_agility_sdk"
+        },
+        {
+          "id": "host.windows",
+          "kind": "os",
+          "category": "host",
+          "need": "Windows host (D3D12 is Windows-only)",
+          "probe": "platform check",
+          "impact": 5,
+          "likelihood": 1.0,
+          "fallback": "use Vulkan on non-Windows; do not emulate D3D12",
+          "source": "TK_TOOLS.json#gpu_toolkits.directx12.linux"
+        },
+        {
+          "id": "capability.barriers",
+          "kind": "manual",
+          "category": "capability",
+          "need": "enhanced barrier support queried, not assumed",
+          "probe": "CheckFeatureSupport(OPTIONS12)",
+          "impact": 3,
+          "likelihood": 0.5,
+          "fallback": "legacy resource-state transitions; correct but more transitions",
+          "source": "TK_TOOLS.json#gpu_toolkits.directx12"
+        },
+        {
+          "id": "runtime.budget",
+          "kind": "manual",
+          "category": "runtime",
+          "need": "DXGI memory budget queried before sizing the working set",
+          "probe": "IDXGIAdapter3::QueryVideoMemoryInfo",
+          "impact": 4,
+          "likelihood": 0.5,
+          "fallback": "size from the modelled budget and stream the remainder",
+          "source": "TK_TOOLS.json#gpu_toolkits.directx12.rebar"
+        },
+        {
+          "id": "artifact.dxil",
+          "kind": "artifact",
+          "category": "artifact",
+          "need": "DXIL container inspected for the target shader model",
+          "probe": "dxc -dumpbin",
+          "impact": 3,
+          "likelihood": 0.5,
+          "fallback": "unvalidated DXIL is unverified; check the shader model in the container",
+          "source": "PORTING-LESSONS.md#7"
+        }
       ]
     },
     "sycl": {
       "name": "SYCL / oneAPI (DPC++)",
       "vendor": "Intel",
-      "aliases": ["sycl", "oneapi", "dpcpp", "icpx"],
-      "host_os": ["windows", "linux"],
+      "aliases": [
+        "sycl",
+        "oneapi",
+        "dpcpp",
+        "icpx"
+      ],
+      "host_os": [
+        "windows",
+        "linux"
+      ],
       "rebar": {
         "supported": true,
         "api": "USM host allocations mapped into the device address space",
@@ -245,49 +495,99 @@
         "fallback": "USM device allocation + explicit memcpy, or buffer/accessor with a copy plan"
       },
       "requirements": [
-        {"id": "toolchain.icpx", "kind": "tool", "category": "toolchain",
-         "need": "icpx/dpcpp with the SYCL front end", "probe": "icpx --version",
-         "env": ["ONEAPI_ROOT"], "names": ["icpx", "dpcpp", "icpx.exe", "dpcpp.exe"],
-         "impact": 5, "likelihood": 0.8,
-         "fallback": "the oneAPI DPC++ compiler is the same front end; a plain clang without SYCL will not compile the code",
-         "source": "TK_TOOLS.json#gpu_toolkits.oneapi"},
-        {"id": "runtime.sycl_ls", "kind": "tool", "category": "runtime",
-         "need": "enumerate devices and confirm the target is visible to SYCL", "probe": "sycl-ls",
-         "names": ["sycl-ls", "sycl-ls.exe"],
-         "impact": 3, "likelihood": 0.5,
-         "fallback": "query through the runtime API once and record the device string",
-         "source": "TK_TOOLS.json#gpu_toolkits.oneapi"},
-        {"id": "capability.usm", "kind": "manual", "category": "capability",
-         "need": "USM support confirmed, since the port may rely on shared pointers",
-         "probe": "device info: usm_shared_allocations",
-         "impact": 4, "likelihood": 0.5,
-         "fallback": "buffer/accessor model; semantics differ, so test the copy boundaries",
-         "source": "PORTING_PATTERNS.json#cuda_to_sycl"},
-        {"id": "capability.subgroup", "kind": "manual", "category": "capability",
-         "need": "subgroup size known before porting shuffles",
-         "probe": "device info: subgroup_sizes",
-         "impact": 3, "likelihood": 0.4,
-         "fallback": "work-group reduction",
-         "source": "PORTING_PATTERNS.json#cuda_to_sycl"},
-        {"id": "capability.matrix", "kind": "capability", "category": "capability",
-         "field": "wmma", "expect": true,
-         "need": "a matrix path on the target device", "probe": "probe_isa(joint_matrix)",
-         "impact": 4, "likelihood": 0.5,
-         "fallback": "scalar or dp4a path; joint_matrix support differs per device",
-         "source": "ARCH_MAP.json"},
-        {"id": "artifact.spv", "kind": "artifact", "category": "artifact",
-         "need": "the device image inspected for the intended target",
-         "probe": "spirv-dis on the embedded image",
-         "impact": 3, "likelihood": 0.4,
-         "fallback": "an unvalidated device image is unverified",
-         "source": "PORTING-LESSONS.md#7"}
+        {
+          "id": "toolchain.icpx",
+          "kind": "tool",
+          "category": "toolchain",
+          "need": "icpx/dpcpp with the SYCL front end",
+          "probe": "icpx --version",
+          "env": [
+            "ONEAPI_ROOT"
+          ],
+          "names": [
+            "icpx",
+            "dpcpp",
+            "icpx.exe",
+            "dpcpp.exe"
+          ],
+          "impact": 5,
+          "likelihood": 0.8,
+          "fallback": "the oneAPI DPC++ compiler is the same front end; a plain clang without SYCL will not compile the code",
+          "source": "TK_TOOLS.json#gpu_toolkits.oneapi"
+        },
+        {
+          "id": "runtime.sycl_ls",
+          "kind": "tool",
+          "category": "runtime",
+          "need": "enumerate devices and confirm the target is visible to SYCL",
+          "probe": "sycl-ls",
+          "names": [
+            "sycl-ls",
+            "sycl-ls.exe"
+          ],
+          "impact": 3,
+          "likelihood": 0.5,
+          "fallback": "query through the runtime API once and record the device string",
+          "source": "TK_TOOLS.json#gpu_toolkits.oneapi"
+        },
+        {
+          "id": "capability.usm",
+          "kind": "manual",
+          "category": "capability",
+          "need": "USM support confirmed, since the port may rely on shared pointers",
+          "probe": "device info: usm_shared_allocations",
+          "impact": 4,
+          "likelihood": 0.5,
+          "fallback": "buffer/accessor model; semantics differ, so test the copy boundaries",
+          "source": "PORTING_PATTERNS.json#cuda_to_sycl"
+        },
+        {
+          "id": "capability.subgroup",
+          "kind": "manual",
+          "category": "capability",
+          "need": "subgroup size known before porting shuffles",
+          "probe": "device info: subgroup_sizes",
+          "impact": 3,
+          "likelihood": 0.4,
+          "fallback": "work-group reduction",
+          "source": "PORTING_PATTERNS.json#cuda_to_sycl"
+        },
+        {
+          "id": "capability.matrix",
+          "kind": "capability",
+          "category": "capability",
+          "field": "wmma",
+          "expect": true,
+          "need": "a matrix path on the target device",
+          "probe": "probe_isa(joint_matrix)",
+          "impact": 4,
+          "likelihood": 0.5,
+          "fallback": "scalar or dp4a path; joint_matrix support differs per device",
+          "source": "ARCH_MAP.json"
+        },
+        {
+          "id": "artifact.spv",
+          "kind": "artifact",
+          "category": "artifact",
+          "need": "the device image inspected for the intended target",
+          "probe": "spirv-dis on the embedded image",
+          "impact": 3,
+          "likelihood": 0.4,
+          "fallback": "an unvalidated device image is unverified",
+          "source": "PORTING-LESSONS.md#7"
+        }
       ]
     },
     "metal": {
       "name": "Metal Shading Language",
       "vendor": "Apple",
-      "aliases": ["metal", "msl"],
-      "host_os": ["macos"],
+      "aliases": [
+        "metal",
+        "msl"
+      ],
+      "host_os": [
+        "macos"
+      ],
       "rebar": {
         "supported": false,
         "api": "not applicable",
@@ -295,28 +595,359 @@
         "fallback": "not applicable"
       },
       "requirements": [
-        {"id": "toolchain.xcrun", "kind": "tool", "category": "toolchain",
-         "need": "Metal compiler from the Xcode toolchain", "probe": "xcrun -f metal",
-         "names": ["xcrun", "metal"],
-         "impact": 5, "likelihood": 0.8,
-         "fallback": "there is no portable substitute for the Metal front end",
-         "source": "TK_TOOLS.json"},
-        {"id": "host.macos", "kind": "os", "category": "host",
-         "need": "macOS host (Metal is Apple-only)", "probe": "platform check",
-         "impact": 5, "likelihood": 1.0,
-         "fallback": "another backend; Metal cannot be emulated",
-         "source": "TK_TOOLS.json"},
-        {"id": "capability.simdgroup", "kind": "manual", "category": "capability",
-         "need": "simdgroup width and matrix support known", "probe": "MTLDevice query",
-         "impact": 3, "likelihood": 0.4,
-         "fallback": "threadgroup reduction",
-         "source": "PORTING_PATTERNS.json"},
-        {"id": "artifact.metallib", "kind": "artifact", "category": "artifact",
-         "need": "metallib inspected for the intended GPU family", "probe": "metal-objdump",
-         "impact": 3, "likelihood": 0.4,
-         "fallback": "an uninspected metallib is unverified",
-         "source": "PORTING-LESSONS.md#7"}
+        {
+          "id": "toolchain.xcrun",
+          "kind": "tool",
+          "category": "toolchain",
+          "need": "Metal compiler from the Xcode toolchain",
+          "probe": "xcrun -f metal",
+          "names": [
+            "xcrun",
+            "metal"
+          ],
+          "impact": 5,
+          "likelihood": 0.8,
+          "fallback": "there is no portable substitute for the Metal front end",
+          "source": "TK_TOOLS.json"
+        },
+        {
+          "id": "host.macos",
+          "kind": "os",
+          "category": "host",
+          "need": "macOS host (Metal is Apple-only)",
+          "probe": "platform check",
+          "impact": 5,
+          "likelihood": 1.0,
+          "fallback": "another backend; Metal cannot be emulated",
+          "source": "TK_TOOLS.json"
+        },
+        {
+          "id": "capability.simdgroup",
+          "kind": "manual",
+          "category": "capability",
+          "need": "simdgroup width and matrix support known",
+          "probe": "MTLDevice query",
+          "impact": 3,
+          "likelihood": 0.4,
+          "fallback": "threadgroup reduction",
+          "source": "PORTING_PATTERNS.json"
+        },
+        {
+          "id": "artifact.metallib",
+          "kind": "artifact",
+          "category": "artifact",
+          "need": "metallib inspected for the intended GPU family",
+          "probe": "metal-objdump",
+          "impact": 3,
+          "likelihood": 0.4,
+          "fallback": "an uninspected metallib is unverified",
+          "source": "PORTING-LESSONS.md#7"
+        }
+      ]
+    },
+    "cpu": {
+      "name": "CPU SIMD (x86-64 / aarch64)",
+      "vendor": "cross-vendor",
+      "aliases": [
+        "cpu",
+        "x86",
+        "x86_64",
+        "amd64",
+        "aarch64",
+        "arm64",
+        "simd"
+      ],
+      "host_os": [
+        "windows",
+        "linux",
+        "macos"
+      ],
+      "rebar": {
+        "supported": false,
+        "api": "not applicable",
+        "benefit": "a CPU has no PCIe BAR window: system memory is directly addressable, so there is no large-BAR path to win or lose",
+        "fallback": "not applicable"
+      },
+      "requirements": [
+        {
+          "id": "toolchain.msvc",
+          "kind": "tool",
+          "category": "toolchain",
+          "host_os": [
+            "windows"
+          ],
+          "need": "MSVC for the Windows CRT and the target /arch flags",
+          "probe": "cl /Bv",
+          "env": [
+            "VCINSTALLDIR",
+            "VSINSTALLDIR"
+          ],
+          "names": [
+            "cl",
+            "cl.exe"
+          ],
+          "paths": [
+            "C:\\Program Files\\Microsoft Visual Studio\\*\\*\\VC\\Tools\\MSVC\\*\\bin\\Hostx64\\x64\\cl.exe",
+            "C:\\Program Files (x86)\\Microsoft Visual Studio\\*\\*\\VC\\Tools\\MSVC\\*\\bin\\Hostx64\\x64\\cl.exe"
+          ],
+          "impact": 5,
+          "likelihood": 0.8,
+          "fallback": "run inside a developer prompt (vcvars64.bat) or use clang-cl with the same CRT; the SIMD flags differ between them",
+          "source": "learnings/TINY_VLLM_CPU_WINDOWS_PORT_LEARNINGS.md"
+        },
+        {
+          "id": "toolchain.gcc",
+          "kind": "tool",
+          "category": "toolchain",
+          "host_os": [
+            "linux"
+          ],
+          "need": "a C/C++ compiler that takes the target -m flags",
+          "probe": "gcc --version",
+          "names": [
+            "gcc",
+            "g++",
+            "cc"
+          ],
+          "impact": 5,
+          "likelihood": 0.7,
+          "fallback": "clang takes the same vector extensions for the common intrinsics; check the builtin spellings you rely on",
+          "source": "learnings/TINY_VLLM_CPU_PORT_LEARNINGS.md"
+        },
+        {
+          "id": "toolchain.clang",
+          "kind": "tool",
+          "category": "toolchain",
+          "need": "clang, which is the only portable compiler on macOS and the one that accepts the widest intrinsic set",
+          "probe": "clang --version",
+          "names": [
+            "clang",
+            "clang++",
+            "clang-cl"
+          ],
+          "impact": 4,
+          "likelihood": 0.5,
+          "fallback": "the platform compiler; verify every `__builtin_` spelling before assuming it exists",
+          "source": "PORTING-LESSONS.md#1"
+        },
+        {
+          "id": "toolchain.cmake",
+          "kind": "tool",
+          "category": "toolchain",
+          "need": "one build description that survives all three hosts",
+          "probe": "cmake --version",
+          "names": [
+            "cmake"
+          ],
+          "impact": 3,
+          "likelihood": 0.6,
+          "fallback": "a plain Makefile plus a .bat equivalent; keep the flag sets in one file, not three",
+          "source": "learnings/TINY_VLLM_CPU_WINDOWS_PORT_LEARNINGS.md"
+        },
+        {
+          "id": "capability.avx2",
+          "kind": "capability",
+          "category": "capability",
+          "field": "avx2",
+          "expect": true,
+          "need": "AVX2+FMA, the baseline every x86-64 SIMD port assumes",
+          "probe": "CPU ISA flags (probe) or the fed fact",
+          "impact": 5,
+          "likelihood": 0.6,
+          "fallback": "restructure for the target's own width: NEON on aarch64, SSE2/AVX if AVX2 is absent, or a scalar path that is correct first",
+          "source": "learnings/TINY_VLLM_CPU_PORT_LEARNINGS.md",
+          "host_arch": [
+            "x86"
+          ]
+        },
+        {
+          "id": "capability.fma",
+          "kind": "capability",
+          "category": "capability",
+          "field": "fma",
+          "expect": true,
+          "need": "fused multiply-add, which the GEMM inner loop is written around",
+          "probe": "CPU ISA flags (probe) or the fed fact",
+          "impact": 4,
+          "likelihood": 0.5,
+          "fallback": "separate multiply and add: identical results only if the reference does not depend on the fused rounding",
+          "source": "PORTING-LESSONS.md#6",
+          "host_arch": [
+            "x86"
+          ]
+        },
+        {
+          "id": "capability.avx512f",
+          "kind": "capability",
+          "category": "capability",
+          "field": "avx512f",
+          "expect": true,
+          "need": "AVX-512 only if the kernels are written for 512-bit vectors",
+          "probe": "CPU ISA flags (probe) or the fed fact",
+          "impact": 3,
+          "likelihood": 0.4,
+          "fallback": "ship the AVX2 path. Never gate on a CPU name: consumer 12th-14th gen parts have AVX-512 fused off, which is why this row is probed and not read from a table",
+          "source": "PORTING-LESSONS.md#2",
+          "host_arch": [
+            "x86"
+          ]
+        },
+        {
+          "id": "runtime.blas",
+          "kind": "manual",
+          "category": "runtime",
+          "need": "a BLAS whose precision matches what the kernels assume (oneMKL, OpenBLAS or Accelerate)",
+          "probe": "link one GEMM on each OS and compare against the reference",
+          "impact": 4,
+          "likelihood": 0.6,
+          "fallback": "write the GEMM; a BLAS that silently uses a different precision is an accuracy bug, not a speed choice",
+          "source": "learnings/TINY_VLLM_CPU_PORT_LEARNINGS.md"
+        },
+        {
+          "id": "host.os",
+          "kind": "os",
+          "category": "host",
+          "need": "a host the port is actually built and run on",
+          "probe": "platform check",
+          "impact": 5,
+          "likelihood": 1.0,
+          "fallback": "cross-build and ship the binary, or drop the OS from the support matrix explicitly",
+          "source": "learnings/TINY_VLLM_CPU_WINDOWS_PORT_LEARNINGS.md"
+        },
+        {
+          "id": "artifact.exe",
+          "kind": "artifact",
+          "category": "artifact",
+          "need": "the produced binary inspected: ISA baseline, BLAS linkage, symbols",
+          "probe": "dumpbin /headers or objdump -d",
+          "impact": 3,
+          "likelihood": 0.5,
+          "fallback": "an uninspected binary may have been built for the build host's ISA rather than the target's",
+          "source": "PORTING-LESSONS.md#1"
+        },
+        {
+          "id": "capability.neon",
+          "kind": "capability",
+          "category": "capability",
+          "field": [
+            "neon"
+          ],
+          "expect": true,
+          "impact": 5,
+          "likelihood": 0.9,
+          "host_arch": [
+            "arm"
+          ],
+          "need": "NEON/ASIMD for the vector path",
+          "probe": "aarch64: /proc/cpuinfo Features asimd, or sysctl on macOS",
+          "fallback": "portable scalar kernels (roughly 4-8x slower on the vector path)",
+          "source": "ARCH_MAP.json#features.neon + AArch64 baseline"
+        },
+        {
+          "id": "capability.dotprod",
+          "kind": "capability",
+          "category": "capability",
+          "field": [
+            "dotprod"
+          ],
+          "expect": true,
+          "impact": 4,
+          "likelihood": 0.7,
+          "host_arch": [
+            "arm"
+          ],
+          "need": "SDOT/UDOT (FEAT_DotProd) for int8 quantised matmul",
+          "probe": "aarch64: Features asimddp; macOS: sysctl hw.optional.arm.FEAT_DotProd",
+          "fallback": "multiply-accumulate widening pair instead of SDOT",
+          "source": "ARCH_MAP.json concept + AArch64 FEAT_DotProd"
+        }
       ]
     }
-  }
+  },
+  "safeguards": [
+    {
+      "id": "efficiency.dispatch_overhead",
+      "kind": "manual",
+      "category": "efficiency",
+      "advisory": true,
+      "impact": 4,
+      "likelihood": 0.9,
+      "need": "the cost of ONE dispatch on this target, measured, because it is a design parameter and not a constant: the same engine structure that is free on one driver is 92% of token time on another",
+      "probe": "time N identical dispatches with a trivial body (pipeline bound once) and divide; do not trust a traced number, tracing inflates per-dispatch cost. Compare with dispatches/iteration.",
+      "fallback": "if overhead x dispatches/iteration is more than half of iteration time, fix granularity before any kernel micro-optimisation",
+      "source": "Meteor Lake Vulkan case: ~385 us/dispatch on Intel vs ~100 us AMD, 116 GEMV dispatches/token = 92% of 48.4 ms"
+    },
+    {
+      "id": "structure.dispatch_count",
+      "kind": "manual",
+      "category": "structure",
+      "advisory": true,
+      "impact": 4,
+      "likelihood": 0.8,
+      "need": "dispatches (or kernel launches) per iteration/token, counted on the ported tree, and the same number on the source platform",
+      "probe": "count launches for exactly one iteration (trace, API hook, or a counter in the submit path)",
+      "fallback": "reduce the count: fuse stages whose dependency is per-element or per-row; never assume a redundant dispatch is cheap",
+      "source": "Meteor Lake: ~263 dispatches/token against ~1.7 ms of real compute"
+    },
+    {
+      "id": "structure.fusion_legality",
+      "kind": "manual",
+      "category": "structure",
+      "advisory": true,
+      "impact": 4,
+      "likelihood": 0.8,
+      "need": "for every stage pair you intend to fuse, the dependency shape: per-element, per-row, or cross-workgroup reduction",
+      "probe": "classify each edge by what the consumer reads: one element, one row, or ALL of the producer's output",
+      "fallback": "a cross-workgroup edge keeps its dispatch boundary or needs a device-wide barrier; on a backend without one (Vulkan compute) fusion there is not available at any workgroup size",
+      "source": "Meteor Lake truth table: gate+up silu fusable (per-row); silu->down NOT fusable (down reads all silu)"
+    },
+    {
+      "id": "limits.workgroup_size",
+      "kind": "manual",
+      "category": "limits",
+      "advisory": true,
+      "impact": 4,
+      "likelihood": 0.7,
+      "need": "the largest workgroup/subgroup configuration this target driver actually runs, verified by running it",
+      "probe": "sweep the size (64..1024) with the real shader and time each; a driver crash or slowdown is the answer, not a bug in the shader",
+      "fallback": "stay at the largest verified size; larger is not faster when the driver serialises or spills",
+      "source": "Meteor Lake: driver unstable above WG=256; the fused shader at WG=1024 was 47% slower"
+    },
+    {
+      "id": "efficiency.peak_utilisation",
+      "kind": "manual",
+      "category": "efficiency",
+      "advisory": true,
+      "impact": 4,
+      "likelihood": 0.7,
+      "need": "achieved arithmetic or bandwidth as a fraction of this target's peak, computed rather than felt",
+      "probe": "measured ops/s or bytes/s for the kernel divided by the spec peak for that datatype",
+      "fallback": "below a few percent of peak the bottleneck is the driver or the dispatch model: stop tuning the inner loop",
+      "source": "Meteor Lake: 20.65 tok/s = 0.03% of peak; the GEMV itself needs ~15 us of 400"
+    },
+    {
+      "id": "efficiency.source_parity",
+      "kind": "manual",
+      "category": "efficiency",
+      "advisory": true,
+      "impact": 3,
+      "likelihood": 0.8,
+      "need": "target throughput against the platform the design came from, same workload and same quantisation",
+      "probe": "run the same model and quant format on both; do not compare against a paper number",
+      "fallback": "attribute the delta before changing kernels: a uniform slowdown across every kernel is a per-dispatch or per-copy cost, not one bad kernel",
+      "source": "Meteor Lake: 32-34 tok/s on AMD -> 20.65 tok/s on Intel, identical kernels"
+    },
+    {
+      "id": "extensions.available_vs_used",
+      "kind": "manual",
+      "category": "extensions",
+      "advisory": true,
+      "impact": 3,
+      "likelihood": 0.7,
+      "need": "for each extension/feature the plan leans on: advertised by the device, enabled at creation, and actually exercised by the shader",
+      "probe": "enumerate device extensions, then check the create-info and grep the shader/pipeline for the feature; all three must hold",
+      "fallback": "available != enabled != used != faster. If it is enabled but unused, the win is unmeasured, not proven",
+      "source": "Meteor Lake: VK_EXT_descriptor_buffer, push_descriptor, shader_object, timeline_semaphore, buffer_device_address all available; buffer_device_address enabled and unused"
+    }
+  ]
 }

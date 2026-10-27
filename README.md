@@ -40,9 +40,65 @@ Each requirement gets one evidence label and never a guess:
 
 Rows are weighted `impact (1-5) x likelihood (0-1)` and ranked by Pareto: the rows that reach 80% of the total score are the vital few, and that is the order to resolve them in. Manual and host rows stay visible instead of passing silently. Every non-PASS row carries the fallback to take.
 
-**PCIe ReBAR is a first-class row.** When the backend can use a large BAR (`hipHostMalloc` + `hipMemAdvise`, `cudaHostAllocMapped`, a host-visible device-local Vulkan heap, D3D12 GPU upload heaps, SYCL USM host allocations), the diagnosis probes the host: sysfs `resource*_resize` on Linux, an explicit driver report if one exists, otherwise a documented manual check. If ReBAR is not PASS, the fallback is a staging buffer plus chunked copy — and the report says so, so the port is never described as zero-copy when it is not. Apple metal has no discrete BAR window, which is recorded as not applicable rather than as a failed probe.
+**PCIe ReBAR is a first-class row.** When the backend can use a large BAR (`hipHostMalloc` + `hipMemAdvise`, `cudaHostAllocMapped`, a host-visible device-local Vulkan heap, D3D12 GPU upload heaps, SYCL USM host allocations), the diagnosis probes the host's **display-class** PCI devices — a host bridge or a NIC that shares the vendor id is not a GPU — and reads both numbers that matter: `resource*_resize` lists the window sizes the device can become, and `resourceN` is the window enabled now. Capability alone is not a pass: a resizable BAR still sitting at 128 MiB does not fit the streaming working set, so that row is **UNVALIDATED** with the size printed and the firmware toggle named, and a maximum below the backend's threshold is **FAIL**. An NVIDIA driver report is only used for a device that driver actually speaks for. With no GPU present the row is UNVALIDATED, not FAIL. If ReBAR is not PASS the fallback is a staging buffer plus chunked copy — and the report says so, so the port is never described as zero-copy when it is not. Apple metal has no discrete BAR window, which is recorded as not applicable rather than as a failed probe.
+
+**Capabilities are probed on the device when a backend has a tool that can answer.** `nvidia-smi --query-gpu=compute_cap` gives the SM number the capability is derived from, `rocminfo` gives the gfx target, wavefront width and LDS size, and `vulkaninfo` lists `VK_KHR_cooperative_matrix` and the integer-dot extension — which is exactly what the Vulkan rows ask. A device measurement outranks every table, but only for the arch it measured: a probe on an RX 9070 is not evidence about an MI300, and the report says when it withheld the result for that reason.
+### Where the facts come from
+A capability table is a claim, not a measurement, and tables rot: consumer CPUs ship with AVX-512 fused off, one AMD target has no matrix core while its neighbours do, and a hand-typed entry can disagree with itself. So every arch fact is resolved from four sources and **records which one it came from**:
+
+| source | weight | what it means |
+|---|---|---|
+| `user` | highest | `ARCH_FACTS.local.json` (or `$KANDS_ARCH_FACTS`) — a human asserted it |
+| `probe` | | measured on this machine: CPU ISA flags from `/proc/cpuinfo`, `sysctl`, or PCI identity |
+| `remote` | | a shared JSON feed at `$KANDS_FACTS_URL` — opt-in, off by default, never required |
+| `bundle` | lowest | `ARCH_MAP.json` — documented, never a measurement |
+
+A fact no source has is **UNVALIDATED**, and the report names the exact key to feed rather than guessing it.
+
+A capability row may name several candidate field names, because one capability has a different name per API (`wmma` in HIP, `vulkan.cooperative_matrix` in Vulkan), and nested blocks in the table are read instead of dropped. Above all four sources sits the device probe described above, applied only when it measured the target arch.
+
+Rows can carry `host_arch` as well as `host_os`: an AVX2 row does not FAIL on an ARM host, and an ARM NEON row does not FAIL on x86. Both read as **NOT RUN — not applicable**, outside the gate and outside the marching order. A probe only answers for the machine it ran on: a named CPU model (`intel_13th`) does not borrow the build host's ISA flags, and a HIP row never gets its ReBAR answer from `nvidia-smi`.
+
+The row set covers **GPU and CPU**. `cpu` is a backend like any other: MSVC on Windows, GCC on Linux, clang everywhere, AVX2/FMA/AVX-512 rows resolved from the probe, and a BLAS row that is honest about precision. A row may name its `host_os`; on any other host it is **NOT RUN — not applicable**, never FAIL, so one model covers Windows, Linux and macOS instead of three files.
+
+### The directive
+The report ends with a marching order, not a table: every non-PASS row in Pareto order, each with the probe to run, the fallback to take, and a gate — `blocked` (an impact-5 row probed absent), `validate-first` (an impact-5 row nobody has evidence for: absence is the assumption), `fallback` (the vital rows have evidence; the rest take fallbacks), or `clear`. Rows that do not apply to this host are not steps. An unmodelled backend still gets a directive: describe it first.
 
 `autonomous_port` runs the same diagnosis automatically in its Phase 0.
+
+### The pre-port analysis is a document, and it is mandatory
+A readiness report that scrolls past in a tool response leaves no record: three days later nobody can reconstruct which rows were known, which were waived and who said so. So every run with a `target_backend` writes a fixed document set into `<repo>/docs/pre-port/<backend>-<arch>/`:
+
+| file | what it answers |
+|---|---|
+| `00-README.md` | what this is, the gate, the sign-off block |
+| `01-target-and-evidence.md` | target identity and where every fact came from |
+| `02-requirement-matrix.md` | the Pareto order, per-row probe, ReBAR window, fallbacks |
+| `03-directive.md` | the marching order, stop conditions, definition of done |
+| `04-fault-tree.md` | failure modes, each gated by named rows |
+| `05-waivers.md` | the human decision for every row that is not PASS |
+| `diagnosis.json` | the same diagnosis, machine-readable |
+
+`write_preport_analysis` regenerates the set on demand; `discover_kernels` and `autonomous_port` write it as part of Phase 0. It is a **gate, not an artefact**: until it exists and agrees with the live probe, the directive opens with a `STOP-DOCS` step and the port does not start. `05-waivers.md` is written once and never overwritten — it is the only place a non-PASS row becomes a decision with a reason, an owner and a date. A set that has drifted from the current probe reads as `stale` rather than as done, because a stale waiver is worse than no waiver.
+
+### After the port: the recheck
+A port can be correct, build clean, and still be three times too slow for a reason no kernel inspection finds. One real case: a Vulkan engine moved from AMD to an Intel iGPU, same kernels and quantisation — 32-34 tok/s became **20.65 tok/s**. Dispatches per token: ~263. Cost of one dispatch on the target: ~385 us (100 us on the source). Arithmetic the GPU needed: ~15 us. So 44.7 ms of a 48.4 ms token went to dispatch overhead, at **0.03% of peak**. The kernels were fine; the structure was designed where a dispatch was cheap.
+
+`postport_recheck` turns that failure mode into checks that run on measurements, for any vendor and any backend:
+
+| check | fires when |
+|---|---|
+| `efficiency.dispatch_overhead` | `overhead x dispatches` is more than half the iteration |
+| `structure.dispatch_count` | the port emits noticeably more dispatches than the source platform |
+| `structure.fusion_legality` | a proposed fusion needs a cross-workgroup barrier (not available in Vulkan compute at any workgroup size) |
+| `limits.workgroup_size` | the dispatched size exceeds the largest size actually verified on the driver |
+| `efficiency.peak_utilisation` | achieved work is a few percent of peak, i.e. the bottleneck is not arithmetic |
+| `efficiency.source_parity` | the target is meaningfully below the platform the design came from |
+| `extensions.available_vs_used` | an extension is enabled but no shader exercises it |
+
+It takes only numbers; anything you have not measured is **NOT RUN** and names the metric to go and get. Numbers that cannot all be true together (overhead x count exceeding the whole iteration) come back UNVALIDATED rather than as a confident percentage, and correctness gates the rest: tuning a kernel that computes the wrong answer measures the wrong thing. Each run writes `docs/post-port/<backend>-<arch>/` and folds the previous numbers in as a delta, because the delta is the result.
+
+The same seven checks are rows in the pre-port matrix, marked `advisory`: they cannot be answered before code exists, so they never gate the start of a port, and they are the first thing the recheck evaluates once it does.
 
 ### Check Compatibility
 Before you start porting, see if your target architecture supports everything your source needs. Does your target have tensor cores? DP4a? Native BF16? Will Vulkan cooperative matrices work (they do not on AMD, use DP4a instead). K_and_S tells you upfront so you do not waste weeks on a dead end.

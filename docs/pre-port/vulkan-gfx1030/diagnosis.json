@@ -1,0 +1,244 @@
+{
+  "known": true,
+  "backend": "vulkan",
+  "name": "Vulkan compute (GLSL/SPIR-V)",
+  "vendor": "cross-vendor",
+  "target_arch": "gfx1030",
+  "source_arch": "",
+  "host_os": "linux",
+  "probed": false,
+  "rebar": {
+    "id": "pcie.rebar",
+    "backend": "vulkan",
+    "supported": true,
+    "api": "VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | HOST_VISIBLE_BIT heap",
+    "benefit": "host-visible device-local staging for large tensors without a copy",
+    "fallback": "host-visible staging buffer + device-local copy, one chunk in flight per queue slot",
+    "status": "UNVALIDATED",
+    "confidence": "none",
+    "evidence": [
+      "host probe disabled (probe_host=False)"
+    ],
+    "host_os": "linux",
+    "manual": [
+      "`lspci -vv | grep -i 'resizable bar'`",
+      "`ls /sys/bus/pci/devices/*/resource*_resize` (a file means the capability is exposed)"
+    ]
+  },
+  "rows": [
+    {
+      "id": "toolchain.glslc",
+      "kind": "tool",
+      "category": "toolchain",
+      "need": "GLSL to SPIR-V compiler",
+      "probe": "glslc --version",
+      "fallback": "glslangValidator; both must target the same SPIR-V version the driver accepts",
+      "source": "TK_TOOLS.json#gpu_toolkits.vulkan",
+      "impact": 5.0,
+      "likelihood": 0.8,
+      "score": 4.0,
+      "status": "UNVALIDATED",
+      "confidence": "none",
+      "evidence": [
+        "host probe disabled (probe_host=False)"
+      ],
+      "cumulative": 0.455,
+      "vital": true
+    },
+    {
+      "id": "runtime.loader",
+      "kind": "tool",
+      "category": "runtime",
+      "need": "a working Vulkan loader and driver",
+      "probe": "vulkaninfo --summary",
+      "fallback": "install the ICD for the target vendor; a missing ICD looks like an unsupported feature",
+      "source": "TK_TOOLS.json#gpu_toolkits.vulkan",
+      "impact": 4.0,
+      "likelihood": 0.5,
+      "score": 2.0,
+      "status": "UNVALIDATED",
+      "confidence": "none",
+      "evidence": [
+        "host probe disabled (probe_host=False)"
+      ],
+      "cumulative": 0.775,
+      "vital": true
+    },
+    {
+      "id": "toolchain.spirvval",
+      "kind": "tool",
+      "category": "toolchain",
+      "need": "validate the produced SPIR-V before shipping it",
+      "probe": "spirv-val --version",
+      "fallback": "let the driver report; a driver error names no line, so keep the module small",
+      "source": "ISA_REFERENCES.md",
+      "impact": 3.0,
+      "likelihood": 0.5,
+      "score": 1.5,
+      "status": "UNVALIDATED",
+      "confidence": "none",
+      "evidence": [
+        "host probe disabled (probe_host=False)"
+      ],
+      "cumulative": 0.936,
+      "vital": false
+    },
+    {
+      "id": "capability.coopmat",
+      "kind": "capability",
+      "category": "capability",
+      "need": "VK_KHR_cooperative_matrix usable for matmul (tensor path)",
+      "probe": "vulkaninfo --summary: VK_KHR_cooperative_matrix; else ARCH_MAP vulkan.cooperative_matrix",
+      "fallback": "DP4a-style SPIR-V (VK_KHR_shader_integer_dot_product) matmul",
+      "source": "README 'CooperativeMatrix is broken on AMD Vulkan' + ARCH_MAP.json#vulkan",
+      "impact": 5.0,
+      "likelihood": 0.9,
+      "score": 4.5,
+      "status": "UNVALIDATED",
+      "confidence": "none",
+      "evidence": [
+        "`gfx1030` is not in ARCH_MAP.json; probe on the device"
+      ],
+      "cumulative": 0.241,
+      "vital": true
+    },
+    {
+      "id": "capability.subgroup",
+      "kind": "info",
+      "category": "capability",
+      "need": "subgroup width the shader will be written against",
+      "probe": "vulkaninfo subgroupSize, or the device's own report",
+      "fallback": "declare SUBGROUP_SIZE at build time and assert it at load",
+      "source": "PORTING_PATTERNS.json#cuda_to_vulkan",
+      "impact": 4.0,
+      "likelihood": 0.5,
+      "score": 2.0,
+      "status": "NOT RUN",
+      "confidence": "none",
+      "evidence": [
+        "`gfx1030.['subgroup_size', 'vulkan.subgroup_size']` not in ARCH_MAP.json"
+      ],
+      "cumulative": 0.561,
+      "vital": true
+    },
+    {
+      "id": "sync.timeline",
+      "kind": "manual",
+      "category": "sync",
+      "need": "timeline semaphore / fence model mapped to the source stream model",
+      "probe": "one capture with two queues",
+      "fallback": "single queue with explicit barriers; slower but ordered",
+      "source": "PORTING_PATTERNS.json#sync_patterns",
+      "impact": 3.0,
+      "likelihood": 0.4,
+      "score": 1.2,
+      "status": "NOT RUN",
+      "confidence": "none",
+      "evidence": [
+        "manual probe not run"
+      ],
+      "cumulative": 1.0,
+      "vital": false
+    },
+    {
+      "id": "artifact.spirv",
+      "kind": "artifact",
+      "category": "artifact",
+      "need": "SPIR-V module validated and disassembled",
+      "probe": "spirv-dis + spirv-val",
+      "fallback": "treat an unvalidated module as unverified",
+      "source": "PORTING-LESSONS.md#7",
+      "impact": 3.0,
+      "likelihood": 0.5,
+      "score": 1.5,
+      "status": "NOT RUN",
+      "confidence": "none",
+      "evidence": [
+        "requires a build: spirv-dis + spirv-val"
+      ],
+      "cumulative": 0.856,
+      "vital": true
+    },
+    {
+      "id": "pcie.rebar",
+      "kind": "pcie",
+      "category": "memory",
+      "need": "a BAR window large enough for the streaming working set",
+      "probe": "VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | HOST_VISIBLE_BIT heap",
+      "fallback": "host-visible staging buffer + device-local copy, one chunk in flight per queue slot",
+      "source": "BACKEND_REQUIREMENTS.json#rebar",
+      "impact": 4,
+      "likelihood": 0.5,
+      "score": 2.0,
+      "status": "UNVALIDATED",
+      "confidence": "none",
+      "evidence": [
+        "host probe disabled (probe_host=False)"
+      ],
+      "supported": true,
+      "rebar": {
+        "id": "pcie.rebar",
+        "backend": "vulkan",
+        "supported": true,
+        "api": "VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | HOST_VISIBLE_BIT heap",
+        "benefit": "host-visible device-local staging for large tensors without a copy",
+        "fallback": "host-visible staging buffer + device-local copy, one chunk in flight per queue slot",
+        "status": "UNVALIDATED",
+        "confidence": "none",
+        "evidence": [
+          "host probe disabled (probe_host=False)"
+        ],
+        "host_os": "linux",
+        "manual": [
+          "`lspci -vv | grep -i 'resizable bar'`",
+          "`ls /sys/bus/pci/devices/*/resource*_resize` (a file means the capability is exposed)"
+        ]
+      },
+      "cumulative": 0.668,
+      "vital": true
+    }
+  ],
+  "ranking": {
+    "total": 18.7,
+    "vital_few": [
+      "capability.coopmat",
+      "toolchain.glslc",
+      "capability.subgroup",
+      "pcie.rebar",
+      "runtime.loader",
+      "artifact.spirv"
+    ],
+    "tail": [
+      "toolchain.spirvval",
+      "sync.timeline"
+    ]
+  },
+  "counts": {
+    "PASS": 0,
+    "FAIL": 0,
+    "NOT RUN": 3,
+    "UNVALIDATED": 5
+  },
+  "blockers": [],
+  "fallback_rows": [
+    "toolchain.glslc",
+    "runtime.loader",
+    "toolchain.spirvval",
+    "capability.coopmat",
+    "pcie.rebar"
+  ],
+  "source": {
+    "file_count": 0,
+    "by_backend": {}
+  },
+  "fault_tree": [
+    "port to `vulkan` does not build or load",
+    "  +-- toolchain.glslc, toolchain.spirvval",
+    "port builds but the artifact is not what was intended",
+    "  +-- artifact rows PASS (build first)",
+    "port builds but results are wrong or a kernel restructured",
+    "  +-- capability.coopmat",
+    "port builds and is correct but streams slowly",
+    "  +-- pcie.rebar"
+  ]
+}

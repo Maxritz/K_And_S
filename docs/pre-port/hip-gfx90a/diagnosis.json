@@ -1,0 +1,285 @@
+{
+  "known": true,
+  "backend": "hip",
+  "name": "AMD HIP / ROCm",
+  "vendor": "AMD",
+  "target_arch": "gfx90a",
+  "source_arch": "",
+  "host_os": "linux",
+  "probed": false,
+  "rebar": {
+    "id": "pcie.rebar",
+    "backend": "hip",
+    "supported": true,
+    "api": "hipHostMalloc/hipHostGetDevicePointer (fine-grained, host-visible) + hipMemAdvise",
+    "benefit": "host-mapped weight and KV streaming without a staging copy; one less full-size buffer per tensor",
+    "fallback": "page-locked staging ring + chunked hipMemcpyAsync, double-buffered; keep hot tensors resident in device memory",
+    "status": "UNVALIDATED",
+    "confidence": "none",
+    "evidence": [
+      "host probe disabled (probe_host=False)"
+    ],
+    "host_os": "linux",
+    "manual": [
+      "`lspci -vv | grep -i 'resizable bar'`",
+      "`ls /sys/bus/pci/devices/*/resource*_resize` (a file means the capability is exposed)"
+    ]
+  },
+  "rows": [
+    {
+      "id": "toolchain.hipcc",
+      "kind": "tool",
+      "category": "toolchain",
+      "need": "hipcc that accepts the target gfx",
+      "probe": "hipcc --version",
+      "fallback": "build the hsaco on a Linux ROCm host and ship the code object; never hand-encode ISA",
+      "source": "TK_TOOLS.json#gpu_toolkits.rocm",
+      "impact": 5.0,
+      "likelihood": 0.9,
+      "score": 4.5,
+      "status": "UNVALIDATED",
+      "confidence": "none",
+      "evidence": [
+        "host probe disabled (probe_host=False)"
+      ],
+      "cumulative": 0.184,
+      "vital": true
+    },
+    {
+      "id": "toolchain.rocminfo",
+      "kind": "tool",
+      "category": "toolchain",
+      "need": "agent enumeration to confirm the target gfx is present",
+      "probe": "rocminfo",
+      "fallback": "read the PCI id and map it to gfx manually, then record it",
+      "source": "TK_TOOLS.json#gpu_toolkits.rocm",
+      "impact": 3.0,
+      "likelihood": 0.5,
+      "score": 1.5,
+      "status": "UNVALIDATED",
+      "confidence": "none",
+      "evidence": [
+        "host probe disabled (probe_host=False)"
+      ],
+      "cumulative": 1.0,
+      "vital": false
+    },
+    {
+      "id": "toolchain.objdump",
+      "kind": "tool",
+      "category": "toolchain",
+      "need": "disassemble the produced hsaco to verify what was emitted",
+      "probe": "roc-objdump --version",
+      "fallback": "use llvm-objdump from the LLVM install; a build that cannot be inspected is not verified",
+      "source": "mcp/isa_tools.py#code_object_report",
+      "impact": 4.0,
+      "likelihood": 0.6,
+      "score": 2.4,
+      "status": "UNVALIDATED",
+      "confidence": "none",
+      "evidence": [
+        "host probe disabled (probe_host=False)"
+      ],
+      "cumulative": 0.619,
+      "vital": true
+    },
+    {
+      "id": "capability.dot4",
+      "kind": "capability",
+      "category": "capability",
+      "need": "4-way int8 dot for quantised kernels",
+      "probe": "probe_isa(amd_mixed_dot)",
+      "fallback": "raw v_dot4_i32_i8 may have no gfx12 encoding; use amd_mixed_dot, else scalar expand",
+      "source": "PORTING-LESSONS.md#2",
+      "impact": 4.0,
+      "likelihood": 0.6,
+      "score": 2.4,
+      "status": "UNVALIDATED",
+      "confidence": "none",
+      "evidence": [
+        "`gfx90a` is not in ARCH_MAP.json; probe on the device"
+      ],
+      "cumulative": 0.52,
+      "vital": true
+    },
+    {
+      "id": "capability.matrix",
+      "kind": "capability",
+      "category": "capability",
+      "need": "a matrix path (MFMA on CDNA, WMMA on RDNA3+)",
+      "probe": "probe_isa(wmma/mfma candidate)",
+      "fallback": "DP4a or scalar FMA reconstruction; a matrix kernel restructured is a design change, not a flag",
+      "source": "PORTING-LESSONS.md#2",
+      "impact": 5.0,
+      "likelihood": 0.6,
+      "score": 3.0,
+      "status": "UNVALIDATED",
+      "confidence": "none",
+      "evidence": [
+        "`gfx90a` is not in ARCH_MAP.json; probe on the device"
+      ],
+      "cumulative": 0.307,
+      "vital": true
+    },
+    {
+      "id": "capability.wave",
+      "kind": "info",
+      "category": "capability",
+      "need": "wave size known before touching shuffle/lane logic",
+      "probe": "compare_archs(source, target)",
+      "fallback": "rewrite warp intrinsics for the target width; do not pass a wave-size flag and assume it applied",
+      "source": "PORTING-LESSONS.md#7",
+      "impact": 4.0,
+      "likelihood": 0.5,
+      "score": 2.0,
+      "status": "NOT RUN",
+      "confidence": "none",
+      "evidence": [
+        "`gfx90a.wave_size` not in ARCH_MAP.json"
+      ],
+      "cumulative": 0.701,
+      "vital": true
+    },
+    {
+      "id": "runtime.finegrained",
+      "kind": "manual",
+      "category": "runtime",
+      "need": "fine-grained host-visible allocation behaviour confirmed",
+      "probe": "run one host-mapped copy on target",
+      "fallback": "fall back to coarse-grained + explicit copies; record which path ran",
+      "source": "PORTING_PATTERNS.json#memory_models.hip",
+      "impact": 4.0,
+      "likelihood": 0.5,
+      "score": 2.0,
+      "status": "NOT RUN",
+      "confidence": "none",
+      "evidence": [
+        "manual probe not run"
+      ],
+      "cumulative": 0.865,
+      "vital": true
+    },
+    {
+      "id": "artifact.hsaco",
+      "kind": "artifact",
+      "category": "artifact",
+      "need": "code object inspected: SIMD width, VGPRs, spills, LDS, exported symbols",
+      "probe": "code_object_report(path, arch)",
+      "fallback": "a module that compiles but lacks the called symbol is a failure; check the symbol inventory",
+      "source": "PORTING-LESSONS.md#1",
+      "impact": 4.0,
+      "likelihood": 0.7,
+      "score": 2.8,
+      "status": "NOT RUN",
+      "confidence": "none",
+      "evidence": [
+        "requires a build: code_object_report(path, arch)"
+      ],
+      "cumulative": 0.422,
+      "vital": true
+    },
+    {
+      "id": "host.windows_rocm",
+      "kind": "os",
+      "category": "host",
+      "need": "a working ROCm/HIP stack on the chosen host OS",
+      "probe": "hipcc --version on the build host",
+      "fallback": "build on Linux and ship the code object, or use the Windows ROCm build that is actually installed",
+      "source": "TK_TOOLS.json#gpu_toolkits.rocm",
+      "impact": 3.0,
+      "likelihood": 0.6,
+      "score": 1.8,
+      "status": "PASS",
+      "confidence": "probed",
+      "evidence": [
+        "host is `linux`"
+      ],
+      "cumulative": 0.939,
+      "vital": false
+    },
+    {
+      "id": "pcie.rebar",
+      "kind": "pcie",
+      "category": "memory",
+      "need": "a BAR window large enough for the streaming working set",
+      "probe": "hipHostMalloc/hipHostGetDevicePointer (fine-grained, host-visible) + hipMemAdvise",
+      "fallback": "page-locked staging ring + chunked hipMemcpyAsync, double-buffered; keep hot tensors resident in device memory",
+      "source": "BACKEND_REQUIREMENTS.json#rebar",
+      "impact": 4,
+      "likelihood": 0.5,
+      "score": 2.0,
+      "status": "UNVALIDATED",
+      "confidence": "none",
+      "evidence": [
+        "host probe disabled (probe_host=False)"
+      ],
+      "supported": true,
+      "rebar": {
+        "id": "pcie.rebar",
+        "backend": "hip",
+        "supported": true,
+        "api": "hipHostMalloc/hipHostGetDevicePointer (fine-grained, host-visible) + hipMemAdvise",
+        "benefit": "host-mapped weight and KV streaming without a staging copy; one less full-size buffer per tensor",
+        "fallback": "page-locked staging ring + chunked hipMemcpyAsync, double-buffered; keep hot tensors resident in device memory",
+        "status": "UNVALIDATED",
+        "confidence": "none",
+        "evidence": [
+          "host probe disabled (probe_host=False)"
+        ],
+        "host_os": "linux",
+        "manual": [
+          "`lspci -vv | grep -i 'resizable bar'`",
+          "`ls /sys/bus/pci/devices/*/resource*_resize` (a file means the capability is exposed)"
+        ]
+      },
+      "cumulative": 0.783,
+      "vital": true
+    }
+  ],
+  "ranking": {
+    "total": 24.4,
+    "vital_few": [
+      "toolchain.hipcc",
+      "capability.matrix",
+      "artifact.hsaco",
+      "capability.dot4",
+      "toolchain.objdump",
+      "capability.wave",
+      "pcie.rebar",
+      "runtime.finegrained"
+    ],
+    "tail": [
+      "host.windows_rocm",
+      "toolchain.rocminfo"
+    ]
+  },
+  "counts": {
+    "PASS": 1,
+    "FAIL": 0,
+    "NOT RUN": 3,
+    "UNVALIDATED": 6
+  },
+  "blockers": [],
+  "fallback_rows": [
+    "toolchain.hipcc",
+    "toolchain.rocminfo",
+    "toolchain.objdump",
+    "capability.dot4",
+    "capability.matrix",
+    "pcie.rebar"
+  ],
+  "source": {
+    "file_count": 0,
+    "by_backend": {}
+  },
+  "fault_tree": [
+    "port to `hip` does not build or load",
+    "  +-- toolchain.hipcc, toolchain.rocminfo, toolchain.objdump",
+    "port builds but the artifact is not what was intended",
+    "  +-- artifact rows PASS (build first)",
+    "port builds but results are wrong or a kernel restructured",
+    "  +-- capability.dot4, capability.matrix",
+    "port builds and is correct but streams slowly",
+    "  +-- pcie.rebar"
+  ]
+}

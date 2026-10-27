@@ -1,24 +1,32 @@
 #!/usr/bin/env python
-"""Final comprehensive test of K_and_S bundle."""
+"""Final comprehensive test of K_and_S bundle.
+
+The bundle root is derived from this file's location, not a hardcoded drive
+letter: the previous version pointed at ``h:\\K_and_S`` and could only ever run
+on the machine it was written on.
+"""
 import sys, json, os
-sys.path.insert(0, r'h:\K_and_S\mcp')
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MCP = os.path.join(ROOT, "mcp")
+sys.path.insert(0, MCP)
 
 errors = []
 
 # 1. Validate all JSON files
 json_files = [
-    r'h:\K_and_S\ARCH_MAP.json',
-    r'h:\K_and_S\MODEL_MAP.json',
-    r'h:\K_and_S\TK_TOOLS.json',
-    r'h:\K_and_S\CROSS_PORT.json',
-    r'h:\K_and_S\AI_FRAMEWORKS.json',
-    r'h:\K_and_S\MODEL_FORMATS.json',
-    r'h:\K_and_S\PORTING_PATTERNS.json',
-    r'h:\K_and_S\PERF_BENCHMARKS.json',
-    r'h:\K_and_S\mcp\state\goal.json',
-    r'h:\K_and_S\mcp\state\perf_history.json',
-    r'h:\K_and_S\mcp\claude_desktop_config.json',
-    r'h:\K_and_S\BACKEND_REQUIREMENTS.json',
+    os.path.join(ROOT, "ARCH_MAP.json"),
+    os.path.join(ROOT, "MODEL_MAP.json"),
+    os.path.join(ROOT, "TK_TOOLS.json"),
+    os.path.join(ROOT, "CROSS_PORT.json"),
+    os.path.join(ROOT, "AI_FRAMEWORKS.json"),
+    os.path.join(ROOT, "MODEL_FORMATS.json"),
+    os.path.join(ROOT, "PORTING_PATTERNS.json"),
+    os.path.join(ROOT, "PERF_BENCHMARKS.json"),
+    os.path.join(MCP, "state", "goal.json"),
+    os.path.join(MCP, "state", "perf_history.json"),
+    os.path.join(MCP, "claude_desktop_config.json"),
+    os.path.join(ROOT, "BACKEND_REQUIREMENTS.json"),
 ]
 for f in json_files:
     fname = os.path.basename(f)
@@ -29,8 +37,9 @@ for f in json_files:
 
 # 2. Validate Python files
 import ast
-for f in [r'h:\K_and_S\mcp\server.py', r'h:\K_and_S\mcp\reference_search.py',
-          r'h:\K_and_S\mcp\backend_profile.py', r'h:\K_and_S\mcp\api_map.py']:
+for f in [os.path.join(MCP, n) for n in
+          ("server.py", "reference_search.py", "backend_profile.py", "api_map.py",
+           "arch_facts.py", "preport_docs.py", "porting_map.py", "isa_tools.py")]:
     try:
         ast.parse(open(f).read())
     except Exception as e:
@@ -39,7 +48,7 @@ for f in [r'h:\K_and_S\mcp\server.py', r'h:\K_and_S\mcp\reference_search.py',
 # 3. Validate TOML
 try:
     import tomllib
-    with open(r'h:\K_and_S\mcp/pyproject.toml', 'rb') as f:
+    with open(os.path.join(MCP, "pyproject.toml"), 'rb') as f:
         tomllib.load(f)
 except Exception as e:
     errors.append(f'TOML pyproject.toml: {e}')
@@ -62,7 +71,8 @@ expected_tools = {
     'search_references', 'record_performance', 'suggest_optimizations',
     'export_contribution', 'set_goal', 'update_goal', 'check_guardrail',
     'prepare_pull_request', 'autonomous_port', 'verify_numerical_equivalence',
-    'reject_common_pattern', 'radical_experiment_plan'
+    'reject_common_pattern', 'radical_experiment_plan', 'write_preport_analysis',
+    'postport_recheck'
 }
 missing = expected_tools - set(tool_names)
 if missing:
@@ -115,7 +125,7 @@ print(f'\n  Bundle version: {status["version"]}')
 print(f'  Current date: {status["current_date"]}')
 
 # 6. Check template file exists
-template = r'h:\K_and_S\mcp\templates\breadcrumb.hpp'
+template = os.path.join(MCP, "templates", "breadcrumb.hpp")
 if os.path.exists(template):
     print(f'  breadcrumb.hpp: {os.path.getsize(template)} bytes')
 else:

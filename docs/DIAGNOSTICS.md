@@ -260,8 +260,8 @@ probed is UNVALIDATED, never assumed present.
 
 ```
 READINESS: toolchain.hipcc = FAIL — no hipcc for gfx1201. probe: hipcc --version. fallback: build on a Linux ROCm host
-READINESS: capability.matrix = PASS — ARCH_MAP.json gfx1201.wmma = True
-READINESS: pcie.rebar = UNVALIDATED — no machine-readable source on windows. fallback: staging ring + chunked copy
+READINESS: capability.matrix = PASS — nvidia-smi: RTX 4090 compute capability 8.9 -> wmma=True [device]
+READINESS: pcie.rebar = UNVALIDATED — resizable BAR available up to 16 GiB but only 256 MiB is enabled. fallback: staging ring + chunked copy
 ```
 
 A row whose status is not PASS either selects its declared fallback or stops the
@@ -269,6 +269,63 @@ port. For PCIe ReBAR the fallback is always available (staging buffer plus
 chunked copy, hot tensors resident), so the port can proceed — but the plan
 records that it ran without a large BAR, and no claim of zero-copy streaming is
 allowed without a PASS.
+
+Two refinements keep the vocabulary honest. A row that names its `host_os` (a
+Windows-only compiler, a Linux-only one) is **NOT RUN — not applicable** on the
+other hosts: that is not the same state as *not done*, and it never reports as
+FAIL. And an impact-5 row with no evidence for it is neither a pass nor a
+blocker: the directive marks it `validate-first`, because the method says treat
+it as absent until it is probed.
+
+Facts carry provenance. `ARCH_MAP.json` is one source among four, ranked below a
+human's feed, below a measurement on this machine and below a shared feed, and
+the report prints which source each fact came from. `mcp/arch_facts.py` resolves
+them; `$KANDS_ARCH_FACTS` (a JSON file) and `$KANDS_FACTS_URL` (a JSON feed) are
+the two ways to feed it. The row set covers CPUs as well as GPUs.
+
+The probes answer with the thing being probed, not with the shape of their input.
+On Linux a ReBAR row comes from display-class PCI devices only, and from the
+window sizes in `resourceN` / `resourceN_resize`: a capability that is exposed
+but still sized 128 MiB is UNVALIDATED, not PASS. Capability rows read the
+device where a backend has a tool that can answer it — `nvidia-smi`'s compute
+capability, `rocminfo`'s gfx target and wavefront width, `vulkaninfo`'s device
+extensions — and only for the arch that tool measured. A row may name several
+candidate field names, and nested table blocks (`vulkan.cooperative_matrix`) are
+read rather than dropped; a `host_arch` on a row keeps an AVX2 requirement off
+an ARM host instead of failing it there.
+
+The diagnosis is filed, not printed. Every run with a `target_backend` writes
+the mandatory pre-port analysis into `<repo>/docs/pre-port/<backend>-<arch>/`:
+`00-README.md` (gate and sign-off), `01-target-and-evidence.md` (every fact and
+its provenance), `02-requirement-matrix.md` (Pareto, per-row probe, ReBAR),
+`03-directive.md` (marching order, stop conditions), `04-fault-tree.md`,
+`05-waivers.md` (human-owned, never overwritten) and `diagnosis.json`. Missing,
+partial or stale documents open the directive with a `STOP-DOCS` step: the port
+does not begin until the set exists and matches the live probe.
+
+The method runs forward a second time, after the port. A finished port is a
+system that can fail in a way no pre-port row can see: it builds, it is correct,
+and it is three times slower than what it replaced because the *structure* was
+copied from a platform whose per-dispatch cost was different. `postport_recheck`
+is that second run:
+
+| datum | question | verdict |
+|---|---|---|
+| dispatch cost x dispatch count | is the iteration spend dominated by submitting work? | FAIL above half of iteration time |
+| dispatches per iteration | did the port multiply the work units? | FAIL above 1.2x the source |
+| dependency shape per fusion | is the fusion legal, or does it need a device barrier? | FAIL on a cross-workgroup edge |
+| workgroup size vs verified ceiling | is the shader running where the driver still behaves? | FAIL above the measured ceiling |
+| achieved / peak | is this arithmetic-bound at all? | FAIL under ~5% of peak |
+| target / source throughput | did the port regress against what it replaced? | FAIL under 0.9x |
+| extension advertised / enabled / used | is the feature actually exercised? | FAIL if enabled and unused |
+
+Two disciplines keep it honest. Every row takes a measurement, so a missing one
+is NOT RUN with the metric named, never a pass; and inputs that contradict each
+other (overhead x count exceeding the whole iteration) are reported as
+UNVALIDATED instead of being arithmetically dressed up. Correctness is the gate
+in front of all of it: a wrong kernel's timings are not performance data. The
+same rows exist in the pre-port model as `advisory`, so they are visible from
+the start and cannot silently gate a port that has not been written yet.
 
 Run it with `discover_kernels(repo=..., target_backend="hip", target_arch="gfx1201")`,
 or let `autonomous_port` include it in Phase 0. The data lives in
