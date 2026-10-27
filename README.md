@@ -400,7 +400,14 @@ K_and_S follows an eight phase methodology so you never miss a step:
 Every claim in it is tied to a measurement that was taken, not advice that was read. That includes a **retraction** of the document's own earlier performance number, because a wrong measurement left sitting in documentation is worse than no measurement at all.
 
 ---
+## An Example of how it caught an issue 
 
+<img width="1194" height="1138" alt="image" src="https://github.com/user-attachments/assets/f962677b-bee9-4699-ae58-8bedad8838d5" />
+
+---
+<img width="1186" height="1041" alt="image" src="https://github.com/user-attachments/assets/03b10023-e6ec-47b2-a105-0b08b7eb2260" />
+
+---
 ## Coming Soon
 
 We are testing two real NVIDIA CUDA to HIP ports using K_and_S on actual GPU hardware. Results and templates from those experiments will be added to the `findings/` directory so the whole community can learn from them.
