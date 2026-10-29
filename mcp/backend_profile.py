@@ -277,19 +277,44 @@ def _probe_capability(req: dict[str, Any], target_arch: str, source_arch: str) -
     field = str(req.get("field", ""))
     if not field:
         return "NOT RUN", "none", ["no capability field declared; run the listed probe"]
+    # Normalise field name aliases so BACKEND_REQUIREMENTS.json can use the
+    # mnemonic form while ARCH_MAP.json uses the architectural form.
+    alias_map = {"avx512f": "avx512", "fma": "fma3"}
+    lookup_field = alias_map.get(field, field)
     info = _arch_record(target_arch)
     if not info:
         return ("UNVALIDATED", "none",
                 [f"`{target_arch or '(no target arch)'}` is not in ARCH_MAP.json; probe on the device"])
     # Support nested fields like "features.wmma" or "vulkan.cooperative_matrix"
-    if "." in field:
-        value = _get_nested(info, field)
+    if "." in lookup_field:
+        value = _get_nested(info, lookup_field)
     else:
-        value = info.get(field)
+        # Check top-level first, then fall back to features.{field} for archs that
+        # nest their capability flags (e.g. gfx1031/cdna2 store wmma under features,
+        # and CPU archs store avx2/fma3/avx512 under features).
+        value = info.get(lookup_field)
+        if value is None and isinstance(info.get("features"), dict):
+            value = info["features"].get(lookup_field)
     if value is None:
         return "UNVALIDATED", "none", [f"ARCH_MAP.json {target_arch}.{field} is not set"]
+    # Check for contradictions with the arch's own sub_targets (e.g. gen12_hp
+    # has wmma:true at the top level but its sub_target arc_b580 has wmma:false).
+    # When a contradiction is found the row stays UNVALIDATED rather than
+    # guessing which level is authoritative.
+    if isinstance(info.get("sub_targets"), dict) and value is not None:
+        for sub_name, sub_info in info["sub_targets"].items():
+            sub_val = sub_info.get(lookup_field) if isinstance(sub_info, dict) else None
+            if sub_val is not None and sub_val != value:
+                return ("UNVALIDATED", "none",
+                        [f"ARCH_MAP.json {target_arch}.{field} = {value}; "
+                         f"sub_target {sub_name}.{lookup_field} = {sub_val} disagrees"])
     src = _arch_record(source_arch) if source_arch else {}
-    src_value = _get_nested(src, field) if "." in field else src.get(field) if src else None
+    if "." in lookup_field:
+        src_value = _get_nested(src, lookup_field) if src else None
+    elif src:
+        src_value = src.get(lookup_field)
+        if src_value is None and isinstance(src.get("features"), dict):
+            src_value = src["features"].get(lookup_field)
     evidence = [f"ARCH_MAP.json {target_arch}.{field} = {value}"]
     if src and src_value is not None:
         evidence.append(f"source `{source_arch}.{field} = {src_value}`")
