@@ -346,6 +346,77 @@
         "note": "V3 is the predecessor to V4; most kernels are shared but dimensions differ. Check exact KV cache layout.",
         "gfx1031": "Builds with portable kernels (no WMMA). Same HIP toolchain as gfx1030. Validate against gfx1030 baseline."
       }
+    },
+    "llama-cpp-cpu": {
+      "engine": "llama.cpp",
+      "architecture": "llama (CPU-only, n_gpu_layers=0)",
+      "quant_formats": [
+        "q4_0",
+        "q4_k_m",
+        "q4_k_s",
+        "q2_k",
+        "q5_0",
+        "q8_0",
+        "f16"
+      ],
+      "source_repo": "https://github.com/ggml-org/llama.cpp",
+      "kernels_needed": {
+        "load": [
+          "gguf_parse (gguf.cpp:460)",
+          "mmap_alias (llama-model.cpp:1962)",
+          "read_raw_fallback (llama-model-loader.cpp:1751)"
+        ],
+        "attention": [
+          "cpu_vec_dot_q4_0_q8_0 (ggml-cpu.c:242)",
+          "flash_attn_f16_mask (llama-graph.cpp:36)",
+          "kqv_scan (llama-kv-cache.cpp:850)"
+        ],
+        "kv_cache": [
+          "kv_init_batch (llama-kv-cache.cpp:696)",
+          "find_slot (:893)",
+          "get_ubatch/next/apply (:2855/:2825/:2835)"
+        ],
+        "graph": [
+          "build_graph (llama-model.cpp:3351)",
+          "graph_compute_batched_flag (llama-context.cpp:1588)",
+          "sched_graph_compute_async (:2771)"
+        ],
+        "sampler": [
+          "chain_apply (llama-sampler.cpp:682)",
+          "sample (llama-sampler.cpp:896)",
+          "common_sample (common/sampling.cpp:606)"
+        ],
+        "loop": [
+          "completion_while (tools/completion/completion.cpp:544)",
+          "server_update_slots (tools/server/server-context.cpp:3470)",
+          "is_eog (llama-vocab.cpp:4731)"
+        ]
+      },
+      "kernels_new": [],
+      "dispatch_points": {
+        "src/llama.cpp:316": "llama_model_load() entry; fans out to loader/mmap/gguf/model paths",
+        "src/llama-model-loader.cpp:535": "loader ctor: gguf_init_from_file + llama_file open",
+        "ggml/src/gguf.cpp:966": "init_from_file_ptr -> init_from_reader: magic/ver/tensors/KV/align/tensor-infos",
+        "src/llama-model.cpp:1596": "load_tensors: make_cpu_buft_list + per-tensor create_tensor",
+        "src/llama-model.cpp:1948": "mmap zero-copy fast path vs alloc+memcpy",
+        "include/llama.h:1006": "llama_decode() API",
+        "src/llama-context.cpp:1839": "decode(batch_ext): n_tokens check, memory_update, init_batch, ubatch loop",
+        "src/llama-context.cpp:1588": "graph_compute(gf, ubatch.n_tokens>1): TRUE=prefill/GEMM, FALSE=decode/GEMV",
+        "src/llama-context.cpp:2750": "batched ? n_threads_batch : n_threads + threadpool + sched compute",
+        "src/llama-sampler.cpp:896": "sampler_sample: logits -> chain_apply -> accept",
+        "tools/completion/completion.cpp:544": "single-slot while(n_remain): overflow shift vs break, EOS break",
+        "tools/server/server-context.cpp:3470": "multi-slot update_slots: shift, KV-full retry, STOP_EOS/LIMIT"
+      },
+      "arch_notes": {
+        "cpu-x86": "decode = BW/bytes GEMV memory-bound; prefill = SIMD_FLOPS/2P GEMM compute-bound (UNVALIDATED formula, PASS mechanism)",
+        "n_threads": "batched ? n_threads_batch : n_threads (llama-context.cpp:2750); oversubscribe -> barrier stall (ggml-cpu.c:576)",
+        "quant": "Q4_0/Q4_K_M/Q2_K low bytes fast GEMV (ggml-cpu.c:242); Q8/F16 ~2x traffic SLOW decode",
+        "simd": "AVX2/VNNI/AMX/NEON-DOT vec_dot path (arch/x86/quants.c:28); scalar fallback quants.c:225 is 3-8x SLOW",
+        "ctx": "KV scan every decode step (llama-kv-cache.cpp:850); KV<=8k short ok, large KV SLOW",
+        "load": "mmap alias (llama-model.cpp:1962) FAST; read_raw copy (llama-model-loader.cpp:1751) SLOW; n_threads irrelevant at load",
+        "evidence": "PASS code-traced flow+gates; numbers UNVALIDATED until measured on real .gguf",
+        "detail": "learnings/LLAMA_CPP_CPU_INFERENCE_LEARNINGS.md + llama_cpu_infer_gates.py gate model"
+      }
     }
   }
 }

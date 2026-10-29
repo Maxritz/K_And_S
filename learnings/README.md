@@ -33,3 +33,8 @@ Durable, distilled knowledge from porting engagements. **This folder is committe
 
 - `TINY_VLLM_CPU_PORT_LEARNINGS.md` — tiny-vllm CPU port: what transfers, what drops
 - `TINY_VLLM_CPU_WINDOWS_PORT_LEARNINGS.md` — tiny-vllm CPU/Windows: toolchain + BLAS reality
+- `LLAMA_CPP_vs_KINDI_PIPELINE_LEARNINGS.md` — pipeline comparison (698 lines)
+- `LLAMA_CPP_CPU_INFERENCE_LEARNINGS.md` — llama.cpp CPU inference notes
+- `GGUF_QUANTIZATION_LEARNINGS.md` — GGUF quantization (distilled from iuliaturc/gguf-docs)
+- `HYPERTHINK_ARXIV_2610_03039_LEARNINGS.md` — HYPERTHINK + 5 foundational papers
+- `VULKAN_SYNC_TDR_LEARNINGS.md` — Vulkan barriers, ping-pong queues, occupancy, TDR/hang prevention

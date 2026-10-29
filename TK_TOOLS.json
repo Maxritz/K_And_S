@@ -1,15 +1,13 @@
 {
   "description": "GPU toolkit and toolchain matrix for porting. Covers GPU backends (ROCm, CUDA, oneAPI, OpenVINO) AND host toolchains (MSVC, MinGW, MSYS2, GCC, Clang).",
-
   "gpu_toolkits": {
-
     "rocm": {
       "name": "ROCm 10.1 / ROC 10.1 (AMD's new branding)",
       "vendor": "AMD",
       "root_env": "ROCM_PATH",
       "version_history": {
         "current": "ROC 10.1.0 (internal HIP 7.16.0, LLVM 24, released 2026-10-05)",
-        "branding_change": "ROCm 7.14.0 was the first production release on TheRock build system. ROCm 7.2 was the last legacy release. AMD jumped 7.x → 10.x branding for ROCm.AI initiative.",
+        "branding_change": "ROCm 7.14.0 was the first production release on TheRock build system. ROCm 7.2 was the last legacy release. AMD jumped 7.x \u2192 10.x branding for ROCm.AI initiative.",
         "breaking_changes_from_rocm_7_2": [
           "Installation dir: /opt/rocm/core-10.1 (was /opt/rocm-7.2/)",
           "Package names: amdrocm-* (was rocm-*/roc-*/*-hip)",
@@ -20,10 +18,10 @@
           "HIPCC and FLANG no longer standalone packages"
         ],
         "new_components_in_10_1": [
-          "hipThreads — GPU concurrency library for incremental CPU-thread→GPU acceleration",
-          "AMD SMI (amd-smi) — unified GPU/CPU/APU monitoring",
-          "ROCm CLI v0.2.0 — single-binary installer with TUI dashboard",
-          "AMD Infinity Storage + hipFILE — direct storage→GPU without CPU staging",
+          "hipThreads \u2014 GPU concurrency library for incremental CPU-thread\u2192GPU acceleration",
+          "AMD SMI (amd-smi) \u2014 unified GPU/CPU/APU monitoring",
+          "ROCm CLI v0.2.0 \u2014 single-binary installer with TUI dashboard",
+          "AMD Infinity Storage + hipFILE \u2014 direct storage\u2192GPU without CPU staging",
           "NUMA-aware host memory allocation (hipMemCreate with hipMemLocationTypeHostNuma)",
           "Coarse-grained memory coherency on Windows (hipHostRegister w/ hipExtHostRegisterCoarseGrained)"
         ]
@@ -39,17 +37,56 @@
         "amdlinker": "${ROCM_PATH}/bin/amdlinker",
         "ld_lld": "${ROCM_PATH}/llvm/bin/ld.lld"
       },
-      "libraries": ["hip", "rocblas", "rocblaslt", "rocwmma", "hsa-runtime"],
+      "libraries": [
+        "hip",
+        "rocblas",
+        "rocblaslt",
+        "rocwmma",
+        "hsa-runtime"
+      ],
       "library_path": "${ROCM_PATH}/lib64",
       "include_path": "${ROCM_PATH}/include",
-      "env_vars": ["ROCM_PATH", "HIP_VISIBLE_DEVICES", "HSA_OVERRIDE_GFX_VERSION", "HSA_OVERRIDE_GFX", "ROCBLAS_USE_HIPBLASLT", "HSA_ENABLE_WINDOWS10_COMPAT_MODE"],
-      "supported_archs": ["gfx908", "gfx1030", "gfx1031", "gfx1100", "gfx1101", "gfx1102", "gfx1103", "gfx1150", "gfx1151", "gfx1200", "gfx1201"],
+      "env_vars": [
+        "ROCM_PATH",
+        "HIP_VISIBLE_DEVICES",
+        "HSA_OVERRIDE_GFX_VERSION",
+        "HSA_OVERRIDE_GFX",
+        "ROCBLAS_USE_HIPBLASLT",
+        "HSA_ENABLE_WINDOWS10_COMPAT_MODE"
+      ],
+      "supported_archs": [
+        "gfx908",
+        "gfx1030",
+        "gfx1031",
+        "gfx1100",
+        "gfx1101",
+        "gfx1102",
+        "gfx1103",
+        "gfx1150",
+        "gfx1151",
+        "gfx1200",
+        "gfx1201"
+      ],
       "min_version": "ROCm 7.0 / ROC 10.1 (current branding: AMD renamed ROCm 7.16 internal to 'ROC 10.1', a complete rewrite from ROCm 7.2 based on TheRock build system)",
       "install_url": "https://rocm.docs.amd.com/en/latest/deploy/linux/Installation-Guide.html",
       "blas_backend": {
         "description": "rocBLAS uses Tensile (built-in) and hipBLASLt (external) for GEMM. Selection is automatic per-arch.",
-        "hipblaslt_archs": ["gfx1200", "gfx1201", "gfx1250"],
-        "tensile_only_archs": ["gfx908", "gfx1030", "gfx1031", "gfx1100", "gfx1101", "gfx1102", "gfx1103", "gfx1150", "gfx1151"],
+        "hipblaslt_archs": [
+          "gfx1200",
+          "gfx1201",
+          "gfx1250"
+        ],
+        "tensile_only_archs": [
+          "gfx908",
+          "gfx1030",
+          "gfx1031",
+          "gfx1100",
+          "gfx1101",
+          "gfx1102",
+          "gfx1103",
+          "gfx1150",
+          "gfx1151"
+        ],
         "env_var": "ROCBLAS_USE_HIPBLASLT (0=force Tensile, 1=prefer hipBLASLt, unset=auto)",
         "rdna2_note": "gfx103X uses Tensile only: hipBLASLt not supported. Build via TheRock PR #1629 for full gfx1031 support. Use HSA_OVERRIDE_GFX_VERSION=10.3.0 on Windows.",
         "roc_10_1_notes": "ROC 10.1 (HIP 7.16, LLVM 24): install dir is /opt/rocm/core-10.1, packages are amdrocm-*. hipThreads library added. AMD SMI replaces ROCm SMI. hipBLAS+rocBLAS combined into amdrocm-blas."
@@ -59,10 +96,22 @@
         "compiler": "${ROCM_PATH}/bin/hipcc.exe",
         "msvc_compat": "Requires MSVC 2022 (v143) or newer as host compiler",
         "sdk_paths": [
-          { "env": "ROCM_PATH", "desc": "Primary ROCm install root from environment variable" },
-          { "path": "C:\\Program Files\\AMD ROCm", "desc": "Default ROCm install location" },
-          { "path": "C:\\dev\\rocm", "desc": "Development/test install location" },
-          { "path": "C:\\msys64\\usr\\local\\rocm", "desc": "MSYS2-based install" }
+          {
+            "env": "ROCM_PATH",
+            "desc": "Primary ROCm install root from environment variable"
+          },
+          {
+            "path": "C:\\Program Files\\AMD ROCm",
+            "desc": "Default ROCm install location"
+          },
+          {
+            "path": "C:\\dev\\rocm",
+            "desc": "Development/test install location"
+          },
+          {
+            "path": "C:\\msys64\\usr\\local\\rocm",
+            "desc": "MSYS2-based install"
+          }
         ],
         "notes": "Windows ROCm: requires ROCm 6.0+; HIP runtime ships as DLL; may need HSA_OVERRIDE_GFX=gfx1201 for RDNA4"
       },
@@ -70,16 +119,27 @@
         "supported": true,
         "compiler": "${ROCM_PATH}/bin/hipcc",
         "sdk_paths": [
-          { "env": "ROCM_PATH", "desc": "Primary ROCm install root from environment variable" },
-          { "path": "/opt/rocm", "desc": "Standard Linux install (ROCm 7.x)" },
-          { "path": "/opt/rocm/core-10.1", "desc": "ROC 10.1 TheRock install location" },
-          { "path": "/usr/local/rocm", "desc": "Alternative install location" }
+          {
+            "env": "ROCM_PATH",
+            "desc": "Primary ROCm install root from environment variable"
+          },
+          {
+            "path": "/opt/rocm",
+            "desc": "Standard Linux install (ROCm 7.x)"
+          },
+          {
+            "path": "/opt/rocm/core-10.1",
+            "desc": "ROC 10.1 TheRock install location"
+          },
+          {
+            "path": "/usr/local/rocm",
+            "desc": "Alternative install location"
+          }
         ],
         "notes": "Standard setup; hipblaslt tuning tables in tools/hip/*.txt"
       },
       "notes": "hipcc compiles .cu as HIP language. rocWMMA required for WMMA path on gfx1100/1150/1151; absent on gfx1030/gfx1200/gfx1201 (portable F32 fallback). The WMMA/CooperativeMatrix extensions must be verified per-target-arch using kands://isa-references."
     },
-
     "cuda": {
       "name": "CUDA (NVIDIA)",
       "vendor": "NVIDIA",
@@ -107,11 +167,26 @@
         "warning": "--compiler-options -Wall -Wextra (passes through to host compiler)",
         "host_compiler": "--compiler-bindir \"path/to/msvc\" (specify host compiler for Windows)"
       },
-      "libraries": ["cudart_static", "cublas", "cublasLt", "cudaProfilerApi"],
+      "libraries": [
+        "cudart_static",
+        "cublas",
+        "cublasLt",
+        "cudaProfilerApi"
+      ],
       "library_path": "${CUDA_PATH}/lib/x64 (Windows) or ${CUDA_PATH}/lib64 (Linux)",
       "include_path": "${CUDA_PATH}/include",
-      "env_vars": ["CUDA_PATH", "CUDA_VISIBLE_DEVICES", "CUDA_HOME"],
-      "supported_archs": ["sm_75", "sm_80", "sm_86", "sm_89", "sm_120"],
+      "env_vars": [
+        "CUDA_PATH",
+        "CUDA_VISIBLE_DEVICES",
+        "CUDA_HOME"
+      ],
+      "supported_archs": [
+        "sm_75",
+        "sm_80",
+        "sm_86",
+        "sm_89",
+        "sm_120"
+      ],
       "min_version": "CUDA 11.5",
       "install_url": "https://docs.nvidia.com/cuda/cuda-installation-guide-linux/",
       "windows": {
@@ -132,7 +207,6 @@
       },
       "notes": "CMAKE_CUDA_ARCHITECTURES must be >= 75. Uses --use_fast_math for native_* kernels. Tensor core path (mma_now()) active on sm_80+."
     },
-
     "oneapi": {
       "name": "Intel oneAPI DPC++/C++",
       "vendor": "Intel",
@@ -143,11 +217,26 @@
         "igf": "${ONEAPI_ROOT}/compiler/latest/linux/bin/igf"
       },
       "linker": {},
-      "libraries": ["sycl", "mkl", "tbb", "oneDPL", "igc"],
+      "libraries": [
+        "sycl",
+        "mkl",
+        "tbb",
+        "oneDPL",
+        "igc"
+      ],
       "library_path": "${ONEAPI_ROOT}/compiler/latest/linux/lib (Linux) or ${ONEAPI_ROOT}\\compiler\\latest\\windows\\lib\\intel64 (Windows)",
       "include_path": "${ONEAPI_ROOT}/compiler/latest/include",
-      "env_vars": ["ONEAPI_ROOT", "CXX=icpx", "SYCL_DEVICE_FILTER"],
-      "supported_archs": ["gen12", "gen13", "arc_alchemist", "arc_battlemage"],
+      "env_vars": [
+        "ONEAPI_ROOT",
+        "CXX=icpx",
+        "SYCL_DEVICE_FILTER"
+      ],
+      "supported_archs": [
+        "gen12",
+        "gen13",
+        "arc_alchemist",
+        "arc_battlemage"
+      ],
       "min_version": "oneAPI 2023",
       "install_url": "https://www.intel.com/content/www/us/en/developer/tools/oneapi/dpc-cpp-cpp-compiler.html",
       "windows": {
@@ -161,7 +250,6 @@
       },
       "notes": "Targets Intel Arc discrete GPUs and integrated GPUs via SYCL/DPC++. Can emit SPIR-V for Vulkan. DPAS matrix instruction on Arc. EU subgroups of 8 threads (vs AMD wave32)."
     },
-
     "openvino": {
       "name": "OpenVINO",
       "vendor": "Intel",
@@ -172,16 +260,28 @@
         "nncf": "pip install nncf"
       },
       "linker": {},
-      "libraries": ["inference_engine", "ngraph", "openvino", "cpu_extension"],
+      "libraries": [
+        "inference_engine",
+        "ngraph",
+        "openvino",
+        "cpu_extension"
+      ],
       "library_path": "${OPENVINO_ROOT}/deployment_tools/lib/intel64",
       "include_path": "${OPENVINO_ROOT}/deployment_tools/include",
-      "env_vars": ["OPENVINO_ROOT", "PYTHONPATH", "OPENVINO_CPU_THREADS_NUM"],
-      "supported_archs": ["gen12", "gen13", "arc_alchemist"],
+      "env_vars": [
+        "OPENVINO_ROOT",
+        "PYTHONPATH",
+        "OPENVINO_CPU_THREADS_NUM"
+      ],
+      "supported_archs": [
+        "gen12",
+        "gen13",
+        "arc_alchemist"
+      ],
       "min_version": "OpenVINO 2023.0",
       "install_url": "https://docs.openvino.ai/latest/get-started.html",
       "notes": "Post-training quantization + model optimizer. Not a compiler; wraps oneAPI/DPC++ for Intel GPU inference. Good for INT8/GPTQ quantized LLMs on Arc."
     },
-
     "vulkan": {
       "name": "Vulkan Compute",
       "vendor": "Khronos Group",
@@ -193,17 +293,39 @@
         "spirv_val": "${VULKAN_SDK}/Bin/spirv-val"
       },
       "linker": {},
-      "libraries": ["vulkan-1", "spirv-tools", "shaderc"],
+      "libraries": [
+        "vulkan-1",
+        "spirv-tools",
+        "shaderc"
+      ],
       "library_path": "${VULKAN_SDK}/Lib (Windows) or /usr/lib/x86_64-linux-gnu (Linux)",
       "include_path": "${VULKAN_SDK}/Include",
-      "env_vars": ["VK_SDK_PATH", "VULKAN_SDK", "VK_ICD_FILENAMES", "VK_LAYER_PATHS"],
-      "supported_archs": ["sm_75", "sm_80", "sm_86", "sm_89", "sm_120", "gfx1030", "gfx1100", "gfx1151", "gfx1200", "gfx1201", "gen12_lp", "gen12_hp"],
+      "env_vars": [
+        "VK_SDK_PATH",
+        "VULKAN_SDK",
+        "VK_ICD_FILENAMES",
+        "VK_LAYER_PATHS"
+      ],
+      "supported_archs": [
+        "sm_75",
+        "sm_80",
+        "sm_86",
+        "sm_89",
+        "sm_120",
+        "gfx1030",
+        "gfx1100",
+        "gfx1151",
+        "gfx1200",
+        "gfx1201",
+        "gen12_lp",
+        "gen12_hp"
+      ],
       "min_version": "Vulkan 1.3",
       "install_url": "https://vulkan.lunarg.com/sdk/home",
       "cooperative_matrix": {
-        "nvidia": "GL_NV_cooperative_matrix — supported on SM 7.5+ via driver 535.x+",
-        "amd": "GL_KHR_cooperative_matrix — **BROKEN** on AMD drivers (radv/AMDVLK). Must use DP4a (spv_dp4) fallback.",
-        "intel": "GL_KHR_cooperative_matrix — supported on Arc A-Series via igc"
+        "nvidia": "GL_NV_cooperative_matrix \u2014 supported on SM 7.5+ via driver 535.x+",
+        "amd": "GL_KHR_cooperative_matrix \u2014 **BROKEN** on AMD drivers (radv/AMDVLK). Must use DP4a (spv_dp4) fallback.",
+        "intel": "GL_KHR_cooperative_matrix \u2014 supported on Arc A-Series via igc"
       },
       "dp4a_fallback": {
         "extension": "GL_KHR_shader_integer_dot_product",
@@ -218,17 +340,16 @@
       "linux": {
         "supported": true,
         "compiler": "glslc (apt: vulkan-sdk)",
-        "notes": "Use glslc for GLSL→SPIR-V. spirv-val for validation. Mesa radv or AMDVLK for AMD."
+        "notes": "Use glslc for GLSL\u2192SPIR-V. spirv-val for validation. Mesa radv or AMDVLK for AMD."
       },
-      "notes": "Cross-platform compute via SPIR-V. AMD Vulkan: CooperativeMatrix broken — use DP4a. NVIDIA Vulkan: CooperativeMatrix supported natively."
+      "notes": "Cross-platform compute via SPIR-V. AMD Vulkan: CooperativeMatrix broken \u2014 use DP4a. NVIDIA Vulkan: CooperativeMatrix supported natively."
     },
-
     "directx12": {
       "name": "Direct3D 12 / DirectML / DXC",
       "vendor": "Microsoft",
       "root_env": "DXC_PATH",
       "compiler": {
-        "dxc": "C:\\Program Files\\Windows Kits\\10\\bin\\<sdk>\\x64\\dxc.exe (HLSL→DXIL)",
+        "dxc": "C:\\Program Files\\Windows Kits\\10\\bin\\<sdk>\\x64\\dxc.exe (HLSL\u2192DXIL)",
         "dxil_dll": "dxil.dll (DXIL runtime, part of DirectX Agility SDK)",
         "agility_sdk": "nuget: Microsoft.Direct3D.DXGI or vcpkg: directxheaders"
       },
@@ -236,34 +357,71 @@
         "dxcompiler_lib": "dxcompiler.lib (DXC programmatic API)",
         "d3d12_lib": "d3d12.lib"
       },
-      "libraries": ["d3d12", "dxgi", "d3dcompiler_47", "dxil", "directml"],
+      "libraries": [
+        "d3d12",
+        "dxgi",
+        "d3dcompiler_47",
+        "dxil",
+        "directml"
+      ],
       "library_path": "C:\\Program Files\\Windows Kits\\10\\Lib\\<sdk>\\um\\x64",
       "include_path": "C:\\Program Files (x86)\\Windows Kits\\10\\Include\\<sdk>\\um\\d3d12",
-      "env_vars": ["DXC_PATH", "DXVK_SDK"],
-      "supported_archs": ["sm_75", "sm_80", "sm_86", "sm_89", "sm_120", "gen12_lp", "gen12_hp"],
+      "env_vars": [
+        "DXC_PATH",
+        "DXVK_SDK"
+      ],
+      "supported_archs": [
+        "sm_75",
+        "sm_80",
+        "sm_86",
+        "sm_89",
+        "sm_120",
+        "gen12_lp",
+        "gen12_hp"
+      ],
       "min_version": "DirectX 12 Agility SDK (June 2024+)",
       "install_url": "https://devblogs.microsoft.com/directx/using-the-directx-12-agility-sdk/",
       "dxc_compiler_notes": "DXC (DirectX Shader Compiler) compiles HLSL to DXIL. Use -T cs_6_6 / -T cs_6_7 for compute shaders. The Agility SDK (nuget) provides headers for D3D12 v1.2+ APIs including enhanced barriers (Rebar).",
       "directx12_agility_sdk": {
-        "description": "Provides latest D3D12 features without OS update — essential for enhanced barriers, Rebar, and mesh shaders",
+        "description": "Provides latest D3D12 features without OS update \u2014 essential for enhanced barriers, Rebar, and mesh shaders",
         "nuget_package": "Microsoft.Direct3D.DXGI",
         "vcpkg_package": "directxheaders",
-        "features": ["enhanced_barriers", "mesh_shaders", "variable_rate_shading", "raytracing_1_1", "sampler_feedback"]
+        "features": [
+          "enhanced_barriers",
+          "mesh_shaders",
+          "variable_rate_shading",
+          "raytracing_1_1",
+          "sampler_feedback"
+        ]
       },
       "rebar": {
-        "description": "Resizable BAR / Rebar GPU memory mapping — allows CPU to access full GPU VRAM",
+        "description": "Resizable BAR / Rebar GPU memory mapping \u2014 allows CPU to access full GPU VRAM",
         "extension": "D3D12_FEATURE_D3D12_OPTIONS12 or DXGI_QUERY_VIDEO_MEMORY_INFO",
         "notes": "Requires motherboard + GPU + CPU support. Enables zero-copy staging buffers for large models. Check via IDXGISubResourceInvariant or DXGI_ADAPTER_FLAG_SOFTWARE."
       },
       "directml": {
         "description": "High-level GPU-accelerated ML inference on Direct3D 12",
-        "supported_formats": ["FP32", "FP16", "INT8", "INT4", "UINT8"],
-        "supported_ops": ["Gemm", "MatMul", "Conv2D", "RNN", "LSTM", "QuantizeLinear", "DequantizeLinear"],
+        "supported_formats": [
+          "FP32",
+          "FP16",
+          "INT8",
+          "INT4",
+          "UINT8"
+        ],
+        "supported_ops": [
+          "Gemm",
+          "MatMul",
+          "Conv2D",
+          "RNN",
+          "LSTM",
+          "QuantizeLinear",
+          "DequantizeLinear"
+        ],
         "python_bindings": "pip install DirectML"
       },
       "windows": {
         "supported": true,
-        "compiler": "dxc.exe (Windows SDK) — HLSL→DXIL→GPU",
+        "compiler": "dxc.exe (Windows SDK) \u2014 HLSL\u2192DXIL\u2192GPU",
         "msvc_compat": "MSVC 2022 17.10+ recommended for DXC integration",
         "sdk_paths": {
           "dxc": "C:\\Program Files\\Windows Kits\\10\\bin\\<sdk>\\x64\\dxc.exe",
@@ -275,12 +433,28 @@
         "supported": false,
         "notes": "Direct3D 12 / DirectML / DXC is Windows-only. Use Vulkan or OpenVINO for Linux GPU compute."
       },
-      "notes": "HLSL → DXIL via DXC (LLVM-based). DirectX Agility SDK provides latest D3D12 features. DirectML wraps D3D12 for ML inference. Rebar support for large model VRAM access."
+      "notes": "HLSL \u2192 DXIL via DXC (LLVM-based). DirectX Agility SDK provides latest D3D12 features. DirectML wraps D3D12 for ML inference. Rebar support for large model VRAM access."
+    },
+    "ggml_cpu": {
+      "name": "llama.cpp ggml CPU backend (reference/oracle)",
+      "vendor": "llama.cpp/ggml",
+      "compiler": {
+        "cpu": "MSVC cl.exe / GCC / Clang (CMake, -DCMAKE_BUILD_TYPE=Release)"
+      },
+      "libraries": [
+        "ggml-cpu (vec_dot_q4_0_q8_0 ggml-cpu.c:242)",
+        "ggml-quants (dequant ggml-quants.c:419+)",
+        "simd: AVX2/VNNI (arch/x86/quants.c:28), NEON/DOTPROD (arch/arm/quants.c:26), AMX (amx/mmq.cpp:19)"
+      ],
+      "supported_archs": [
+        "cpu-x86",
+        "cpu-arm"
+      ],
+      "min_version": "llama.cpp master (CPU-only, n_gpu_layers=0)",
+      "notes": "Reference backend for CPU-as-oracle. decode=BW/bytes GEMV memory-bound; prefill=SIMD_FLOPS/2P GEMM compute-bound (UNVALIDATED formula). Thread rule batched?n_threads_batch:n_threads; scalar fallback quants.c:225 is 3-8x SLOW."
     }
   },
-
   "host_toolchains": {
-
     "msvc": {
       "name": "Microsoft Visual C++ (MSVC)",
       "vendor": "Microsoft",
@@ -297,12 +471,16 @@
       "sdk_lib": "C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\<sdk_ver>\\um\\x64",
       "msvc_version": "14.44.35207 (VS 2022 17.14+)",
       "cpp_standard": "/std:c++20",
-      "flags": ["/W4", "/utf-8", "/EHsc", "/Zi (release PDB)"],
+      "flags": [
+        "/W4",
+        "/utf-8",
+        "/EHsc",
+        "/Zi (release PDB)"
+      ],
       "runtime": "MultiThreaded (static) or MultiThreadedDLL (dynamic)",
       "cmake_generator": "Visual Studio 17 2022",
       "notes": "For standalone compilation: set Windows SDK include/lib paths. CUDA builds: nvcc wraps cl.exe for host code. HIP on Windows: needs hipcc + Windows SDK."
     },
-
     "mingw": {
       "name": "MinGW-w64 (GCC for Windows)",
       "vendor": "MinGW-w64 project",
@@ -312,12 +490,14 @@
         "C:\\mingw64\\bin\\g++.exe"
       ],
       "cpp_standard": "-std=c++20",
-      "flags": ["-Wall", "-Wextra"],
+      "flags": [
+        "-Wall",
+        "-Wextra"
+      ],
       "runtime": "static or shared (libstdc++)",
       "cmake_generator": "MinGW Makefiles or Ninja",
       "notes": "Alternative to MSVC; useful for simpler builds. Does NOT support CUDA (needs nvcc with MSVC host). HIP compilation via mingw not officially supported."
     },
-
     "msys2": {
       "name": "MSYS2 (Unix-like environment for Windows)",
       "vendor": "MSYS2 project",
@@ -335,31 +515,49 @@
         "clang-cl": "C:\\msys64\\clang64\\bin\\clang-cl.exe (drop-in MSVC replacement)"
       },
       "package_manager": "pacman -S <package>",
-      "useful_packages": ["mingw-w64-x86_64-gcc", "mingw-w64-x86_64-clang", "mingw-w64-x86_64-cmake", "make"],
+      "useful_packages": [
+        "mingw-w64-x86_64-gcc",
+        "mingw-w64-x86_64-clang",
+        "mingw-w64-x86_64-cmake",
+        "make"
+      ],
       "notes": "C:\\msys64 is the standard MSYS2 root. Can install both MinGW and Clang toolchains in parallel. hipcc can be built from source via MSYS2."
     },
-
     "gcc": {
       "name": "GCC (GNU Compiler Collection)",
       "vendor": "GNU",
       "compiler": "g++",
       "cpp_standard": "-std=c++20",
-      "flags": ["-Wall", "-Wextra", "-O3"],
-      "platforms": ["Linux (primary)", "macOS via Homebrew", "Windows via MSYS2"],
+      "flags": [
+        "-Wall",
+        "-Wextra",
+        "-O3"
+      ],
+      "platforms": [
+        "Linux (primary)",
+        "macOS via Homebrew",
+        "Windows via MSYS2"
+      ],
       "cmake_generator": "Unix Makefiles"
     },
-
     "clang": {
       "name": "Clang (LLVM)",
       "vendor": "LLVM/Apple",
       "compiler": "clang++",
       "cpp_standard": "-std=c++20",
-      "flags": ["-Wall", "-Wextra", "-O3"],
-      "platforms": ["Linux", "macOS", "Windows (via MSYS2 or LLVM release)"],
+      "flags": [
+        "-Wall",
+        "-Wextra",
+        "-O3"
+      ],
+      "platforms": [
+        "Linux",
+        "macOS",
+        "Windows (via MSYS2 or LLVM release)"
+      ],
       "cmake_generator": "Unix Makefiles or Ninja",
       "notes": "On Linux, hipcc uses Clang/LLVM under the hood. On Windows, clang-cl can act as MSVC replacement if MSVC SDK is available."
     },
-
     "strawberry": {
       "name": "Strawberry Perl",
       "vendor": "Strawberry Perl Project",
@@ -368,9 +566,13 @@
         "C:\\Strawberry\\perl\\bin\\perl.exe",
         "C:\\Strawberry\\bin\\perl.exe"
       ],
-      "required_by": ["MSYS2 package scripts", "Some ROCm/Vulkan build scripts", "CUDA setup scripts"],
+      "required_by": [
+        "MSYS2 package scripts",
+        "Some ROCm/Vulkan build scripts",
+        "CUDA setup scripts"
+      ],
       "cmake_generator": "MinGW Makefiles (with perl in PATH)",
-      "notes": "NOT a C++ compiler — provides Perl for build scripts. Required alongside MSVC or MinGW for many GPU SDK installers and build systems (e.g., amdocl, Vulkan SDK build scripts, some ROCm Makefiles). Ensure C:\\Strawberry\\perl\\bin is in PATH before running build scripts."
+      "notes": "NOT a C++ compiler \u2014 provides Perl for build scripts. Required alongside MSVC or MinGW for many GPU SDK installers and build systems (e.g., amdocl, Vulkan SDK build scripts, some ROCm Makefiles). Ensure C:\\Strawberry\\perl\\bin is in PATH before running build scripts."
     }
   }
 }

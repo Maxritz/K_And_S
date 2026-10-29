@@ -22,6 +22,8 @@ Resources (URI: kands://...):
   kands://perf-benchmarks    Theoretical perf estimates + web search queries
   kands://setup-guide        Interactive target selection guide (GPU backend, OS, arch)
   kands://findings/{name}    Completed porting analysis for a specific engine
+  kands://radical-experiments  RDNA-specific anti-patterns + radical kernel experiments
+  kands://vulkan-sync        Vulkan barriers, sync hazards, TDR/hang prevention, occupancy
 
 Tools:
   discover_kernels()          Scan any repo for kernel/shader sources
@@ -84,6 +86,19 @@ _TARGET_LANGUAGES_PATH = _KANDS_ROOT / "TARGET_LANGUAGES.json"
 _DIAGNOSTICS_PATH = _KANDS_ROOT / "docs" / "DIAGNOSTICS.md"
 _DOX_STYLE_PATH = _KANDS_ROOT / "docs" / "DOX_STYLE.md"
 _PORTING_STRATEGIES_PATH = _KANDS_ROOT / "docs" / "PORTING_STRATEGIES.md"
+_VULKAN_SYNC_TDR_PATH = _KANDS_ROOT / "learnings" / "VULKAN_SYNC_TDR_LEARNINGS.md"
+_MY_SKILLS_DIR = Path.home() / ".config" / "opencode" / "command" / "MySkills"
+if not _MY_SKILLS_DIR.exists():
+    # Fallback: look for it relative to known locations
+    for candidate in [
+        Path.home() / "MySkills",
+        Path.home() / "code" / "MySkills",
+        Path("/usr/local/share/myskills"),
+        Path("/opt/myskills"),
+    ]:
+        if candidate.exists():
+            _MY_SKILLS_DIR = candidate
+            break
 _GOAL_STATE_PATH = Path(__file__).resolve().parent / "state" / "goal.json"
 _GOAL_TEMPLATE_PATH = _KANDS_ROOT / "docs" / "GOAL_TEMPLATE.md"
 _ANALYSIS_CACHE_DIR = Path(__file__).resolve().parent / "state" / "analysis"
@@ -413,6 +428,7 @@ RES_PORTING_PATTERNS = "kands://porting-patterns"
 RES_PORTING_STRATEGIES = "kands://porting-strategies"
 RES_DIAGNOSTICS = "kands://diagnostics"
 RES_LESSONS = "kands://porting-lessons"
+RES_VULKAN_SYNC_TDR = "kands://vulkan-sync"
 RES_DOX_STYLE = "kands://dox-style"
 RES_GOAL = "kands://goal"
 RES_STATUS = "kands://status"
@@ -420,6 +436,8 @@ RES_PERF_HISTORY = "kands://perf-history"
 RES_BENCHMARKS = "kands://perf-benchmarks"
 RES_SETUP_GUIDE = "kands://setup-guide"
 RES_RADICAL_EXPERIMENTS = "kands://radical-experiments"
+RES_MY_SKILLS = "kands://myskills"
+RES_MY_SKILLS_INDEX = "kands://myskills/index"
 RES_FINDINGS_PREFIX = "kands://findings/"
 
 
@@ -532,6 +550,16 @@ _FEATURE_REQUIREMENTS = {
     "router_sigmoid": {"dot4": True},
     "kv_q4":          {"dot4": True},
     "kv_q8":          {"bf16_native": True},
+    # CPU SIMD feature requirements (for CPU arch checks)
+    "avx2_kernel":    {"avx2": True, "fma3": True},
+    "avx512_kernel":  {"avx512": True},
+    "amx_kernel":     {"amx": True},
+    "sse2_kernel":    {"sse2": True},
+    "sve2_kernel":    {"sve2": True},
+    "neon_kernel":    {"neon": True},
+    "fp16_native_kernel": {"fp16_native": True},
+    "aes_kernel":     {"aes": True},
+    "sha_kernel":     {"sha": True},
 }
 
 
@@ -548,6 +576,16 @@ _REQUIRED_FOR_KERNEL = {
     "router_topk":    {"dot4": True},
     "router_sigmoid": {"dot4": True},
     "mma":            {"tensor_cores": True},
+    # CPU SIMD feature requirements
+    "avx2_kernel":    {"avx2": True, "fma3": True},
+    "avx512_kernel":  {"avx512": True},
+    "amx_kernel":     {"amx": True},
+    "sse2_kernel":    {"sse2": True},
+    "sve2_kernel":    {"sve2": True},
+    "neon_kernel":    {"neon": True},
+    "fp16_native_kernel": {"fp16_native": True},
+    "aes_kernel":     {"aes": True},
+    "sha_kernel":     {"sha": True},
 }
 
 
@@ -585,15 +623,24 @@ def _arch_gen_number(name: str) -> int:
 
 def _check_kernel_against_arch(kernel: str, arch_info: dict) -> str:
     """Return 'OK', 'NEEDS_FALLBACK', or 'INCOMPATIBLE'."""
+    is_cpu = arch_info.get("cpu", False)
     for pattern, reqs in _FEATURE_REQUIREMENTS.items():
         if pattern in kernel.lower():
             missing = []
             for feat, needed in reqs.items():
-                if needed and not arch_info.get(feat):
-                    missing.append(feat)
+                if needed:
+                    if is_cpu:
+                        # For CPU arches, check the 'features' dict (SIMD capabilities)
+                        feats = arch_info.get("features", {})
+                        if not feats.get(feat, False):
+                            missing.append(feat)
+                    else:
+                        # For GPU arches, check top-level feature booleans
+                        if not arch_info.get(feat, False):
+                            missing.append(feat)
             if not missing:
                 return "OK"
-            return "NEEDS_FALLBACK"  # Most kernels have F32 fallback
+            return "NEEDS_FALLBACK"  # Most kernels have F32/scalar fallback
     return "OK"
 
 
@@ -729,6 +776,24 @@ def _list_resources() -> list[mcp_types.Resource]:
             description="RDNA/AMD GPU porting anti-patterns + unconventional kernel approaches. Use with radical_experiment_plan() tool.",
             mimeType="text/markdown",
         ),
+        mcp_types.Resource(
+            uri=RES_VULKAN_SYNC_TDR,
+            name="Vulkan Sync & TDR Prevention",
+            description="Vulkan barrier optimization, ping-pong queue patterns, occupancy/latency hiding, GPU hang/TDR prevention, and CUDA-Vulkan context isolation.",
+            mimeType="text/markdown",
+        ),
+        mcp_types.Resource(
+            uri=RES_MY_SKILLS,
+            name="MySkills Directory",
+            description="Lists all available skills from the MySkills framework. Use 'select_skill' to load a specific skill's instructions.",
+            mimeType="application/json",
+        ),
+        mcp_types.Resource(
+            uri=RES_MY_SKILLS_INDEX,
+            name="MySkills Index",
+            description="The skill-index.md file from MySkills — full category listing of all available skills.",
+            mimeType="text/markdown",
+        ),
     ]
 
 
@@ -819,6 +884,25 @@ def _read_resource(uri: str) -> str:
 
     if uri == RES_RADICAL_EXPERIMENTS:
         return _radical_experiments_markdown()
+
+    if uri == RES_VULKAN_SYNC_TDR:
+        if _VULKAN_SYNC_TDR_PATH.exists():
+            return _VULKAN_SYNC_TDR_PATH.read_text(encoding="utf-8")
+        return "# Vulkan Sync & TDR\n\n(Not found)"
+
+    if str(uri) == RES_MY_SKILLS:
+        skill_data = _load_myskills_index()
+        return json.dumps(skill_data, indent=2)
+
+    if str(uri) == RES_MY_SKILLS_INDEX:
+        index_file = _MY_SKILLS_DIR / "skill-index.md"
+        if index_file.exists():
+            return index_file.read_text(encoding="utf-8", errors="replace")
+        return "# MySkills Index\n\n(MySkills directory not found at `%USERPROFILE%\\.config\\opencode\\command\\MySkills`)"
+
+    if str(uri).startswith(RES_MY_SKILLS + "/"):
+        skill_name = uri[len(RES_MY_SKILLS) + 1:]
+        return _read_myskills_skill(skill_name)
 
     if str(uri).startswith(RES_FINDINGS_PREFIX):
         name = uri[len(RES_FINDINGS_PREFIX):]
@@ -916,8 +1000,8 @@ def _bundle_status() -> dict:
                 "age_days": round((now - mtime).total_seconds() / 86400, 1),
             })
     return {
-        "bundle": "kands (Kernels & Shaders)",
-        "version": "0.2.0",
+        "bundle": "kands (Kernels & Shaders + MySkills)",
+        "version": "0.3.0",
         "current_time_utc": now.isoformat(),
         "current_date": now.strftime("%Y-%m-%d"),
         "current_date_human": now.strftime("%B %d, %Y"),
@@ -1071,8 +1155,8 @@ then `read kands://porting-patterns` for transformation patterns.
                 "age_days": round((now - mtime).total_seconds() / 86400, 1),
             })
     return {
-        "bundle": "kands (Kernels & Shaders)",
-        "version": "0.2.0",
+        "bundle": "kands (Kernels & Shaders + MySkills)",
+        "version": "0.3.0",
         "current_time_utc": now.isoformat(),
         "current_date": now.strftime("%Y-%m-%d"),
         "resource_count": len(resources),
@@ -1138,6 +1222,135 @@ def _radical_experiments_markdown() -> str:
 4. Fallback to last-good kernel — NEVER stub
 5. `record_performance(arch=..., workload=...)` after success
 """
+
+
+
+
+# ── MySkills Integration ─────────────────────────────────────────────────
+
+def _infer_skill_category(skill_name: str) -> str:
+    """Infer a skill's category from its directory name when no explicit category exists."""
+    if skill_name.startswith("debug"):
+        return "debug"
+    if skill_name.startswith("llm"):
+        return "ml"
+    if skill_name.startswith("ponytail"):
+        return "optimization"
+    if skill_name.startswith("amd") or skill_name.startswith("nvidia") or skill_name.startswith("vulkan") or skill_name.startswith("intel"):
+        return "gpu"
+    if "git" in skill_name or "deploy" in skill_name or "ci" in skill_name or "release" in skill_name:
+        return "devops"
+    if "python" in skill_name:
+        return "python"
+    if "linux" in skill_name or "windows" in skill_name:
+        return "systems"
+    if "c99" in skill_name or "c-system" in skill_name:
+        return "systems"
+    if "security" in skill_name:
+        return "security"
+    if "test" in skill_name or "testing" in skill_name:
+        return "testing"
+    if "shader" in skill_name or "kernel" in skill_name or "graphics" in skill_name:
+        return "gpu"
+    if "memory" in skill_name or "data-storage" in skill_name:
+        return "systems"
+    if "knowledge" in skill_name or "trace" in skill_name:
+        return "process"
+    if skill_name in ("caveman", "utility-pair"):
+        return "output"
+    if skill_name in ("analysis-log", "context-tracker"):
+        return "process"
+    if skill_name in ("report",):
+        return "devops"
+    if skill_name.startswith("debate"):
+        return "analysis"
+    if skill_name.startswith("deploy-"):
+        return "devops"
+    return "general"
+
+
+def _load_myskills_index() -> dict:
+    """Scan the MySkills directory and return a structured index of available skills.
+
+    Returns a dict with:
+    - skill_count: total number of skills found
+    - categories: dict of category -> list of skill names
+    - skills: list of {name, category, description, path} dicts
+    - myskills_dir: path to the MySkills directory
+    - loaded: bool indicating if the directory was found
+    """
+    result = {
+        "skill_count": 0,
+        "categories": {},
+        "skills": [],
+        "myskills_dir": str(_MY_SKILLS_DIR),
+        "loaded": False,
+    }
+
+    if not _MY_SKILLS_DIR.exists():
+        return result
+
+    result["loaded"] = True
+    categories: dict[str, list[dict]] = {}
+
+    try:
+        for entry in sorted(_MY_SKILLS_DIR.iterdir()):
+            if entry.is_dir() and entry.name not in {".git", ".opencode", ".github"}:
+                skill_md = entry / "SKILL.md"
+                category = _infer_skill_category(entry.name)
+                description = ""
+                skill_name = entry.name
+
+                if skill_md.exists():
+                    try:
+                        text = skill_md.read_text(encoding="utf-8", errors="replace")
+                        # Try to extract category from YAML frontmatter
+                        cat_match = re.search(r"category:\s*(\S+)", text, re.IGNORECASE)
+                        if cat_match:
+                            category = cat_match.group(1).strip()
+                        # Extract description from YAML frontmatter
+                        desc_match = re.search(r"description:\s*\"?(.+?)\"?[\n$]", text, re.IGNORECASE)
+                        if desc_match:
+                            description = desc_match.group(1).strip()
+                        else:
+                            # Fallback: first non-empty, non-heading line
+                            for line in text.splitlines():
+                                l = line.strip()
+                                if l and not l.startswith("#") and not l.startswith("---"):
+                                    description = l[:120]
+                                    break
+                    except Exception:
+                        description = "(failed to read SKILL.md)"
+                # If category still "general", try to infer from name
+                if category == "general":
+                    category = _infer_skill_category(skill_name)
+
+                skill_entry = {
+                    "name": skill_name,
+                    "category": category,
+                    "description": description,
+                    "path": str(entry),
+                }
+                result["skills"].append(skill_entry)
+                categories.setdefault(category, []).append(skill_entry)
+
+        result["skill_count"] = len(result["skills"])
+        result["categories"] = {k: [s["name"] for s in v] for k, v in categories.items()}
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result
+
+
+def _read_myskills_skill(skill_name: str) -> str:
+    """Read a specific MySkills skill's SKILL.md file content."""
+    skill_dir = _MY_SKILLS_DIR / skill_name
+    skill_md = skill_dir / "SKILL.md"
+    if not skill_dir.exists():
+        return f"# Skill not found: {skill_name}\n\nPath: {_MY_SKILLS_DIR / skill_name}\n\nUse kands://myskills to list all available skills."
+    if not skill_md.exists():
+        return f"# {skill_name}\n\nDirectory exists but no SKILL.md found.\n\nAvailable files:\n"
+    return skill_md.read_text(encoding="utf-8", errors="replace")
 
 
 # ── Feature flag search (engine-agnostic) ─────────────────────────────────────
@@ -2707,6 +2920,202 @@ def _detect_local_gpu_arch(arch_map: dict) -> str | None:
     return None  # Could not detect local GPU
 
 
+def _detect_local_cpu_arch(arch_map: dict) -> str | None:
+    """Dynamically detect the local CPU architecture by querying the OS.
+
+    No hardcoded model->arch mappings. Instead:
+    - Windows: parse platform.processor() + OS version
+    - Linux: parse /proc/cpuinfo (CPU part / vendor), uname -m
+    - macOS: parse sysctl -n machdep.cpu.brand_string / sysctl -n machdep.cpu.core_count
+
+    Returns the arch ID (e.g. 'zen4', 'x86_64', 'apple_m3', 'aarch64_neoverse') or None.
+    """
+    import subprocess
+    import os as _os
+    import platform as _platform
+    import re as _re
+
+    entries = arch_map.get("entries", {})
+    machine = _platform.machine().lower()  # 'AMD64', 'arm64', 'x86_64', 'aarch64'
+    processor = (_platform.processor() or "").lower()
+
+    is_windows = _os.name == "nt" or _platform.system() == "Windows"
+    is_linux = _platform.system() == "Linux"
+    is_macos = _platform.system() == "Darwin"
+
+    # ── macOS ──
+    if is_macos:
+        try:
+            r = subprocess.run(['sysctl', '-n', 'machdep.cpu.brand_string'],
+                                capture_output=True, text=True, timeout=5)
+            if r.returncode == 0 and r.stdout.strip():
+                brand = r.stdout.strip().lower()
+                # Match against Apple Silicon entries
+                if 'apple m4' in brand or 'm4 ' in brand:
+                    return 'apple_m4'
+                if 'apple m3' in brand or 'm3 ' in brand:
+                    return 'apple_m3'
+                if 'apple m2' in brand or 'm2 ' in brand:
+                    return 'apple_m2'
+                if 'apple m1' in brand or 'm1 ' in brand:
+                    return 'apple_m1'
+                # Intel Mac fallback
+                if 'intel' in brand:
+                    # Check if it's a recent Intel (10th+ gen) or older
+                    gen_match = _re.search(r'(\d+)(?:th|gen)', brand)
+                    if gen_match:
+                        gen = int(gen_match.group(1))
+                        if gen >= 12:
+                            return f'intel_{gen}th'
+                    return 'intel_11th'  # assume recent if Intel Mac
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+    # ── Linux ──
+    if is_linux:
+        try:
+            with open('/proc/cpuinfo', 'r') as f:
+                cpuinfo = f.read()
+        except (FileNotFoundError, PermissionError):
+            cpuinfo = ""
+
+        if cpuinfo:
+            vendor_match = _re.search(r'vendor_id\s*:\s*(\S+)', cpuinfo)
+            model_match = _re.search(r'model name\s*:\s*(.+)', cpuinfo)
+
+            if vendor_match and model_match:
+                vendor = vendor_match.group(1).lower()
+                model = model_match.group(1).lower()
+
+                if vendor == 'genuineintel' or vendor == 'authentic_amd':
+                    # Intel
+                    if vendor == 'genuinintel':
+                        if 'avx512' in model or 'genuineintel' in vendor:
+                            # Check /proc/cpuinfo flags for AVX-512
+                            flags_match = _re.search(r'flags\s*:\s*(.+)', cpuinfo)
+                            if flags_match:
+                                flags = flags_match.group(1).lower()
+                                if 'avx512' in flags:
+                                    if 'meteor' in model or 'core ultra' in model:
+                                        return 'intel_core_ultra'
+                                    # Check generation from model string
+                                    if '12th' in model or 'alder' in model:
+                                        return 'intel_12th'
+                                    if '13th' in model or 'raptor' in model:
+                                        return 'intel_13th'
+                                    if '14th' in model:
+                                        return 'intel_14th'
+                                    if '11th' in model or 'rocket' in model:
+                                        return 'intel_11th'
+                                    if '10th' in model or 'comet' in model:
+                                        return 'intel_10th'
+                                    return 'intel_12th'  # assume modern if AVX-512 present
+                                else:
+                                    if '12th' in model or 'alder' in model:
+                                        return 'intel_12th'
+                                    if '13th' in model or 'raptor' in model:
+                                        return 'intel_13th'
+                                    if '14th' in model:
+                                        return 'intel_14th'
+
+                    # AMD
+                    if vendor == 'authentic_amd':
+                        if 'zen 4' in model or 'zen4' in model or '78' in model:
+                            return 'zen4'
+                        if 'zen 5' in model or 'zen5' in model:
+                            return 'zen5'
+                        if 'zen 3' in model or 'zen3' in model or 'vermeer' in model:
+                            return 'zen3'
+                        # Check for Neoverse
+                        if 'neoverse' in model or 'cortex' in model:
+                            return 'aarch64_neoverse'
+
+                elif vendor == 'authentic_amd':
+                    if 'zen 4' in model or 'zen4' in model:
+                        return 'zen4'
+                    if 'zen 5' in model or 'zen5' in model:
+                        return 'zen5'
+                    if 'zen 3' in model or 'zen3' in model:
+                        return 'zen3'
+
+        # Architecture-based detection (fallback)
+        if machine in ('aarch64', 'arm64'):
+            # Check if it's an AWS Graviton or Neoverse
+            try:
+                r = subprocess.run(['uname', '-m'], capture_output=True, text=True, timeout=5)
+                # Check for SVE
+                sve_path = '/sys/devices/system/cpu/cpuid/0'
+                # Look at /proc/cpuinfo for sve
+                if cpuinfo and 'sve' in cpuinfo:
+                    return 'aarch64_neoverse'
+                return 'aarch64_neoverse'  # default ARM64
+            except Exception:
+                return 'aarch64_neoverse'
+
+        if machine in ('x86_64', 'amd64'):
+            # x86-64 architecture — check for AVX-512
+            if cpuinfo:
+                flags_match = _re.search(r'flags\s*:\s*(.+)', cpuinfo)
+                if flags_match:
+                    flags = flags_match.group(1).lower()
+                    if 'avx512' in flags:
+                        return 'zen4'  # could be either AMD or Intel with AVX-512
+                    if 'avx2' in flags:
+                        return 'x86_64'  # baseline with AVX2
+            return 'x86_64'
+
+    # ── Windows ──
+    if is_windows:
+        try:
+            r = subprocess.run(['wmic', 'cpu', 'get', 'name'], capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                cpu_name = r.stdout.strip().lower()
+                if 'amd' in cpu_name:
+                    if 'zen 4' in cpu_name or 'zen4' in cpu_name or '78' in cpu_name:
+                        return 'zen4'
+                    if 'zen 5' in cpu_name or 'zen5' in cpu_name:
+                        return 'zen5'
+                    if 'zen 3' in cpu_name or 'zen3' in cpu_name:
+                        return 'zen3'
+                    # Check for AVX-512 (Zen 4 only on AMD)
+                    return 'zen3'  # default AMD CPU
+                if 'intel' in cpu_name:
+                    if '12th' in cpu_name or 'alder' in cpu_name:
+                        return 'intel_12th'
+                    if '13th' in cpu_name or 'raptor' in cpu_name:
+                        return 'intel_13th'
+                    if '14th' in cpu_name:
+                        return 'intel_14th'
+                    if '11th' in cpu_name or 'rocket' in cpu_name:
+                        return 'intel_11th'
+                    if '10th' in cpu_name or 'comet' in cpu_name:
+                        return 'intel_10th'
+                    return 'intel_12th'  # default to modern
+        except Exception:
+            pass
+
+        # Fallback: platform.processor()
+        if processor:
+            if 'amd' in processor or 'zen' in processor:
+                return 'zen4'
+            if 'intel' in processor:
+                return 'intel_12th'
+
+        # Architecture-based fallback
+        if machine in ('amd64', 'x86_64'):
+            return 'x86_64'
+        if machine in ('arm64', 'aarch64'):
+            return 'aarch64_neoverse'
+
+    # Last resort: architecture only
+    if machine in ('x86_64', 'amd64'):
+        return 'x86_64'
+    if machine in ('aarch64', 'arm64'):
+        return 'aarch64_neoverse'
+
+    return None  # Could not detect local CPU
+
+
 def _suggest_target_arch(source_arch: str, arch_map: dict) -> str:
     """Suggest a target arch based on local device detection.
 
@@ -3706,6 +4115,12 @@ import backend_profile  # noqa: E402
 _diagnose_backend = backend_profile.diagnose
 _render_backend_profile = backend_profile.render
 
+import pipeline_analysis  # noqa: E402
+_analyze_pipeline = pipeline_analysis.analyze_pipeline
+_render_pipeline = pipeline_analysis.render_pipeline
+_analyze_core = pipeline_analysis.analyze_core
+_render_core = pipeline_analysis.render_core
+
 
 def _tools() -> list[mcp_types.Tool]:
     """All available MCP tools."""
@@ -4078,6 +4493,18 @@ def _tools() -> list[mcp_types.Tool]:
             },
         ),
         mcp_types.Tool(
+            name="list_skills",
+            description="List all available skills from the MySkills framework. Returns categorized skill index. Use read_resource to get kands://myskills for full data, or kands://myskills/<skill_name> to read a specific skill's instructions.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string", "description": "Filter by category (e.g. 'debug', 'gpu', 'ml', 'optimization'). Empty = all."},
+                    "search": {"type": "string", "description": "Search skill names/descriptions for this term."},
+                },
+                "required": [],
+            },
+        ),
+        mcp_types.Tool(
             name="detect_toolchain",
             description="Dynamically detect installed GPU toolchains + host compilers at runtime. Probes the filesystem, PATH, and environment variables. Returns actual discovered paths — no hardcoded locations.",
             inputSchema={
@@ -4288,6 +4715,31 @@ def _tools() -> list[mcp_types.Tool]:
                 "required": ["api", "target_arch"],
             },
         ),
+        mcp_types.Tool(
+            name="analyze_full_pipeline",
+            description="Analyze a source tree for its full inference pipeline stages (engine init → model load → prompt → decode → attention → KV cache → output). Reports each stage's dispatch model, memory pattern, and porting-critical constructs. General-purpose: works with any engine (llama.cpp, tinyvllm, Kindi, etc.).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "repo": {"type": "string", "description": "Path to the engine source tree"},
+                    "target_arch": {"type": "string", "description": "Target arch ID (e.g. 'gfx1201', 'sm_80') to score constructs against", "default": ""},
+                    "source_arch": {"type": "string", "description": "Source arch ID (e.g. 'sm_80', 'sm_30') for comparison", "default": ""},
+                },
+                "required": ["repo"],
+            },
+        ),
+        mcp_types.Tool(
+            name="analyze_core_engine",
+            description="Analyze an engine's core dispatch architecture: kernel launch strategy, memory management pattern, tensor-parallelism/multi-GPU support, weight layout handling, and host↔device interface. Produces a structured map of how the engine orchestrates its kernels. General-purpose: works with any engine.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "repo": {"type": "string", "description": "Path to the engine source tree"},
+                    "target_arch": {"type": "string", "description": "Target arch ID (e.g. 'gfx1201', 'sm_80') to evaluate dispatch constraints against", "default": ""},
+                },
+                "required": ["repo"],
+            },
+        ),
     ]
 
 
@@ -4360,14 +4812,28 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
     elif name == "check_arch_compatibility":
         kernel_list = arguments.get("kernel_list", [])
         arch_id = arguments.get("arch", "")
-        arch_info = arch_map.get("entries", {}).get(arch_id, {})
+        entries = arch_map.get("entries", {})
+        arch_info = entries.get(arch_id, {})
         if not arch_info:
             results.append(mcp_types.TextContent(type="text", text=f"Architecture '{arch_id}' not found in ARCH_MAP.json"))
         else:
+            is_cpu = arch_info.get("cpu", False)
             report = f"# Architecture: {arch_id} ({arch_info.get('name', '?')})\n\n"
+            report += f"**Type:** {'CPU' if is_cpu else 'GPU'}\n\n"
             report += "| Feature | Value |\n|---|---|\n"
+            # GPU features
             for feat in ["wave_size", "lds_kib", "tensor_cores", "wmma", "dot4", "dot8", "bf16_native", "fp8_native"]:
-                report += f"| {feat} | {arch_info.get(feat, 'N/A')} |\n"
+                if feat in arch_info:
+                    report += f"| {feat} | {arch_info.get(feat, 'N/A')} |\n"
+            # CPU features
+            cpu_feats = arch_info.get("features", {})
+            if cpu_feats:
+                report += "\n### CPU SIMD Features\n\n"
+                report += "| Feature | Available |\n|---|---|\n"
+                for k in ["sse2", "sse3", "sse4_1", "sse4_2", "avx", "avx2", "avx512", "amx", "fma3",
+                          "neon", "sve", "sve2", "aes", "sha", "fp16_native", "apx"]:
+                    if k in cpu_feats:
+                        report += f"| {k} | {cpu_feats[k]} |\n"
             report += "\n## Kernel Compatibility:\n\n"
             for kern in kernel_list:
                 status = _check_kernel_against_arch(kern, arch_info)
@@ -4377,6 +4843,10 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
                 report += "\n## Known Issues:\n"
                 for issue in arch_info["known_issues"]:
                     report += f"- {issue}\n"
+            if arch_info.get("porting_notes"):
+                report += "\n## Porting Notes:\n"
+                for k, v in arch_info["porting_notes"].items():
+                    report += f"- **{k}:** {v}\n"
             results.append(mcp_types.TextContent(type="text", text=report))
 
     elif name == "query_kernel_features":
@@ -4425,25 +4895,82 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
             missing = arguments.get("arch_a") if not a else arguments.get("arch_b")
             results.append(mcp_types.TextContent(type="text", text=f"Architecture '{missing}' not found in ARCH_MAP.json"))
         else:
+            is_a_cpu = a.get("cpu", False)
+            is_b_cpu = b.get("cpu", False)
             report = f"# Comparing {arguments['arch_a']} ({a.get('name')}) vs {arguments['arch_b']} ({b.get('name')})\n\n"
-            report += "| Feature | A | B | Gap |\n|---|---|---|---|\n"
-            for k in ["wave_size", "lds_kib", "tensor_cores", "wmma", "dot4", "dot8", "bf16_native", "fp8_native"]:
-                va = a.get(k, "?"); vb = b.get(k, "?")
-                gap = "SAME" if str(va) == str(vb) else "DIFF"
-                report += f"| {k} | {va} | {vb} | {gap} |\n"
+            report += f"**A ({arguments['arch_a']}):** {'CPU' if is_a_cpu else 'GPU'}\n"
+            report += f"**B ({arguments['arch_b']}):** {'CPU' if is_b_cpu else 'GPU'}\n\n"
+
+            if is_a_cpu and is_b_cpu:
+                # CPU-to-CPU SIMD feature comparison
+                fa = a.get("features", {})
+                fb = b.get("features", {})
+                all_feats = sorted(set(fa.keys()) | set(fb.keys()))
+                report += "## CPU SIMD Features Comparison\n\n"
+                report += "| Feature | A | B | Gap |\n|---|---|---|---|\n"
+                for feat in all_feats:
+                    va = fa.get(feat, False)
+                    vb = fb.get(feat, False)
+                    gap = "SAME" if va == vb else ("LOST" if va and not vb else "GAINED")
+                    report += f"| {feat} | {va} | {vb} | {gap} |\n"
+                report += "\n## Porting Implications (CPU -> CPU)\n\n"
+                lost = [f for f in all_feats if fa.get(f) and not fb.get(f)]
+                gained = [f for f in all_feats if not fa.get(f) and fb.get(f)]
+                if lost:
+                    report += f"- LOST on target: {', '.join(lost)} -- CPU kernels using these need scalar or lower-SIMD fallback\n"
+                if gained:
+                    report += f"- GAINED on target: {', '.join(gained)}\n"
+                common_cpu_feats = ["sse2", "avx2", "avx512", "neon", "sve2", "amx", "aes", "sha"]
+                report += "\n## Shared CPU SIMD Features\n\n"
+                for k in common_cpu_feats:
+                    va = fa.get(k, False)
+                    vb = fb.get(k, False)
+                    report += f"- {k}: A={va}, B={vb}\n"
+            else:
+                # GPU or mixed comparison
+                report += "| Feature | A | B | Gap |\n|---|---|---|---|\n"
+                for k in ["wave_size", "lds_kib", "tensor_cores", "wmma", "dot4", "dot8", "bf16_native", "fp8_native"]:
+                    va = a.get(k, "?"); vb = b.get(k, "?")
+                    gap = "SAME" if str(va) == str(vb) else "DIFF"
+                    report += f"| {k} | {va} | {vb} | {gap} |\n"
+                if is_a_cpu != is_b_cpu:
+                    report += "\n## Mixed CPU/GPU Comparison\n\n"
+                    if is_a_cpu and not is_b_cpu:
+                        report += f"A is CPU ({arguments['arch_a']}), B is GPU ({arguments['arch_b']}).\n"
+                    else:
+                        report += f"A is GPU ({arguments['arch_a']}), B is CPU ({arguments['arch_b']}).\n"
+                    report += "CPU SIMD does NOT map to GPU features. CPU kernels use host SIMD; GPU kernels use device intrinsics.\n"
+
             report += f"\n## Issues on {arguments['arch_a']}:\n"
             for issue in a.get("known_issues", []):
                 report += f"- {issue}\n"
+            if is_a_cpu and is_b_cpu:
+                report += "\n## Porting Implications:\n"
+                # CPU-specific porting implications
             report += f"\n## Issues on {arguments['arch_b']}:\n"
             for issue in b.get("known_issues", []):
                 report += f"- {issue}\n"
+
             report += "\n## Porting Implications:\n"
-            if a.get("wmma") and not b.get("wmma"):
-                report += f"- WMMA kernels on {arguments['arch_a']} need F32 fallback on {arguments['arch_b']}\n"
-            if a.get("bf16_native") and not b.get("bf16_native"):
-                report += f"- BF16-native kernels on {arguments['arch_a']} need emulation on {arguments['arch_b']}\n"
-            if a.get("dot8") and not b.get("dot8"):
-                report += f"- Dot8 kernels on {arguments['arch_a']} need fallback on {arguments['arch_b']}\n"
+            if not is_a_cpu and not is_b_cpu:
+                # Original GPU implications
+                if a.get("wmma") and not b.get("wmma"):
+                    report += f"- WMMA kernels on {arguments['arch_a']} need F32 fallback on {arguments['arch_b']}\n"
+                if a.get("bf16_native") and not b.get("bf16_native"):
+                    report += f"- BF16-native kernels on {arguments['arch_a']} need emulation on {arguments['arch_b']}\n"
+                if a.get("dot8") and not b.get("dot8"):
+                    report += f"- Dot8 kernels on {arguments['arch_a']} need fallback on {arguments['arch_b']}\n"
+                if a.get("wmma") and not b.get("wmma"):
+                    report += f"- WMMA kernels need F32 fallback on {arguments['arch_b']}\n"
+            elif is_a_cpu and is_b_cpu:
+                fa = a.get("features", {})
+                fb = b.get("features", {})
+                if fa.get("avx512") and not fb.get("avx512"):
+                    report += f"- AVX-512 kernels need AVX2 fallback on {arguments['arch_b']}\n"
+                if fa.get("amx") and not fb.get("amx"):
+                    report += f"- AMX kernels need AVX2/scalar fallback on {arguments['arch_b']}\n"
+                if not fa.get("sve2") and fb.get("sve2"):
+                    report += f"- Target {arguments['arch_b']} has SVE2 \u2192 can add SVE2 kernels\n"
             results.append(mcp_types.TextContent(type="text", text=report))
 
     elif name == "generate_porting_report":
@@ -5117,6 +5644,74 @@ gh pr view --web
 
         results.append(mcp_types.TextContent(type="text", text=report))
 
+    elif name == "list_skills":
+        category = arguments.get("category", "")
+        search = arguments.get("search", "").lower()
+        skill_data = _load_myskills_index()
+
+        if not skill_data.get("loaded", False):
+            results.append(mcp_types.TextContent(type="text", text=f"""# MySkills Not Found
+
+**Expected directory:** `{skill_data.get("myskills_dir", "unknown")}`
+
+The MySkills framework was not found. To use skills:
+
+1. Clone MySkills to `%USERPROFILE%\\.config\\opencode\\command\\MySkills` (Windows) or `~/.config/opencode/command/MySkills` (Linux)
+2. Or edit `_MY_SKILLS_DIR` in `server.py` to point to your MySkills checkout
+
+Available resources:
+- `kands://myskills` — structured JSON index of all skills
+- `kands://myskills/index` — raw skill-index.md
+- `kands://myskills/<skill_name>` — full SKILL.md for any skill
+"""))
+        else:
+            report = f"# Available MySkills ({skill_data["skill_count"]} skills)\n\n"
+            report += f"**Directory:** `{skill_data["myskills_dir"]}`\n\n"
+
+            if search:
+                # Filter by search term
+                matched = [s for s in skill_data["skills"]
+                          if search in s["name"].lower() or search in s.get("description", "").lower()]
+                report += f"**Search filter:** `{search}` → {len(matched)} matches\n\n"
+                if not matched:
+                    results.append(mcp_types.TextContent(type="text", text=report + "_No skills match the search term._"))
+                    return results
+                skills_to_show = matched
+            else:
+                skills_to_show = skill_data["skills"]
+
+            # Group by category
+            by_cat: dict[str, list] = {}
+            for s in skills_to_show:
+                by_cat.setdefault(s["category"], []).append(s)
+
+            # Show categories in a readable order
+            cat_order = ["debug", "gpu", "ml", "optimization", "systems", "devops",
+                        "python", "testing", "security", "porting", "general"]
+            shown_cats = []
+            for cat in cat_order:
+                if cat in by_cat:
+                    shown_cats.append(cat)
+            for cat in sorted(by_cat.keys()):
+                if cat not in shown_cats:
+                    shown_cats.append(cat)
+
+            for cat in shown_cats:
+                cat_skills = by_cat[cat]
+                report += f"## {cat.title()} ({len(cat_skills)})\n\n"
+                for s in cat_skills:
+                    report += f"- **`{s["name"]}`** — {s.get("description", "")[:100]}\n"
+                report += "\n"
+
+            report += "## How to Use Skills\n\n"
+            report += "1. **Read a skill:** `read kands://myskills/<skill_name>` for full SKILL.md instructions\n"
+            report += "2. **Use in conversation:** Mention the skill name (e.g. \"use the debug-deep skill\")\n"
+            report += "3. **OpenCode native:** Skills are also auto-discovered from `~/.config/opencode/command/MySkills` via `skills: [\"./\"]` in opencode.jsonc\n"
+
+            results.append(mcp_types.TextContent(type="text", text=report))
+            # Also return the raw data for programmatic use
+            results.append(mcp_types.TextContent(type="text", text=json.dumps(skill_data, indent=2)))
+
     elif name == "capability_report":
         cap = _capability_report(arguments.get("target", ""),
                                  arguments.get("backend", "auto"))
@@ -5378,6 +5973,39 @@ gh pr view --web
                       f"- replacement: **{r['replacement']}**\n"
                       f"- status: **{r['status']}**\n"
                       + (f"- note: {r['note']}\n" if r.get("note") else ""))))
+
+    elif name == "analyze_full_pipeline":
+        repo = arguments.get("repo", "")
+        root = Path(repo)
+        if not root.exists():
+            results.append(mcp_types.TextContent(
+                type="text", text=f"Error: {repo} does not exist"))
+        else:
+            md = _analyze_pipeline(
+                repo,
+                target_arch=arguments.get("target_arch", ""),
+                source_arch=arguments.get("source_arch", ""),
+            )
+            results.append(mcp_types.TextContent(
+                type="text", text=_render_pipeline(md)))
+            results.append(mcp_types.TextContent(
+                type="text", text=json.dumps(md, indent=2, default=str)))
+
+    elif name == "analyze_core_engine":
+        repo = arguments.get("repo", "")
+        root = Path(repo)
+        if not root.exists():
+            results.append(mcp_types.TextContent(
+                type="text", text=f"Error: {repo} does not exist"))
+        else:
+            md = _analyze_core(
+                repo,
+                target_arch=arguments.get("target_arch", ""),
+            )
+            results.append(mcp_types.TextContent(
+                type="text", text=_render_core(md)))
+            results.append(mcp_types.TextContent(
+                type="text", text=json.dumps(md, indent=2, default=str)))
 
     return results
 

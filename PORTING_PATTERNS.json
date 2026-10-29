@@ -1,84 +1,228 @@
 {
   "description": "Engine-agnostic GPU compute porting patterns. Maps source API constructs to target API equivalents with transformation notes, complexity ratings, and known caveats.",
   "last_updated": "2026-10-23T00:00:00Z",
-
   "patterns": {
-
     "cuda_to_hip": {
-      "name": "CUDA → HIP",
+      "name": "CUDA \u2192 HIP",
       "source": "CUDA",
       "target": "HIP (AMD ROCm)",
       "complexity": "low",
-      "auto_translatable": ["hipify-perl", "hipify-python"],
+      "auto_translatable": [
+        "hipify-perl",
+        "hipify-python"
+      ],
       "manual_transforms": {
-        "cudaMalloc": {"hip": "hipMalloc", "notes": "Direct replacement, same semantics"},
-        "cudaFree": {"hip": "hipFree", "notes": "Direct replacement"},
-        "cudaMemcpy": {"hip": "hipMemcpy", "notes": "Add hipMemcpyKind::hipMemcpyDefault if direction unclear"},
-        "cudaMemcpyHostToDevice": {"hip": "hipMemcpyHostToDevice", "notes": "Same enum value"},
-        "cudaMemcpyDeviceToHost": {"hip": "hipMemcpyDeviceToHost", "notes": "Same enum value"},
-        "cudaMemcpyDeviceToDevice": {"hip": "hipMemcpyDeviceToDevice", "notes": "Same enum value"},
-        "cudaStreamCreate": {"hip": "hipStreamCreate", "notes": "Direct replacement"},
-        "cudaStreamSynchronize": {"hip": "hipStreamSynchronize", "notes": "Direct replacement"},
-        "cudaEventRecord": {"hip": "hipEventRecord", "notes": "Direct replacement"},
-        "cudaEventSynchronize": {"hip": "hipEventSynchronize", "notes": "Direct replacement"},
-        "cudaDeviceSynchronize": {"hip": "hipDeviceSynchronize", "notes": "Direct replacement"},
-        "<<<>>>": {"hip": "hipLaunchKernelGGL()", "notes": "Kernel launch syntax change — hipify handles automatically"},
-        "__syncthreads": {"hip": "__syncthreads", "notes": "Direct replacement in HIP"},
-        "blockIdx": {"hip": "hipThreadIdx_x", "notes": "hipify auto-replaces blockIdx → hipBlockIdx"},
-        "threadIdx": {"hip": "hipThreadIdx", "notes": "hipify auto-replaces"},
-        "threadIdx.x": {"hip": "hipThreadIdx_x", "notes": "hipify auto-replaces"},
-        "blockIdx.x": {"hip": "hipBlockIdx_x", "notes": "hipify auto-replaces"},
-        "blockDim": {"hip": "hipBlockDim", "notes": "hipify auto-replaces"},
-        "gridDim": {"hip": "hipGridDim", "notes": "hipify auto-replaces"},
-        "__umulhi": {"hip": "__umulhi", "notes": "Supported on AMD in ROCm 6+"},
-        "__ldg": {"hip": "__ldg", "notes": "Supported"},
-        "__float2half": {"hip": "__float2half", "notes": "Supported"},
-        "__half2float": {"hip": "__half2float", "notes": "Supported"}
+        "cudaMalloc": {
+          "hip": "hipMalloc",
+          "notes": "Direct replacement, same semantics"
+        },
+        "cudaFree": {
+          "hip": "hipFree",
+          "notes": "Direct replacement"
+        },
+        "cudaMemcpy": {
+          "hip": "hipMemcpy",
+          "notes": "Add hipMemcpyKind::hipMemcpyDefault if direction unclear"
+        },
+        "cudaMemcpyHostToDevice": {
+          "hip": "hipMemcpyHostToDevice",
+          "notes": "Same enum value"
+        },
+        "cudaMemcpyDeviceToHost": {
+          "hip": "hipMemcpyDeviceToHost",
+          "notes": "Same enum value"
+        },
+        "cudaMemcpyDeviceToDevice": {
+          "hip": "hipMemcpyDeviceToDevice",
+          "notes": "Same enum value"
+        },
+        "cudaStreamCreate": {
+          "hip": "hipStreamCreate",
+          "notes": "Direct replacement"
+        },
+        "cudaStreamSynchronize": {
+          "hip": "hipStreamSynchronize",
+          "notes": "Direct replacement"
+        },
+        "cudaEventRecord": {
+          "hip": "hipEventRecord",
+          "notes": "Direct replacement"
+        },
+        "cudaEventSynchronize": {
+          "hip": "hipEventSynchronize",
+          "notes": "Direct replacement"
+        },
+        "cudaDeviceSynchronize": {
+          "hip": "hipDeviceSynchronize",
+          "notes": "Direct replacement"
+        },
+        "<<<>>>": {
+          "hip": "hipLaunchKernelGGL()",
+          "notes": "Kernel launch syntax change \u2014 hipify handles automatically"
+        },
+        "__syncthreads": {
+          "hip": "__syncthreads",
+          "notes": "Direct replacement in HIP"
+        },
+        "blockIdx": {
+          "hip": "hipThreadIdx_x",
+          "notes": "hipify auto-replaces blockIdx \u2192 hipBlockIdx"
+        },
+        "threadIdx": {
+          "hip": "hipThreadIdx",
+          "notes": "hipify auto-replaces"
+        },
+        "threadIdx.x": {
+          "hip": "hipThreadIdx_x",
+          "notes": "hipify auto-replaces"
+        },
+        "blockIdx.x": {
+          "hip": "hipBlockIdx_x",
+          "notes": "hipify auto-replaces"
+        },
+        "blockDim": {
+          "hip": "hipBlockDim",
+          "notes": "hipify auto-replaces"
+        },
+        "gridDim": {
+          "hip": "hipGridDim",
+          "notes": "hipify auto-replaces"
+        },
+        "__umulhi": {
+          "hip": "__umulhi",
+          "notes": "Supported on AMD in ROCm 6+"
+        },
+        "__ldg": {
+          "hip": "__ldg",
+          "notes": "Supported"
+        },
+        "__float2half": {
+          "hip": "__float2half",
+          "notes": "Supported"
+        },
+        "__half2float": {
+          "hip": "__half2float",
+          "notes": "Supported"
+        }
       },
       "manual_only": {
-        "wmma": {"hip": "rocWMMA (gfx1100+, gfx1200/gfx1201) or F32 fallback", "notes": "RDNA4 (gfx1200/gfx1201) supports rocWMMA. Use __builtin_amdgcn_wmma_*_gfx12 intrinsics. RDNA2 (gfx1030) has NO WMMA — use F32 fallback"},
-        "mma": {"hip": "rocBLASLt or dot4 instructions", "notes": "Tensor cores → dot4 or rocBLASLt"},
-        "tensor_core_mma": {"hip": "rocWMMA or rocBLASLt MMA API", "notes": "Requires ROCm 5.7+"},
-        "nvrtc": {"hip": "hiprtc or runtime compilation via HIPRTC", "notes": "Different API but similar concept"},
-        "cuMemPool": {"hip": "hipMemPool (if available) or hipMalloc managed", "notes": "Memory pooling support varies by ROCm version"},
-        "cudaGraph": {"hip": "hipGraph (experimental)", "notes": "HIP graphs are experimental; may need fallback"},
-        "cuStreamWorkDescrib": {"hip": "hipStreamWorkStealing", "notes": "Different semantics"},
-        "header_order": {"hip": "Include runtime FIRST", "notes": "MUST #include hip_runtime.h BEFORE custom headers using __device__/__forceinline__/__shared__"}
+        "wmma": {
+          "hip": "rocWMMA (gfx1100+, gfx1200/gfx1201) or F32 fallback",
+          "notes": "RDNA4 (gfx1200/gfx1201) supports rocWMMA. Use __builtin_amdgcn_wmma_*_gfx12 intrinsics. RDNA2 (gfx1030) has NO WMMA \u2014 use F32 fallback"
+        },
+        "mma": {
+          "hip": "rocBLASLt or dot4 instructions",
+          "notes": "Tensor cores \u2192 dot4 or rocBLASLt"
+        },
+        "tensor_core_mma": {
+          "hip": "rocWMMA or rocBLASLt MMA API",
+          "notes": "Requires ROCm 5.7+"
+        },
+        "nvrtc": {
+          "hip": "hiprtc or runtime compilation via HIPRTC",
+          "notes": "Different API but similar concept"
+        },
+        "cuMemPool": {
+          "hip": "hipMemPool (if available) or hipMalloc managed",
+          "notes": "Memory pooling support varies by ROCm version"
+        },
+        "cudaGraph": {
+          "hip": "hipGraph (experimental)",
+          "notes": "HIP graphs are experimental; may need fallback"
+        },
+        "cuStreamWorkDescrib": {
+          "hip": "hipStreamWorkStealing",
+          "notes": "Different semantics"
+        },
+        "header_order": {
+          "hip": "Include runtime FIRST",
+          "notes": "MUST #include hip_runtime.h BEFORE custom headers using __device__/__forceinline__/__shared__"
+        }
       },
       "hipify_notes": {
         "command": "hipify-perl source.cu > target.cpp --inplace",
-        "flags": ["--inplace", "--inplace-relative-prefix", "--no-backup"],
+        "flags": [
+          "--inplace",
+          "--inplace-relative-prefix",
+          "--no-backup"
+        ],
         "caveats": [
-          "hipify does NOT handle WMMA → rocWMMA conversion automatically",
+          "hipify does NOT handle WMMA \u2192 rocWMMA conversion automatically",
           "hipify does NOT handle tensor core intrinsics (mma/sm) automatically",
           "hipify does NOT handle CUDA Graphs automatically",
           "hipify replaces __syncthreads with __syncthreads in HIP 6+"
         ]
       }
     },
-
     "cuda_to_sycl": {
-      "name": "CUDA → oneAPI DPC++/SYCL",
+      "name": "CUDA \u2192 oneAPI DPC++/SYCL",
       "source": "CUDA",
       "target": "SYCL (Intel oneAPI)",
       "complexity": "high",
-      "auto_translatable": ["dpct (Intel DPC++ Compatibility Tool)"],
+      "auto_translatable": [
+        "dpct (Intel DPC++ Compatibility Tool)"
+      ],
       "manual_transforms": {
-        "cudaMalloc": {"sycl": "sycl::malloc_device", "notes": "SYCL uses unified memory model"},
-        "cudaFree": {"sycl": "sycl::free", "notes": "Must specify queue"},
-        "cudaMemcpy": {"sycl": "queue.copy or handler.copy", "notes": "Explicit copy vs unified memory"},
-        "cudaStreamCreate": {"sycl": "sycl::queue", "notes": "Queue replaces stream concept"},
-        "<<<blocks, threads>>>": {"sycl": "parallel_for(nd_range(...))", "notes": "Different kernel launch model"},
-        "threadIdx.x": {"sycl": "item.get_local_id(0)", "notes": "Index space access differs"},
-        "blockIdx.x": {"sycl": "item.get_group(0)", "notes": "Group indexing"},
-        "blockDim.x": {"sycl": "item.get_local_range(0)", "notes": "Local range"},
-        "gridDim.x": {"sycl": "item.get_group_range(0)", "notes": "Group range"},
-        "__syncthreads": {"sycl": "item.barrier()", "notes": "Requires nd_item parameter"},
-        "warpSize": {"sycl": "get_sub_group().get_local_range()", "notes": "Subgroup size varies by target"},
-        "threadIdx.x % 32": {"sycl": "item.get_local_id(0) % sub_group_size", "notes": "Subgroup size is target-specific"},
-        "shared_memory": {"sycl": "sycl::local_accessor<T, 1>", "notes": "Different declaration syntax"},
-        "wmma": {"sycl": "dp4a or joint_matrix (SYCL 2020)", "notes": "oneAPI has joint_matrix extension for matrix ops"},
-        "mma": {"sycl": "oneMKL gemm or joint_matrix", "notes": "Use oneMKL for BLAS, joint_matrix for tensors"}
+        "cudaMalloc": {
+          "sycl": "sycl::malloc_device",
+          "notes": "SYCL uses unified memory model"
+        },
+        "cudaFree": {
+          "sycl": "sycl::free",
+          "notes": "Must specify queue"
+        },
+        "cudaMemcpy": {
+          "sycl": "queue.copy or handler.copy",
+          "notes": "Explicit copy vs unified memory"
+        },
+        "cudaStreamCreate": {
+          "sycl": "sycl::queue",
+          "notes": "Queue replaces stream concept"
+        },
+        "<<<blocks, threads>>>": {
+          "sycl": "parallel_for(nd_range(...))",
+          "notes": "Different kernel launch model"
+        },
+        "threadIdx.x": {
+          "sycl": "item.get_local_id(0)",
+          "notes": "Index space access differs"
+        },
+        "blockIdx.x": {
+          "sycl": "item.get_group(0)",
+          "notes": "Group indexing"
+        },
+        "blockDim.x": {
+          "sycl": "item.get_local_range(0)",
+          "notes": "Local range"
+        },
+        "gridDim.x": {
+          "sycl": "item.get_group_range(0)",
+          "notes": "Group range"
+        },
+        "__syncthreads": {
+          "sycl": "item.barrier()",
+          "notes": "Requires nd_item parameter"
+        },
+        "warpSize": {
+          "sycl": "get_sub_group().get_local_range()",
+          "notes": "Subgroup size varies by target"
+        },
+        "threadIdx.x % 32": {
+          "sycl": "item.get_local_id(0) % sub_group_size",
+          "notes": "Subgroup size is target-specific"
+        },
+        "shared_memory": {
+          "sycl": "sycl::local_accessor<T, 1>",
+          "notes": "Different declaration syntax"
+        },
+        "wmma": {
+          "sycl": "dp4a or joint_matrix (SYCL 2020)",
+          "notes": "oneAPI has joint_matrix extension for matrix ops"
+        },
+        "mma": {
+          "sycl": "oneMKL gemm or joint_matrix",
+          "notes": "Use oneMKL for BLAS, joint_matrix for tensors"
+        }
       },
       "dpct_notes": {
         "command": "dpct -outdir <output> <source>",
@@ -91,30 +235,77 @@
         ]
       }
     },
-
     "cuda_to_vulkan": {
-      "name": "CUDA → Vulkan Compute (SPIR-V)",
+      "name": "CUDA \u2192 Vulkan Compute (SPIR-V)",
       "source": "CUDA",
       "target": "Vulkan Compute / SPIR-V",
       "complexity": "very_high",
       "auto_translatable": [],
       "manual_transforms": {
-        "cudaMalloc": {"vulkan": "vkAllocateMemory + vkBindBufferMemory", "notes": "Full buffer creation pipeline"},
-        "cudaMemcpy": {"vulkan": "vkCmdCopyBufferToImage / staging buffer", "notes": "Must use staging buffers for upload"},
-        "cudaStreamCreate": {"vulkan": "vkCreateCommandPool + vkAllocateCommandBuffers", "notes": "Command buffer model"},
-        "<<<>>>": {"vulkan": "vkCmdDispatch", "notes": "Workgroup size defined in shader via layout(local_size_x=N)"},
-        "threadIdx": {"vulkan": "gl_GlobalInvocationID / gl_LocalInvocationID", "notes": "Built-in variables in GLSL/SPIR-V"},
-        "blockIdx": {"vulkan": "gl_WorkGroupID", "notes": "Built-in variable"},
-        "blockDim": {"vulkan": "gl_WorkGroupSize", "notes": "Built-in variable"},
-        "gridDim": {"vulkan": "gl_NumWorkGroups", "notes": "Built-in variable"},
-        "__syncthreads": {"vulkan": "shared/shared variables + control flow", "notes": "No explicit barrier; use executionBarrier() / OpControlBarrier"},
-        "shared_memory": {"vulkan": "shared variables in GLSL / OpVariable with Shared storage class", "notes": "Different declaration"},
-        "wmma": {"vulkan": "GL_KHR_cooperative_matrix (NVIDIA) or GL_KHR_shader_integer_dot_product (DP4a AMD)", "notes": "AMD CM broken → use DP4a"},
-        "mma": {"vulkan": "GL_KHR_shader_integer_dot_product (dp4) or CM", "notes": "NVIDIA: CM works. AMD: broken, use DP4a"},
-        "texture_2d": {"vulkan": "subpassLoad / texture() with sampler", "notes": "Image load/store vs texture sampling"},
-        "surface": {"vulkan": "imageStore / atomicImageOp", "notes": "Different write semantics"},
-        "warp shuffle": {"vulkan": "subgroup operations (GL_KHR_vulkan_glsl) or SM extension", "notes": "Subgroup ops in SPIR-V"},
-        "__ldg": {"vulkan": "OpLoad with Aligned hint (or just read-only buffer)", "notes": "Read-only access pattern"}
+        "cudaMalloc": {
+          "vulkan": "vkAllocateMemory + vkBindBufferMemory",
+          "notes": "Full buffer creation pipeline"
+        },
+        "cudaMemcpy": {
+          "vulkan": "vkCmdCopyBufferToImage / staging buffer",
+          "notes": "Must use staging buffers for upload"
+        },
+        "cudaStreamCreate": {
+          "vulkan": "vkCreateCommandPool + vkAllocateCommandBuffers",
+          "notes": "Command buffer model"
+        },
+        "<<<>>>": {
+          "vulkan": "vkCmdDispatch",
+          "notes": "Workgroup size defined in shader via layout(local_size_x=N)"
+        },
+        "threadIdx": {
+          "vulkan": "gl_GlobalInvocationID / gl_LocalInvocationID",
+          "notes": "Built-in variables in GLSL/SPIR-V"
+        },
+        "blockIdx": {
+          "vulkan": "gl_WorkGroupID",
+          "notes": "Built-in variable"
+        },
+        "blockDim": {
+          "vulkan": "gl_WorkGroupSize",
+          "notes": "Built-in variable"
+        },
+        "gridDim": {
+          "vulkan": "gl_NumWorkGroups",
+          "notes": "Built-in variable"
+        },
+        "__syncthreads": {
+          "vulkan": "shared/shared variables + control flow",
+          "notes": "No explicit barrier; use executionBarrier() / OpControlBarrier"
+        },
+        "shared_memory": {
+          "vulkan": "shared variables in GLSL / OpVariable with Shared storage class",
+          "notes": "Different declaration"
+        },
+        "wmma": {
+          "vulkan": "GL_KHR_cooperative_matrix (NVIDIA) or GL_KHR_shader_integer_dot_product (DP4a AMD)",
+          "notes": "AMD CM broken \u2192 use DP4a"
+        },
+        "mma": {
+          "vulkan": "GL_KHR_shader_integer_dot_product (dp4) or CM",
+          "notes": "NVIDIA: CM works. AMD: broken, use DP4a"
+        },
+        "texture_2d": {
+          "vulkan": "subpassLoad / texture() with sampler",
+          "notes": "Image load/store vs texture sampling"
+        },
+        "surface": {
+          "vulkan": "imageStore / atomicImageOp",
+          "notes": "Different write semantics"
+        },
+        "warp shuffle": {
+          "vulkan": "subgroup operations (GL_KHR_vulkan_glsl) or SM extension",
+          "notes": "Subgroup ops in SPIR-V"
+        },
+        "__ldg": {
+          "vulkan": "OpLoad with Aligned hint (or just read-only buffer)",
+          "notes": "Read-only access pattern"
+        }
       },
       "vulkan_notes": {
         "compilation": "glslc shader.comp -o shader.spv OR dxc -T cs_6_6 shader.hlsl -E main -spirv",
@@ -125,117 +316,280 @@
         "nvidia_ok": "CooperativeMatrix works on NVIDIA Vulkan drivers SM 7.5+ (535.x+) via GL_NV_cooperative_matrix"
       }
     },
-
     "cuda_to_cuda": {
-      "name": "CUDA → CUDA (Arch Translation)",
+      "name": "CUDA \u2192 CUDA (Arch Translation)",
       "source": "CUDA",
       "target": "CUDA (different arch)",
       "complexity": "low",
-      "auto_translatable": ["nvcc --gpu-architecture flag"],
+      "auto_translatable": [
+        "nvcc --gpu-architecture flag"
+      ],
       "manual_transforms": {
-        "cudaMalloc": {"cuda": "cudaMalloc", "notes": "No change needed"},
-        "cudaFree": {"cuda": "cudaFree", "notes": "No change needed"},
-        "cudaMemcpy": {"cuda": "cudaMemcpy", "notes": "No change needed"},
-        "<<<blocks, threads>>>": {"cuda": "<<<blocks, threads>>>", "notes": "No change — just adjust arch flag"},
-        "threadIdx": {"cuda": "threadIdx", "notes": "No change"},
-        "blockIdx": {"cuda": "blockIdx", "notes": "No change"},
-        "__syncthreads": {"cuda": "__syncthreads", "notes": "No change"}
+        "cudaMalloc": {
+          "cuda": "cudaMalloc",
+          "notes": "No change needed"
+        },
+        "cudaFree": {
+          "cuda": "cudaFree",
+          "notes": "No change needed"
+        },
+        "cudaMemcpy": {
+          "cuda": "cudaMemcpy",
+          "notes": "No change needed"
+        },
+        "<<<blocks, threads>>>": {
+          "cuda": "<<<blocks, threads>>>",
+          "notes": "No change \u2014 just adjust arch flag"
+        },
+        "threadIdx": {
+          "cuda": "threadIdx",
+          "notes": "No change"
+        },
+        "blockIdx": {
+          "cuda": "blockIdx",
+          "notes": "No change"
+        },
+        "__syncthreads": {
+          "cuda": "__syncthreads",
+          "notes": "No change"
+        }
       },
       "manual_only": {
-        "wmma": {"cuda": "Check arch WMMA support (sm_75+ for FP16 WMMA, sm_80+ for BF16/TF32)", "notes": "Tensor Core intrinsics are arch-specific"},
-        "mma": {"cuda": "Check tensor core support for target SM", "notes": "mma.sm80 only on sm_80+"},
-        "tensor_core_mma": {"cuda": "Verify tensor core availability on target arch", "notes": "May need to disable on older arches"},
-        "shared_memory_dynamic": {"cuda": "Check maxSharedMemoryPerBlock for target arch", "notes": "Varies: 48KB (sm_70) vs 164KB (sm_80+) vs 100KB (sm_89+)"}
+        "wmma": {
+          "cuda": "Check arch WMMA support (sm_75+ for FP16 WMMA, sm_80+ for BF16/TF32)",
+          "notes": "Tensor Core intrinsics are arch-specific"
+        },
+        "mma": {
+          "cuda": "Check tensor core support for target SM",
+          "notes": "mma.sm80 only on sm_80+"
+        },
+        "tensor_core_mma": {
+          "cuda": "Verify tensor core availability on target arch",
+          "notes": "May need to disable on older arches"
+        },
+        "shared_memory_dynamic": {
+          "cuda": "Check maxSharedMemoryPerBlock for target arch",
+          "notes": "Varies: 48KB (sm_70) vs 164KB (sm_80+) vs 100KB (sm_89+)"
+        }
       }
     },
-
     "hip_self": {
-      "name": "HIP → HIP (Arch Translation)",
+      "name": "HIP \u2192 HIP (Arch Translation)",
       "source": "HIP",
       "target": "HIP (different arch)",
       "complexity": "low",
-      "auto_translatable": ["hipify-perl for ROCm version compat"],
+      "auto_translatable": [
+        "hipify-perl for ROCm version compat"
+      ],
       "manual_transforms": {
-        "hipMalloc": {"hip": "hipMalloc", "notes": "No change"},
-        "hipFree": {"hip": "hipFree", "notes": "No change"},
-        "hipMemcpy": {"hip": "hipMemcpy", "notes": "No change"},
-        "hipLaunchKernelGGL": {"hip": "hipLaunchKernelGGL", "notes": "No change — just adjust offload-arch"},
-        "__syncthreads": {"hip": "__syncthreads", "notes": "No change"},
-        "blockIdx": {"hip": "hipBlockIdx", "notes": "No change"},
-        "threadIdx": {"hip": "hipThreadIdx", "notes": "No change"}
+        "hipMalloc": {
+          "hip": "hipMalloc",
+          "notes": "No change"
+        },
+        "hipFree": {
+          "hip": "hipFree",
+          "notes": "No change"
+        },
+        "hipMemcpy": {
+          "hip": "hipMemcpy",
+          "notes": "No change"
+        },
+        "hipLaunchKernelGGL": {
+          "hip": "hipLaunchKernelGGL",
+          "notes": "No change \u2014 just adjust offload-arch"
+        },
+        "__syncthreads": {
+          "hip": "__syncthreads",
+          "notes": "No change"
+        },
+        "blockIdx": {
+          "hip": "hipBlockIdx",
+          "notes": "No change"
+        },
+        "threadIdx": {
+          "hip": "hipThreadIdx",
+          "notes": "No change"
+        }
       },
       "manual_only": {
-        "rocwmma": {"hip": "Check rocWMMA support for target arch (gfx1100+)", "notes": "WMMA only on RDNA3+"},
-        "hipblaslt": {"hip": "Check hipBLASLt availability for target ROCm version", "notes": "Not available on ROCm < 5.7"},
-        "shared_memory_dynamic": {"hip": "Check LDS size for target arch", "notes": "32KB (gfx1030) vs 64KB (gfx1100) vs 128KB (gfx1201)"}
+        "rocwmma": {
+          "hip": "Check rocWMMA support for target arch (gfx1100+)",
+          "notes": "WMMA only on RDNA3+"
+        },
+        "hipblaslt": {
+          "hip": "Check hipBLASLt availability for target ROCm version",
+          "notes": "Not available on ROCm < 5.7"
+        },
+        "shared_memory_dynamic": {
+          "hip": "Check LDS size for target arch",
+          "notes": "32KB (gfx1030) vs 64KB (gfx1100) vs 128KB (gfx1201)"
+        }
       }
     },
-
     "cuda_to_directx": {
-      "name": "CUDA → HLSL (Direct3D 12)",
+      "name": "CUDA \u2192 HLSL (Direct3D 12)",
       "source": "CUDA",
-      "target": "HLSL → DXIL",
+      "target": "HLSL \u2192 DXIL",
       "complexity": "very_high",
       "auto_translatable": [],
       "manual_transforms": {
-        "cudaMalloc": {"hlsl": "StructuredBuffer/RWByteAddressBuffer in HLSL", "notes": "GPU resource via D3D12 buffer upload"},
-        "cudaMemcpy": {"hlsl": "D3D12 command list copy commands", "notes": "Use UpdateSubresources or Upload heap"},
-        "threadIdx": {"hlsl": "SV_DispatchThreadID / SV_GroupThreadID", "notes": "HLSL built-in semantics"},
-        "blockIdx": {"hlsl": "SV_GroupID", "notes": "HLSL built-in semantics"},
-        "blockDim": {"hlsl": "SV_GroupSize", "notes": "HLSL built-in semantics"},
-        "gridDim": {"hlsl": "numthreads() attribute + dispatch size", "notes": "Workgroup size via [numthreads(x,y,z)]"},
-        "__syncthreads": {"hlsl": "GroupMemoryBarrierWithGroupSync()", "notes": "HLSL barrier"},
-        "shared_memory": {"hlsl": "groupshared", "notes": "HLSL keyword"},
-        "wmma": {"hlsl": "NativeFloat16_Rolling or Wave* intrinsics", "notes": "Use WaveActiveMatMul or scalar fallbacks"},
-        "mma": {"hlsl": "WaveActiveMatMul or manual SIMD", "notes": "DirectX 12 has wave intrinsics for matrix ops"},
-        "warp shuffle": {"hlsl": "WaveReadLane", "notes": "HLSL wave intrinsics (WaveIsa)"}
+        "cudaMalloc": {
+          "hlsl": "StructuredBuffer/RWByteAddressBuffer in HLSL",
+          "notes": "GPU resource via D3D12 buffer upload"
+        },
+        "cudaMemcpy": {
+          "hlsl": "D3D12 command list copy commands",
+          "notes": "Use UpdateSubresources or Upload heap"
+        },
+        "threadIdx": {
+          "hlsl": "SV_DispatchThreadID / SV_GroupThreadID",
+          "notes": "HLSL built-in semantics"
+        },
+        "blockIdx": {
+          "hlsl": "SV_GroupID",
+          "notes": "HLSL built-in semantics"
+        },
+        "blockDim": {
+          "hlsl": "SV_GroupSize",
+          "notes": "HLSL built-in semantics"
+        },
+        "gridDim": {
+          "hlsl": "numthreads() attribute + dispatch size",
+          "notes": "Workgroup size via [numthreads(x,y,z)]"
+        },
+        "__syncthreads": {
+          "hlsl": "GroupMemoryBarrierWithGroupSync()",
+          "notes": "HLSL barrier"
+        },
+        "shared_memory": {
+          "hlsl": "groupshared",
+          "notes": "HLSL keyword"
+        },
+        "wmma": {
+          "hlsl": "NativeFloat16_Rolling or Wave* intrinsics",
+          "notes": "Use WaveActiveMatMul or scalar fallbacks"
+        },
+        "mma": {
+          "hlsl": "WaveActiveMatMul or manual SIMD",
+          "notes": "DirectX 12 has wave intrinsics for matrix ops"
+        },
+        "warp shuffle": {
+          "hlsl": "WaveReadLane",
+          "notes": "HLSL wave intrinsics (WaveIsa)"
+        }
       },
       "hlsl_notes": {
         "compiler": "dxc.exe -T cs_6_6 -E main shader.hlsl -Fo shader.dxil",
         "agility_sdk": "Provides enhanced barriers, mesh shaders, variable rate shading",
-        "directml": "DirectML provides ML primitives on D3D12 — alternative to writing custom HLSL"
+        "directml": "DirectML provides ML primitives on D3D12 \u2014 alternative to writing custom HLSL"
       }
     },
-
     "hip_to_cuda": {
-      "name": "HIP → CUDA",
+      "name": "HIP \u2192 CUDA",
       "source": "HIP",
       "target": "CUDA",
       "complexity": "low",
       "auto_translatable": [],
       "manual_transforms": {
-        "hipMalloc": {"cuda": "cudaMalloc", "notes": "Direct replacement"},
-        "hipFree": {"cuda": "cudaFree", "notes": "Direct replacement"},
-        "hipMemcpy": {"cuda": "cudaMemcpy", "notes": "Direct replacement"},
-        "hipLaunchKernelGGL": {"cuda": "<<<>>>", "notes": "Kernel launch syntax"},
-        "hipGetLastError": {"cuda": "cudaGetLastError", "notes": "Direct replacement"},
-        "hipPeekAtLastError": {"cuda": "cudaPeekAtLastError", "notes": "Direct replacement"}
+        "hipMalloc": {
+          "cuda": "cudaMalloc",
+          "notes": "Direct replacement"
+        },
+        "hipFree": {
+          "cuda": "cudaFree",
+          "notes": "Direct replacement"
+        },
+        "hipMemcpy": {
+          "cuda": "cudaMemcpy",
+          "notes": "Direct replacement"
+        },
+        "hipLaunchKernelGGL": {
+          "cuda": "<<<>>>",
+          "notes": "Kernel launch syntax"
+        },
+        "hipGetLastError": {
+          "cuda": "cudaGetLastError",
+          "notes": "Direct replacement"
+        },
+        "hipPeekAtLastError": {
+          "cuda": "cudaPeekAtLastError",
+          "notes": "Direct replacement"
+        }
       },
-      "notes": "HIP → CUDA is generally straightforward since HIP is a subset of CUDA API. rocWMMA → WMMA needs manual work."
+      "notes": "HIP \u2192 CUDA is generally straightforward since HIP is a subset of CUDA API. rocWMMA \u2192 WMMA needs manual work."
     },
-
     "python_to_native": {
-      "name": "Python (PyTorch/TensorFlow) → Native CUDA/HIP",
+      "name": "Python (PyTorch/TensorFlow) \u2192 Native CUDA/HIP",
       "source": "Python",
       "target": "CUDA/HIP C++",
       "complexity": "high",
       "auto_translatable": [],
       "manual_transforms": {
-        "torch.matmul": {"cuda": "mma / tensor cores", "notes": "Requires manual GEMM kernel or cuBLAS"},
-        "torch.softmax": {"cuda": "custom kernel with max-subtract-reduce", "notes": "Numerically stable implementation needed"},
-        "torch.topk": {"cuda": "radix-select or partial sort", "notes": "Custom selection algorithm needed"},
-        "torch.quantize": {"cuda": "manual dequant + imad/dp4", "notes": "Quantized GEMV/GEMM requires arch-specific instructions"},
-        "torch.cuda.amp": {"cuda": "tensor cores / tf32", "notes": "Use __hmma or mma instructions"},
-        "torch.cuda.stream": {"cuda": "cudaStream_t / hipStream_t", "notes": "Same API concept"},
-        "torch.compile": {"cuda": "manual optimization", "notes": "Compile-time fusion must be done manually in C++"}
+        "torch.matmul": {
+          "cuda": "mma / tensor cores",
+          "notes": "Requires manual GEMM kernel or cuBLAS"
+        },
+        "torch.softmax": {
+          "cuda": "custom kernel with max-subtract-reduce",
+          "notes": "Numerically stable implementation needed"
+        },
+        "torch.topk": {
+          "cuda": "radix-select or partial sort",
+          "notes": "Custom selection algorithm needed"
+        },
+        "torch.quantize": {
+          "cuda": "manual dequant + imad/dp4",
+          "notes": "Quantized GEMV/GEMM requires arch-specific instructions"
+        },
+        "torch.cuda.amp": {
+          "cuda": "tensor cores / tf32",
+          "notes": "Use __hmma or mma instructions"
+        },
+        "torch.cuda.stream": {
+          "cuda": "cudaStream_t / hipStream_t",
+          "notes": "Same API concept"
+        },
+        "torch.compile": {
+          "cuda": "manual optimization",
+          "notes": "Compile-time fusion must be done manually in C++"
+        }
       },
-      "notes": "Python → native requires full rewrite of tensor operations. PyTorch ops map to CUDA intrinsics or cuBLAS calls."
+      "notes": "Python \u2192 native requires full rewrite of tensor operations. PyTorch ops map to CUDA intrinsics or cuBLAS calls."
+    },
+    "llama_cpp_cpu_reference": {
+      "name": "llama.cpp CPU reference flow (oracle for porting)",
+      "source": "llama.cpp CPU (ggml-cpu backend)",
+      "target": "any port target (HIP/Vulkan/SYCL/DirectX/CPU)",
+      "complexity": "reference",
+      "auto_translatable": [],
+      "manual_transforms": {
+        "load_gguf": {
+          "cpu": "gguf_init_from_reader (gguf.cpp:460) -> mmap alias (llama-model.cpp:1962)",
+          "notes": "Port target must reproduce: magic check, align, per-tensor buft pick, zero-copy map. Oracle: load must alias not copy when backend allows."
+        },
+        "prefill_vs_decode": {
+          "cpu": "graph_compute(gf, ubatch.n_tokens>1) (llama-context.cpp:1588)",
+          "notes": "TRUE=prefill GEMM compute-bound, FALSE=decode GEMV memory-bound. Target must keep the branch: never reuse graph across phases (allow_reuse, llama-graph.h:839)."
+        },
+        "thread_select": {
+          "cpu": "batched ? n_threads_batch : n_threads (llama-context.cpp:2750)",
+          "notes": "Port must keep two thread counts; oversubscribe (>cores) stalls on barrier (ggml-cpu.c:576)."
+        },
+        "logits_row": {
+          "cpu": "logits[i]!=0 marks output rows (llama.h:264); get_logits_ith (llama-context.cpp:1030)",
+          "notes": "Port must preserve output-row mask or sampler reads wrong rows."
+        },
+        "stop_gates": {
+          "cpu": "is_eog (llama-vocab.cpp:4731); ctx shift seq_rm+seq_add (completion.cpp:584)",
+          "notes": "eos->STOP_EOS, full&!shift->STOP_LIMIT, full&shift->SHIFT-degraded. Drop any one and generation loops or truncates."
+        }
+      },
+      "notes": "Use as numerical oracle (verify_numerical_equivalence CPU reference) and structural checklist before porting any llama-class engine. Detail: learnings/LLAMA_CPP_CPU_INFERENCE_LEARNINGS.md."
     }
   },
-
   "language_mappings": {
     "c++_to_python": {
-      "description": "C++ → Python type and API mappings",
+      "description": "C++ \u2192 Python type and API mappings",
       "type_map": {
         "float*": "float*",
         "half*": "torch.float16 tensor",
@@ -246,7 +600,7 @@
       }
     },
     "c++_to_rust": {
-      "description": "C++ → Rust type and API mappings",
+      "description": "C++ \u2192 Rust type and API mappings",
       "type_map": {
         "float*": "*const f32 or &[f32]",
         "half*": "half::f16 or &[u16]",
@@ -256,7 +610,6 @@
       }
     }
   },
-
   "memory_models": {
     "cuda": {
       "model": "Explicit allocation + transfer",
@@ -284,7 +637,7 @@
       "managed_memory": "N/A (fully explicit)",
       "unified": false,
       "pinning": "staging buffers",
-      "prefetch": "vkCmdCopyBuffer → pipeline barrier"
+      "prefetch": "vkCmdCopyBuffer \u2192 pipeline barrier"
     },
     "directx12": {
       "model": "Explicit heap allocation + upload/download",
@@ -294,7 +647,6 @@
       "prefetch": "Resource barriers"
     }
   },
-
   "sync_patterns": {
     "description": "Fence / synchronization patterns to avoid TDRs (Timeout Detection and Recovery) and GPU hangs",
     "tdr_limits_ms": {
@@ -349,7 +701,7 @@
         "cudaEventRecord": "vkCmdWriteTimestamp + VkSemaphore signaled",
         "cudaStreamSynchronize": "vkQueueWaitIdle OR vkWaitFences with timeout",
         "cudaDeviceSynchronize": "vkDeviceWaitIdle",
-        "warning": "vkQueueWaitIdle blocks the CPU thread — use fences with timeout instead for TDR safety"
+        "warning": "vkQueueWaitIdle blocks the CPU thread \u2014 use fences with timeout instead for TDR safety"
       },
       "cuda_to_directx12": {
         "cudaEventRecord": "ID3D12Device5::SignalFence(fence, value)",
@@ -373,7 +725,6 @@
       "required_pattern": "Every kernel submission MUST have a fence/semaphore pair. At minimum, insert `query_toolchain()` for the proper fence pattern on your target."
     }
   },
-
   "memory_patterns": {
     "cuda_to_hip": {
       "model": "Explicit allocation + transfer",
@@ -401,7 +752,7 @@
       "managed_memory": "N/A (fully explicit)",
       "unified": false,
       "pinning": "staging buffers",
-      "prefetch": "vkCmdCopyBuffer → pipeline barrier"
+      "prefetch": "vkCmdCopyBuffer \u2192 pipeline barrier"
     },
     "directx12": {
       "model": "Explicit heap allocation + upload/download",

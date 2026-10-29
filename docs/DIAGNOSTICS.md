@@ -521,6 +521,7 @@ The PERF_BENCHMARKS.json now includes roofline model data. To use:
 ## GPU Fence & TDR Prevention
 
 > **Critical for Windows: Timeout Detection and Recovery (TDR) resets the GPU if a kernel runs > 2s**
+> See also: `kands://vulkan-sync` for full Vulkan synchronization, barrier optimization, and occupancy guidance.
 
 ### The Problem
 
@@ -528,6 +529,8 @@ If you port a GPU kernel and forget to add proper fence synchronization, you'll 
 - **TDR resets** on Windows (kernel runs > 2s without yielding)
 - **GPU hangs** (no fence to signal completion)
 - **Stale data** (reading GPU buffer before write completes)
+- **Pipeline flushes** from redundant barriers (Vulkan: each barrier may flush the GPU pipeline)
+- **Cross-frame stalls** from graphics→compute→graphics barriers in a single queue
 
 ### Per-Platform TDR Limits
 
@@ -591,6 +594,67 @@ CloseHandle(fenceEvent);
 timelineFence->Release();
 ```
 
+### Vulkan-Specific Sync & Barrier Hazards
+
+> See `kands://vulkan-sync` for the full reference. Key points:
+
+**Barrier pitfalls (GPUOpen + NVIDIA):**
+- Avoid `BOTTOM_OF_PIPE_BIT` as source + `TOP_OF_PIPE_BIT` as target — this is a full-GPU flush.
+- Use **specific** `srcStageMask`/`dstStageMask` (e.g. `COMPUTE_SHADER_BIT` not `ALL_COMMANDS_BIT`).
+- Use `VK_KHR_synchronization2` (`vkCmdPipelineBarrier2`) for finer scheduling control.
+- Group all barriers into one `vkCmdPipelineBarrier2()` call — the worst case is picked, not summed.
+
+**Ping-pong queues (Imagination):**
+- Graphics→Compute→Graphics in a single queue causes cross-frame stalls.
+- Submit each frame on a different queue (ping-pong) to break barrier isolation.
+- Requires **triple-buffering**; adds one frame of latency but recovers 20–30% lost throughput.
+
+**Occupation & latency hiding (Vulkan Tutorial):**
+- GPUs are memory-bound: VRAM fetch = hundreds of cycles.
+- Hide latency via concurrency — more in-flight bundles = better latency hiding.
+- Occupancy limiters: **registers** (per-thread), **LDS/shared mem** (per-workgroup), **thread slots** (hardware max).
+- Use `VK_KHR_performance_query` counters (NVIDIA: `SM Active`, AMD: `ValuUtilization`).
+
+**CUDA-Vulkan context isolation (ArXiv VUDA):**
+- CUDA and Vulkan create **separate GPU contexts** with separate TSGs (scheduling groups).
+- GPU time-slices among TSGs — CUDA compute + Vulkan graphics run in mutually exclusive time slices.
+- Cross-runtime sync requires shared fences (`VK_KHR_external_fence`) or unified queues.
+
+### Vulkan Timeline Semaphore (safe multi-second work)
+
+```cpp
+// For kernels that may exceed the TDR-safe window:
+VkSemaphore timeline_sem;
+vkCreateSemaphore(device, &(VkSemaphoreCreateInfo){
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+    .pNext = &(VkSemaphoreTypeCreateInfo){
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+        .initialValue = 0,
+    },
+}, nullptr, &timeline_sem);
+
+// After vkQueueSubmit: signal
+VkSemaphoreSignalInfo signal_info = {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
+    .semaphore = timeline_sem,
+    .value = ++signal_value,
+};
+vkSignalSemaphore(device, &signal_info);
+
+// Wait with timeout (1.5s on Windows):
+VkSemaphoreWaitInfo wait_info = {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+    .semaphore = timeline_sem,
+    .pValues = &signal_value,
+    .timeout = 1500000000ULL,  // 1.5s in nanoseconds
+};
+VkResult result = vkWaitSemaphores(device, &wait_info, 1500000000ULL);
+if (result == VK_TIMEOUT) {
+    // Kernel exceeded safe duration — abort or split
+}
+```
+
 ### STRACE Integration for Fence Debugging
 
 ```cpp
@@ -612,4 +676,9 @@ STRACE("sync", "wait", "fence_wait", "fence_val=%llu timeout=1500ms", fence_val)
 - [ ] Fence events are properly cleaned up (CloseHandle / vkDestroySemaphore / Release)
 - [ ] Timeline fences used for multi-second GPU operations (Vulkan/DX12)
 - [ ] No `cudaDeviceSynchronize()` in hot path on Windows (blocks CPU thread, may cause TDR)
-- [ ] STRACE() calls instrument every fence signal/wait
+- [ ] Vulkan barriers use precise src/dst stages (not ALL_COMMANDS_BIT) to minimize flush
+- [ ] Ping-pong queues used for multi-frame compute+graphics to avoid cross-frame stalls
+- [ ] VK_KHR_synchronization2 used for granular barrier control
+- [ ] STRACE() calls instrument every fence signal/wait → see `kands://tracing-steps`
+
+> **Full Vulkan sync reference:** Read `kands://vulkan-sync` for barrier patterns, occupancy optimization, and CUDA-Vulkan context isolation details.

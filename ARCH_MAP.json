@@ -1,17 +1,20 @@
 {
   "description": "GPU architecture capability matrix.  Each entry is the MINIMUM set of features a GPU must have for an engine's kernels to compile (or to dispatch correctly).  Used to decide which arch-specific code paths to add.",
   "fields": {
-    "name": "Human-readable GPU name",
-    "vendor": "NVIDIA|AMD|Intel|Apple",
-    "vendor_id": "gfx1030|sm_80|adln_g|apple_m2",
-    "wave_size": "Wavefront/warp size in threads (32 for NVIDIA/curry, 32/64 for AMD RDNA/CDNA, 32 for Intel)",
-    "lds_kib": "Local data share / shared memory per CU in KiB",
-    "tensor_cores": "bool: does this arch have tensor cores/MMA units",
-    "wmma": "bool: does this arch support Wave Matrix Multiply-Accumulate",
-    "dot4": "bool: does this arch have native int8 dot-product instruction",
-    "dot8": "bool: does this arch have native int8 dot-product-8 instruction",
+    "name": "Human-readable arch name",
+    "vendor": "NVIDIA|AMD|Intel|Apple|x86|ARM",
+    "vendor_id": "gfx1030|sm_80|adln_g|apple_m2|x86_64|znver3|aarch64",
+    "cpu": "bool: true if this is a CPU arch entry (not a GPU)",
+    "gpu": "bool: true if this is a combined CPU+GPU APU entry",
+    "wave_size": "Wavefront/warp size (32 for NVIDIA, 32/64 for AMD RDNA/CDNA, 32 for Intel, 4 for NEON/SVE, 2 for x86 SSE)",
+    "lds_kib": "Local data share / shared memory per CU (0 for CPU-only arches)",
+    "tensor_cores": "bool: GPU matrix cores / MMA units",
+    "wmma": "bool: Wave Matrix Multiply-Accumulate (GPU)",
+    "dot4": "bool: native int8 dot-product instruction (GPU)",
+    "dot8": "bool: native int8 dot-product-8 instruction (GPU)",
     "bf16_native": "bool: native bf16 math (no emulation)",
     "fp8_native": "bool: native FP8 format support",
+    "features": "dict of SIMD/ISA features for CPU entries (sse2, avx2, avx512, amx, neon, sve, sve2, aes, sha, fma3, apx, fp16_native)",
     "known_issues": [
       "array of strings"
     ]
@@ -794,6 +797,206 @@
         "shared_memory": "DDR5/LPDDR5X shared memory — higher bandwidth than Strix Point (more CUs, more memory channels rumored). Still a bottleneck vs discrete GPU (960 GB/s).",
         "use_case": "Higher-throughput laptop LLM inference than Strix Point. 40 CU iGPU can do more than 12 CU Strix Point. Still laptop power/thermal constrained.",
         "status": "Rumored/upcoming — verify exact CU count and feature set when hardware ships."
+      }
+    },
+    "x86_64": {
+      "name": "x86-64 baseline (SSE2 minimum)",
+      "vendor": "x86",
+      "vendor_id": "x86_64",
+      "cpu": true,
+      "wave_size": 2,
+      "lds_kib": 0,
+      "features": {
+        "sse2": true,
+        "sse3": false,
+        "sse4_1": false,
+        "sse4_2": false,
+        "avx": false,
+        "avx2": false,
+        "avx512": false,
+        "fma3": false,
+        "amx": false,
+        "neon": false,
+        "sve": false,
+        "aes": false,
+        "sha": false
+      },
+      "notes": "x86-64 baseline: SSE2 only. This is the minimum guarantee from the x86-64 spec. Any CPU claiming x86-64 support has SSE2. Use this for portability analysis: code that requires AVX2 or AVX-512 must fall back here.",
+      "porting_notes": {
+        "compiler_flags": "GCC/Clang: no -march= flag (SSE2 is baseline). MSVC: /arch:SSE2 (default).",
+        "runtime_detection": "Use __builtin_cpu_supports(\"avx2\") / __builtin_cpu_supports(\"avx512f\") to dispatch at runtime.",
+        "fallback": "Where AVX2/AVX-512 is unavailable, fall back to scalar C++ or SSE2 intrinsics."
+      }
+    },
+    "zen4": {
+      "name": "AMD Zen 4 (Ryzen 7000 series, EPYC 9004 series)",
+      "vendor": "AMD",
+      "vendor_id": "znver4",
+      "cpu": true,
+      "wave_size": 2,
+      "lds_kib": 0,
+      "features": {
+        "avx2": true,
+        "avx512": true,
+        "amx": false,
+        "fma3": true,
+        "sse4_2": true,
+        "avx": true,
+        "aes": true,
+        "sha": true,
+        "neon": false,
+        "sve": false
+      },
+      "notes": "Zen 4 (2022) desktop/server CPU. First AMD consumer CPU with AVX-512 (Zen 4 reintroduced it, unlike Zen 2/Zen 3 which dropped it). No AMX (AMX is Intel-only). Supports V-Cache variants (7845HX3D, etc.). Good hipcc host (Clang 15+ under ROCm 5.7+). GCC 12+ or Clang 15+ recommended.",
+      "porting_notes": {
+        "compiler_flags": "GCC: -march=znver4. Clang: -march=x86-64-v4 (AVX-512). MSVC: /arch:AVX512.",
+        "avx512": "AVX-512 IS available on Zen 4 (unlike Zen 3). If CPU kernel uses AVX-512, it works here.",
+        "hipcc_host": "ROCm hipcc works on Zen 4. Use Clang++ from ROCm's LLVM.",
+        "cuda_host": "Zen 4 as CUDA host on Linux: GCC 12+ or Clang 15+. AVX-512 fully supported.",
+        "windows_cuda": "Zen 4 + Windows needs MSVC 2022 (v143). AMD CPU is neutral for CUDA host."
+      }
+    },
+    "zen5": {
+      "name": "AMD Zen 5 (Ryzen 9000 series, EPYC 9005 series)",
+      "vendor": "AMD",
+      "vendor_id": "znver5",
+      "cpu": true,
+      "wave_size": 2,
+      "lds_kib": 0,
+      "features": {
+        "avx2": true,
+        "avx512": true,
+        "amx": false,
+        "fma3": true,
+        "sse4_2": true,
+        "avx": true,
+        "aes": true,
+        "sha": true,
+        "apx": true,
+        "neon": false,
+        "sve": false
+      },
+      "notes": "Zen 5 (2024) desktop/server CPU. AVX-512 retained (same as Zen 4). Adds APX (Advanced Performance Extensions) in some SKUs. No AMX. 16KB L1D (vs 32KB on Zen 4). Supports V-Cache (9800X3D). Good hipcc host (ROCm 6.2+). GCC 13+ or Clang 17+ recommended. FP64 throughput improved 2x vs Zen 4.",
+      "porting_notes": {
+        "compiler_flags": "GCC: -march=znver5. Clang: -march=x86-64-v4. MSVC: /arch:AVX512 + /arch:APX (preview).",
+        "avx512": "AVX-512 available (same as Zen 4).",
+        "apx": "APX adds 3-operand instructions for better code density. Requires GCC 14+ or Clang 18+.",
+        "hipcc_host": "ROCm hipcc works on Zen 5 (ROCm 6.2+).",
+        "cuda_host": "Zen 5 as CUDA host: GCC 13+ or Clang 17+.",
+        "l1d_16k_warning": "16KB L1D (vs 32KB Zen4) — cache-sensitive kernels may need tuning."
+      }
+    },
+    "apple_m2": {
+      "name": "Apple M2 (ARM64, 8-core CPU + 10-core GPU)",
+      "vendor": "Apple",
+      "vendor_id": "apple_m2",
+      "cpu": true,
+      "wave_size": 4,
+      "lds_kib": 0,
+      "features": {
+        "sse2": false,
+        "avx": false,
+        "avx2": false,
+        "avx512": false,
+        "fma3": false,
+        "neon": true,
+        "sve": false,
+        "aes": true,
+        "sha": true
+      },
+      "notes": "Apple M2 (2023) ARM64 SoC. NEON SIMD (128-bit, 4-wide vector). No AVX/AVX-512 (ARM SIMD is fundamentally different). Hardware AES/SHA. Unified memory (shared LPDDR5). CPU is the primary porting concern: x86 code must be translated (Rosetta 2) or recompiled. Metal is the native GPU API; Vulkan via MoltenVK; CUDA not supported.",
+      "porting_notes": {
+        "compiler_flags": "Clang: -arch arm64 -mcpu=apple-m2. GCC: -arch arm64 -mcpu=native (via cross-compile on Linux).",
+        "avx_replacement": "AVX2 (256-bit) → NEON (128-bit): need 2x iterations. AVX-512 (512-bit) → 4x NEON iterations. Use ACLE __builtin vectors or inline asm.",
+        "hipcc_host": "Not supported (no ROCm on Linux ARM desktop). Use Metal Performance Shaders (MPS) instead.",
+        "cuda_host": "Not supported on Apple Silicon. Use Metal Performance Shaders (MPS) / MoltenVK / Vulkan.",
+        "simd_width": "NEON is 128-bit (4x float32 or 8x int16). Wave/warp analogy = 4 lanes for float32."
+      }
+    },
+    "apple_m3": {
+      "name": "Apple M3 (ARM64, 8-core CPU + 10-core GPU, 3nm)",
+      "vendor": "Apple",
+      "vendor_id": "apple_m3",
+      "cpu": true,
+      "wave_size": 4,
+      "lds_kib": 0,
+      "features": {
+        "sse2": false,
+        "avx": false,
+        "avx2": false,
+        "avx512": false,
+        "fma3": false,
+        "neon": true,
+        "sve": false,
+        "aes": true,
+        "sha": true,
+        "fp16_native": true
+      },
+      "notes": "Apple M3 (2023) ARM64 SoC, 3nm process. NEON SIMD. Native FP16 (unlike M1/M2 which required software emulation for some FP16 ops). Same caveats as M2 for x86 porting. No AVX. Best for on-device LLM inference (Metal + MLX framework).",
+      "porting_notes": {
+        "compiler_flags": "Clang: -arch arm64 -mcpu=apple-m3. Xcode 15+ or Clang 16+.",
+        "fp16_native": "M3 has hardware FP16 multiply-add (unlike M1/M2). Can use native bf16/fp16 kernels.",
+        "hipcc_host": "Not supported. Use Apple MLX framework for LLM on Apple Silicon.",
+        "cuda_host": "Not supported. Use Metal Performance Shaders (MPS) / MoltenVK / Vulkan.",
+        "avx_replacement": "AVX → NEON via Apple's simd.h or ACLE intrinsics. For LLM inference, MLX framework provides optimized kernels."
+      }
+    },
+    "apple_m4": {
+      "name": "Apple M4 (ARM64, 10-core CPU + 16-core GPU, 3nm+)",
+      "vendor": "Apple",
+      "vendor_id": "apple_m4",
+      "cpu": true,
+      "wave_size": 4,
+      "lds_kib": 0,
+      "features": {
+        "sse2": false,
+        "avx": false,
+        "avx2": false,
+        "avx512": false,
+        "fma3": false,
+        "neon": true,
+        "sve": false,
+        "aes": true,
+        "sha": true,
+        "fp16_native": true
+      },
+      "notes": "Apple M4 (2024) ARM64 SoC, 3nm+ EUV process. 10-core CPU (6P + 4E). 16-core GPU. Native FP16. NEON SIMD. Supports ray tracing in GPU. First Apple Silicon with AV1 decode in hardware. MLX framework runs well.",
+      "porting_notes": {
+        "compiler_flags": "Clang: -arch arm64 -mcpu=apple-m4. Xcode 16+ recommended.",
+        "hipcc_host": "Not supported. Use Apple MLX framework.",
+        "cuda_host": "Not supported. Use Metal / MoltenVK / Vulkan.",
+        "avx_replacement": "AVX → NEON via Apple's simd.h or ACLE intrinsics.",
+        "best_for": "On-device LLM inference via MLX (Qwen, Llama, etc.) with native GPU acceleration through Metal."
+      }
+    },
+    "aarch64_neoverse": {
+      "name": "ARM Neoverse N3 / V2 / N2 (server ARM64)",
+      "vendor": "ARM",
+      "vendor_id": "aarch64_neoverse",
+      "cpu": true,
+      "wave_size": 4,
+      "lds_kib": 0,
+      "features": {
+        "sse2": false,
+        "avx": false,
+        "avx2": false,
+        "avx512": false,
+        "fma3": false,
+        "neon": true,
+        "sve": false,
+        "sve2": true,
+        "aes": true,
+        "sha": true,
+        "fp16_native": true
+      },
+      "notes": "ARM Neoverse server CPU (N2/V2/N3, 2021-2025). SVE2 SIMD (up to 256-bit vector registers, runtime-determined length). NEON backward compatible. Native FP16. Runs Linux/llama.cpp efficiently. AWS Graviton3/Graviton4, Ampere Altra, AmpereOne use this class. No AVX. Good for native llama.cpp CPU inference on ARM servers.",
+      "porting_notes": {
+        "compiler_flags": "GCC: -march=armv9-a+sve2+aes+sha. Clang: -march=armv9-a+sve2.",
+        "sve2": "SVE2 provides predication + 256-bit vectors. NEON (128-bit) is the minimum. Code must handle variable SVE vector length (VL) at runtime.",
+        "hipcc_host": "Not supported natively. AMD ROCm supports aarch64 for AMD Instinct GPUs alongside Neoverse CPUs.",
+        "cuda_host": "Not applicable. Use oneAPI DPC++ / OpenACC for offload, or CPU-native inference.",
+        "best_for": "Server-class LLM CPU inference (llama.cpp, tinyvllm CPU backend). SVE2 provides good throughput for fp16/bf16 GEMM.",
+        "runtime_detection": "Use getauxval(AT_HWCAP) to check for SVE2 at runtime. SVE VL varies by implementation."
       }
     }
   },
