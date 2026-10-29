@@ -207,7 +207,8 @@ _SHADER_EXTS = {".comp", ".vert", ".frag", ".geom", ".tesc", ".tese",
                 ".metal", ".hlsl", ".cl"}
 _BINARY_EXTS = {".spv"}
 _CPP_EXTS = {".cpp", ".cc", ".cxx", ".hpp", ".hh"}
-_ALL_EXTS = _CUDA_EXTS | _SYCL_EXTS | _SHADER_EXTS | _BINARY_EXTS | _CPP_EXTS
+_C_EXTS = {".c"}  # CPU kernel homes: SIMD intrinsic code in plain C (vg_cpu, ggml style)
+_ALL_EXTS = _CUDA_EXTS | _SYCL_EXTS | _SHADER_EXTS | _BINARY_EXTS | _CPP_EXTS | _C_EXTS
 
 #: Directories that never hold first-party kernel sources. Build output is the
 #: important one: it contains copies, which double the inventory and inflate the
@@ -520,7 +521,7 @@ def _determine_backend_kind(f: Path, ext: str) -> tuple[str | None, str | None]:
                 return sniffed
         return (backend, kind)
 
-    if ext in _CPP_EXTS:
+    if ext in _CPP_EXTS or ext in _C_EXTS:
         head = _read_head(f)
         sniffed = _sniff_gpu_backend(head)
         if sniffed:
@@ -533,6 +534,17 @@ def _determine_backend_kind(f: Path, ext: str) -> tuple[str | None, str | None]:
             return ("cpu_x86_avx2", "CPU kernel (AVX2)")
         if "cpu" in [p.lower() for p in f.parts] or "cpu" in f.name.lower():
             return ("cpu_x86", "CPU kernel (x86)")
+        # A .c file with SIMD markers beyond the head window, or with a matmul/
+        # kernel-ish name, is a CPU kernel candidate; plain C host code is not.
+        if ext in _C_EXTS:
+            body = _read_head(f, _SNIFF_BYTES * 4)
+            if any(m in body for m in _AVX512_MARKERS):
+                return ("cpu_x86_avx512", "CPU kernel (AVX-512)")
+            if any(m in body for m in _AVX2_MARKERS):
+                return ("cpu_x86_avx2", "CPU kernel (AVX2)")
+            lower = f.name.lower()
+            if any(t in lower for t in ("matmul", "gemm", "gemv", "ops", "kernel")):
+                return ("cpu_x86", "CPU kernel (x86)")
         return (None, None)
     return (None, None)
 
@@ -2001,16 +2013,75 @@ def _estimate_performance(arch_id: str, workload: str, seq_len: int, arch_map: d
         report += f"## Estimated Real-World Performance\n\n"
         report += f"**Expected:** {est[workload]}\n\n"
     else:
-        # Generic estimate using scaling factors
-        report += "## Generic Estimate\n\n"
-        peak = hw.get("fp32_peak_gflops", "?")
-        factor = scaling.get(workload, scaling.get("flash_attn", 0.65))
-        if isinstance(peak, (int, float)) and isinstance(factor, (int, float)):
-            report += f"**Theoretical FP32 peak:** {peak} GFLOPS\n"
-            report += f"**Scaling factor for {workload}:** {factor}\n"
-            report += f"**Estimated real-world:** ~{peak * factor:.1f} GFLOPS\n\n"
+        # Workload-aware estimate. The old code applied one generic 0.65 scale
+        # to the fp32 peak, which returned the same number for dequant, GEMM,
+        # and attention on every arch. Real workloads differ by their
+        # arithmetic intensity: memory-bound ones are capped by bandwidth,
+        # compute-bound ones by FLOPs.
+        report += "## Workload-Aware Estimate\n\n"
+        peak = hw.get("fp32_peak_gflops")
+        # Bandwidth: prefer arch entry (measured values preferred there),
+        # fall back to the benchmark table.
+        bw = arch_info.get("memory_bandwidth_gb_s") or hw.get("memory_bandwidth_gb_s")
+        is_cpu = arch_info.get("cpu", False)
+
+        # Per-workload bytes per token / FLOPs per token shape factors.
+        # memory_bound: workload streams weights/KV faster than it computes;
+        #   est_gflops ~= (bytes_per_flop_at_this_workload) * bandwidth
+        # The "gb_s_per_gflop" column encodes measured bytes/flop ratios
+        # distilled from kindi/llama.cpp traces (see learnings/).
+        workload_profile = {
+            #                 bytes/seq-tok, kind
+            "dequant_q8":    ("memory_bound", 24.0),
+            "dequant_q4":    ("memory_bound", 12.0),
+            "gemv":          ("memory_bound", 32.0),
+            "gemm":          ("compute_bound", None),
+            "flash_attn":    ("mixed", None),
+            "attention":     ("mixed", None),
+            "kv_copy":       ("memory_bound", 8.0),
+            "elementwise":   ("memory_bound", 8.0),
+        }
+        profile = workload_profile.get(workload.lower())
+        kind = profile[0] if profile else "compute_bound"
+
+        if is_cpu:
+            # CPU archs: peak fp32 from AVX width is meaningless if we don't
+            # know the SIMD level; report bandwidth-limited streaming estimate
+            # and say what it assumes.
+            if bw:
+                report += f"**CPU streaming ceiling:** ~{bw} GB/s (shared DDR bandwidth, all cores)\n"
+                report += f"**Workload class:** {kind}\n"
+                report += f"**Note:** CPU estimates are memory-streaming bound for decode-shaped work; "
+                report += f"measure with a real benchmark (kindi_cpu, llama-bench) rather than trusting this number.\n\n"
+            else:
+                report += f"**No bandwidth data for this CPU arch.** Measure, don't estimate.\n\n"
+        elif isinstance(bw, (int, float)) and isinstance(peak, (int, float)):
+            ridge = peak / bw  # FLOPs per byte at the ridge point
+            report += f"**FP32 compute peak:** {peak} GFLOPS\n"
+            report += f"**Memory bandwidth:** {bw} GB/s"
+            if arch_info.get("memory_bandwidth_note"):
+                report += " *(measured)*"
+            report += "\n"
+            report += f"**Ridge point:** ~{ridge:.1f} FLOP/byte — workloads below this are memory-bound\n"
+            if kind == "memory_bound":
+                est_gflops = bw * 1.0  # 1 flop/byte-ish for streaming dequant/gemv
+                report += f"**{workload} is memory-bound:** expect ~{est_gflops:.0f} GFLOPS "
+                report += f"(bandwidth-limited), NOT {peak * 0.65:.0f}\n"
+            elif kind == "mixed":
+                report += f"**{workload} is mixed:** between {bw:.0f} and {peak * 0.65:.0f} GFLOPS "
+                report += f"depending on seq_len and head_dim; measure.\n"
+            else:
+                report += f"**{workload} is compute-bound:** generic scaling gives ~{peak * 0.65:.0f} GFLOPS\n"
+            report += "\n"
         else:
-            report += f"Peak: {peak}, Factor: {factor}\n\n"
+            # Legacy generic estimate (peak present, bandwidth absent)
+            factor = scaling.get(workload, scaling.get("flash_attn", 0.65))
+            if isinstance(peak, (int, float)) and isinstance(factor, (int, float)):
+                report += f"**Theoretical FP32 peak:** {peak} GFLOPS\n"
+                report += f"**Scaling factor for {workload}:** {factor} (generic — no bandwidth model)\n"
+                report += f"**Estimated real-world:** ~{peak * factor:.1f} GFLOPS\n\n"
+            else:
+                report += f"Peak: {peak}, Factor: {factor}\n\n"
 
     # Known bottlenecks
     issues = arch_info.get("known_issues", [])
@@ -5141,15 +5212,27 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
         # When target_arch or target_backend is "auto", pick the single best path
         # by scoring installed toolchains + source kernel features + target arch generation.
         # Falls through to the full _autonomous_port report below with the chosen path.
+        detected_info: dict = {}  # set below; _autonomous_port reads it
         if params.target_arch == "auto" or params.target_backend == "auto":
             detected_tools = _detect_installed_toolchain("auto", "auto")
             det = detected_tools.get("detected", {})
             source_info = arch_map.get("entries", {}).get(params.source_arch, {})
             source_vendor = source_info.get("vendor", "NVIDIA")
 
-            # Kernel names from the already-scanned source (gpu_kernels is set above in _autonomous_port body)
-            _kernel_names = [k["path"].split("/")[-1].replace(".cu", "").replace(".cpp", "").replace(".comp", "")
-                             for k in gpu_kernels]
+            # Kernel names from the source tree. The scan used to live only
+            # inside _autonomous_port (which runs AFTER this block), which made
+            # `gpu_kernels` an UnboundLocalError here — autonomous_port with
+            # target=auto hard-failed before producing any report. Scan now.
+            _scan_root = Path(params.repo_path) if params.repo_path else None
+            if _scan_root and _scan_root.exists():
+                _all_kernels = _scan_sources(_scan_root)
+                _kernel_names = [k["path"].split("/")[-1]
+                                 .replace(".cu", "").replace(".cpp", "")
+                                 .replace(".comp", "").replace(".c", "")
+                                 .replace(".cc", "").replace(".cxx", "")
+                                 for k in _all_kernels]
+            else:
+                _kernel_names = []  # github_url clone — no local tree to scan
 
             backend_scores: dict[str, int] = {}
             for bk in ("hip", "cuda", "vulkan", "directx", "sycl"):

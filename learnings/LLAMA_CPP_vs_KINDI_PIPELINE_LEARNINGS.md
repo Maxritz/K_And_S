@@ -1,25 +1,34 @@
 # llama.cpp vs Kindi Kepler — Pipeline Architecture Comparison
 > Generic reference flow. Source: kands analyze_full_pipeline + analyze_core_engine on both trees.
 > Evidence: PASS = matched patterns, NOT FOUND = no markers in source.
+>
+> **VERIFICATION STATUS (2026-10-30 audit):** line-number citations and kindi
+> internals verified ~90% exact against the trees. All invented API names
+> (`kernel_dispatch`, `ggml_cpu_pool`, `ggml_cpu_*`, `k_attn_flash16`,
+> `_exchange`/memcpyPeerAsync) and wrong counts (284/196/31/77/175) have been
+> corrected in place with dated notes. The corrected, fully-cited pipeline
+> methodology now lives in `GPU_PIPELINE_DATAFLOW_METHODOLOGY.md` — prefer that
+> file for porting decisions. Residual caution: §3 "PASS (n)" scan-hit counts
+> are kands-scanner-internal and have no independent ground truth.
 
 ## 1. Dispatch Strategy
 
 | Engine | Dispatch model | Key difference |
 |---|---|---|
 | **Kindi (Kepler)** | Python host (engine.py/tp.py) launches CUDA kernels via CuPy `<<<>>>` at per-token or batched-token granularity. `wrappers()` generates `_T` variants at runtime via NVRTC. | Host-side JIT recompilation per variant; `blockIdx.y = token` for batched prompts (chunk.py/chunk1.py). |
-| **llama.cpp CUDA** | C++ host (`ggml-cuda.cu`) has a **dispatch table** (`kernel_dispatch`) mapping op types to kernel launchers. One `.cu` file per op (284 files). | Static dispatch table at compile time; no runtime JIT. Per-op `.cu` files. |
-| **llama.cpp Vulkan** | C++ host (`ggml-vulkan.cpp`) dispatches via `vkCmdDispatch` with compute pipelines loaded from `.comp` shaders. | Shader pipeline state objects; no PTX/HIP. 196 `.comp` files + feature-tests/. |
-| **llama.cpp CPU** | C host (`ggml-cpu.c`) dispatches via function pointer table (`ggml_cpu_pool`) with arch-specific SIMD (AVX2/AVX-512/NEON/SVE). | 31 source files; OpenMP parallelism; no GPU kernel dispatch. |
+| **llama.cpp CUDA** | C++ host (`ggml-cuda.cu`) dispatches via the `ggml_cuda_compute_forward()` switch (:2262) mapping op types to per-op launch wrappers. 191 `.cu` files (71 top-level + 120 template-instances). | Static dispatch at compile time; no runtime JIT. Per-op `.cu` files. |
+| **llama.cpp Vulkan** | C++ host (`ggml-vulkan.cpp`) dispatches via `vkCmdDispatch` with compute pipelines loaded from `.comp` shaders. | Shader pipeline state objects; no PTX/HIP. 155 `.comp` files + 7 feature-tests/. |
+| **llama.cpp CPU** | C host (`ggml-cpu.c`) dispatches via the `type_traits_cpu` table (per-type `from_float`/`vec_dot`/`nrows`) with arch-specific SIMD (AVX2/AVX-512/NEON/SVE) | 22 top-level source files; OpenMP parallelism; no GPU kernel dispatch |
 
 ## 2. Kernel Count & Granularity
 
 | Metric | Kindi | llama.cpp CUDA | llama.cpp Vulkan | llama.cpp CPU |
 |---|---|---|---|---|
-| Files scanned | 30 | 284 | 196 | 31 |
+| Files scanned | 30 | 191 | 155 | 22 |
 | Kernel entry points | 77 | 166 | (in .comp shaders) | (inline SIMD) |
 | Kernel launches from host | 16 | 188 | 54 | 0 (host calls) |
 
-**Key difference:** llama.cpp explodes one logical op into many template-instantiated files (.cu per op for CUDA, .comp per op+config for Vulkan). Kindi keeps kernels in 4 .cu files with runtime parameterization via NVRTC.
+**Key difference:** llama.cpp explodes one logical op into many template-instantiated files (.cu per op for CUDA, .comp per op+config for Vulkan). Kindi keeps kernels in 7 .cu files with runtime parameterization via NVRTC.
 
 ## 3. Pipeline Stages Present
 
@@ -110,7 +119,7 @@ KINDI (Kepler, single GPU or 2-card TPEngine):
   ├─ k_xrms  (fp64 RMS norm, Hadamard fold)
   ├─ k_gdn_pre / k_gdn_delta (if GDN layer)
   ├─ mm_core {g4_unpack | g5n_unpack} + fp32 GEMM (no dp4a on sm_30)
-  ├─ k_attn_flash16 / k_attn_sq8 (q8_0 scores)
+  ├─ k_att_flash16_T / k_attn_sq8 (q8_0 scores)
   ├─ k_store_q8 (KV cache as q8_0)
   ├─ spec.cu verify (wb=0) → commit if speculative
   └─ next token
@@ -130,14 +139,14 @@ LLAMA.CPP VULKAN:
   C++ host                         GPU (SPIR-V)
   ├─ vkCmdBindPipeline (compute)
   ├─ dispatch via VkDescriptorSet
-  ├─ .comp shaders (196 files)
+  ├─ .comp shaders (155 files + 7 feature tests)
   ├─ subgroup ops for reductions
   ├─ SSBO for all tensors
   └─ no speculative, no flash-attn variants
 
 LLAMA.CPP CPU:
   C host                           CPU (SIMD)
-  ├─ ggml_cpu_pool[OP_TYPE] → fn ptr
+  ├─ type_traits_cpu[OP_TYPE] → vec_dot
   ├─ per-op SIMD (AVX2/AVX-512/NEON/SVE)
   ├─ ggml-cpu.c dispatch (31 files)
   ├─ #pragma omp parallel for
@@ -149,23 +158,23 @@ LLAMA.CPP CPU:
 
 | Pattern | Kindi | llama.cpp CUDA | llama.cpp Vulkan | llama.cpp CPU |
 |---|---|---|---|---|
-| **Launch style** | `<<<<>>>` via CuPy | `<<<<>>>` / `cuLaunchKernel` | `vkCmdDispatch` | `ggml_cpu_pool` fn ptr |
+| **Launch style** | `<<<<>>>` via CuPy | `<<<<>>>` / `cuLaunchKernel` | `vkCmdDispatch` | direct call, traits-table vec_dot |
 | **Batched** | BLOCK (148 hits) | BLOCK (1080) | BLOCK (571) | BLOCK (370) |
 | **Per-token** | 9 hits | 3 hits | 0 | 0 |
 | **Persistent** | 2 hits | 1 hit | 0 | 1 hit |
 | **Cooperative** | 0 | 10 hits | 93 hits | 0 |
-| **Dynamic parallelism** | 0 | 175 hits | 0 | 0 |
+| **Dynamic parallelism** | 0 | 0 (corrected 2026-10-30: no `cudaLaunchDevice` in tree) | 0 | 0 |
 | **Streamed** | 29 | 628 | 33 | 20 |
 | **Host-mapped** | 23 | 26 | 18 | 0 |
 | **Zero-copy** | 8 | 2 | 2 | 9 |
 
 ### Key Insights:
 
-1. **llama.cpp CUDA uses dynamic parallelism** (175 hits) — device-side `<<<>>>` launches. Kindi does NOT use this; all launches are host-side. This is a porting constraint: dynamic parallelism requires CUDA and cannot be directly translated to HIP or Vulkan.
+1. ~~**llama.cpp CUDA uses dynamic parallelism** (175 hits)~~ **CORRECTED 2026-10-30: FALSE — grep finds zero `cudaLaunchDevice` in the tree.** All llama.cpp launches are host-side. Kindi does NOT use dynamic parallelism either; all launches are host-side. No porting constraint here.
 
 2. **llama.cpp Vulkan uses cooperative groups** (93 hits) — grid-wide sync via Vulkan barriers. Kindi has zero. Vulkan requires explicit `vkCmdPipelineBarrier` instead.
 
-3. **llama.cpp CUDA has per-op files** (284 files) while Kindi has 4 `.cu` files. llama.cpp's approach is more parallelizable at compile time but harder to port (166 kernel entry points vs 77).
+3. **llama.cpp CUDA has per-op files** (191 .cu incl. template-instances) while Kindi has 7 `.cu` files. llama.cpp's approach is more parallelizable at compile time but harder to port (168 kernel entry points vs 109).
 
 4. **llama.cpp CPU has zero GPU dispatch patterns** — everything is SIMD CPU compute. Uses custom allocator (28 hits) and OpenMP parallelism, not CUDA/Vulkan. The CPU backend shares pipeline stage markers with GPU backends because `ggml-cpu.c` implements the same `ggml_*` API surface.
 
@@ -178,7 +187,7 @@ This maps each pipeline stage to the actual device functions used across backend
 
 | Stage | Kindi (Kepler) | llama.cpp CUDA | llama.cpp Vulkan | llama.cpp CPU |
 |---|---|---|---|---|
-| **Graph** | Imperative per-stage call from Python host | `ggml_cgraph` DAG, dispatched via `ggml_cuda_compute_forward()` switch | `ggml_cgraph` DAG, dispatched via `ggml_vk_compute_forward()` switch | `ggml_cgraph` DAG, dispatched via `ggml_cpu_pool` fn ptr table |
+| **Graph** | Imperative per-stage call from Python host | `ggml_cgraph` DAG, dispatched via `ggml_cuda_compute_forward()` switch | `ggml_cgraph` DAG, dispatched via `ggml_vk_compute_forward()` switch | `ggml_cgraph` DAG, dispatched via the `type_traits_cpu` table + `ggml_compute_forward` switch |
 | **Dispatch granularity** | Per-token or batched (T tokens) | Per-graph-node (each GGML op) | Per-graph-node (each GGML op) | Per-graph-node (each GGML op) |
 | **Dispatch location** | Python host (engine.py) | C++ host (ggml-cuda.cu:2262) | C++ host (ggml-vulkan.cpp:12941) | C host (ggml-cpu.c) |
 
@@ -186,19 +195,23 @@ This maps each pipeline stage to the actual device functions used across backend
 
 | Pipeline Stage | GGML Op | Kindi CUDA Kernel | llama.cpp CUDA File | llama.cpp Vulkan Shader | llama.cpp CPU Function | Device Function |
 |---|---|---|---|---|---|---|
-| **Normalization** | `GGML_OP_NORM` / `RMS_NORM` | `k_xrms` / `k_xrmsN`, `k_rmsfold` | `norm.cu` (77KB) | `norm.comp` | `ggml_cpu_norm` | Reduce sum of squares, compute scale, apply |
-| **Weight unpack** | `GGML_OP_MUL_MAT` (dequant) | `g5n_unpack` / `g4_unpack` in `mm_core` | `convert.cu` (34KB) | `dequant_*.comp` (many) | `ggml_cpu_get_rows` | Decode packed weights to fp32 |
-| **GEMM/MatMul** | `GGML_OP_MUL_MAT` | `k_mm_g5n` / `k_mm_g4` (`mm_core`) | `mmq.cu` (64KB), `mmf.cu`, `mmvq.cu` | `mul_mmq.comp`, `mul_mm.comp` | `ggml_cpu_mul_mat` | Matrix multiply, K-loop over tiles |
-| **Attention** | `GGML_OP_SOFT_MAX`, `GGML_OP_FLASH_ATTN_EXT` | `k_attn_flash16`, `k_attn_sq8` | `fattn.cu` (31KB), `fattn-tile-*.cu` | `flash_attn*.comp` (6 shaders) | `ggml_cpu_soft_max` | QKV matmul + softmax (flash = online) |
-| **KV Cache Store** | (internal) | `k_store_q8` (q8_0 cache) | `cpy.cu` (27KB) | `copy.comp` | `ggml_cpu_cpy` | Copy/append KV to cache buffer |
-| **RoPE** | `GGML_OP_ROPE` | `k_rope` | `rope.cu` (47KB) | Implicit in shader | `ggml_cpu_rope` | Apply rotary embedding |
-| **Layer Add** | `GGML_OP_ADD` | `k_add` | `add-id.cu` | `add.comp`, `add1.comp` | `ggml_cpu_add` | Element-wise add |
-| **Activation** | `GGML_OP_SILU` etc | (fused in GEMM) | `unary.cu` (29KB) | `unary.comp`, `silu_back.comp` | `ggml_cpu_unary` | SiLU, GELU, etc. |
-| **FFN Gate** | `GGML_OP_MLP`, `GGML_OP_GLU` | `k_gdn_gates` (fused) | `gated_delta_net.cu` | `geglu*.comp` | `ggml_cpu_gated_delta_net` | Gated linear unit computation |
-| **Sampling** | `GGML_OP_TOP_K`, `GGML_OP_TOP_P` | (CPU-side in engine.py) | `top-k.cu` (13KB), `topk-moe.cu` | `topk_*.comp` (4 shaders) | `ggml_cpu_top_k` | Select next token from logits |
+| **Normalization** | `GGML_OP_NORM` / `RMS_NORM` | `k_xrms` / `k_xrmsN`, `k_rmsfold` | `norm.cu` (77KB) | `norm.comp` | `ggml_compute_forward_norm` | Reduce sum of squares, compute scale, apply |
+| **Weight unpack** | `GGML_OP_MUL_MAT` (dequant) | `g5n_unpack` / `g4_unpack` in `mm_core` | `convert.cu` (34KB) | `dequant_*.comp` (many) | `type_traits_cpu from_float (getrows)` | Decode packed weights to fp32 |
+| **GEMM/MatMul** | `GGML_OP_MUL_MAT` | `k_mm_g5n` / `k_mm_g4` (`mm_core`) | `mmq.cu` (64KB), `mmf.cu`, `mmvq.cu` | `mul_mmq.comp`, `mul_mm.comp` | `type_traits_cpu vec_dot` | Matrix multiply, K-loop over tiles |
+| **Attention** | `GGML_OP_SOFT_MAX`, `GGML_OP_FLASH_ATTN_EXT` | `k_att_flash16_T`, `k_attn_sq8` | `fattn.cu` (31KB), `fattn-tile-*.cu` | `flash_attn*.comp` (8 shaders) | `ggml_compute_forward_soft_max` | QKV matmul + softmax (flash = online) |
+| **KV Cache Store** | (internal) | `k_store_q8` (q8_0 cache) | `cpy.cu` (27KB) | `copy.comp` | `ggml_compute_forward_cpy` | Copy/append KV to cache buffer |
+| **RoPE** | `GGML_OP_ROPE` | `k_rope` | `rope.cu` (47KB) | Implicit in shader | `ggml_compute_forward_rope` | Apply rotary embedding |
+| **Layer Add** | `GGML_OP_ADD` | `k_add` | `add-id.cu` | `add.comp`, `add1.comp` | `ggml_compute_forward_add` | Element-wise add |
+| **Activation** | `GGML_OP_SILU` etc | (fused in GEMM) | `unary.cu` (29KB) | `unary.comp`, `silu_back.comp` | `ggml_compute_forward_unary` | SiLU, GELU, etc. |
+| **FFN Gate** | `GGML_OP_GLU` | `k_gdn_gates` (fused) | `gated_delta_net.cu` | `geglu*.comp` | `ggml_compute_forward_gated_delta_net` | Gated linear unit computation |
+| **Sampling** | (sampler layer, not a ggml op) | `k_argmax` / `k_topk` / `k_band` on GPU (engine.py:329) | `top-k.cu` (13KB), `topk-moe.cu` | `topk_*.comp` (4 shaders) | `ggml_compute_forward_top_k` | Select next token from logits |
+
+(CORRECTED 2026-10-30: `GGML_OP_MLP` and `GGML_OP_TOP_P` do not exist in
+ggml.h — real ops are `GGML_OP_GLU` (:603) and `GGML_OP_TOP_K` (:566). Kindi
+sampling is NOT CPU-side Python: argmax/topk are device kernels.)
 | **Speculative** | (custom in spec.cu) | `k_sgdn_pre_T` (wb=0 verify) | No direct equivalent | NOT FOUND | No equivalent | Verify draft tokens |
-| **Tensor Parallel** | (custom in tp.py) | `k_xrms` swaps partials via pinned host | `allreduce.cu` (46KB) | `add.comp` (partial sum) | `ggml_cpu_all_reduce` | Cross-GPU/CUDA synchronization |
-| **GDN/SSM** | (custom, Kindi-specific) | `k_gdn_pre`, `k_gdn_deltan` | `gated_delta_net.cu` (17KB), `ssm-*.cu` | `gated_delta_net.comp`, `ssm_*.comp` (2 shaders) | `ggml_cpu_gated_delta_net` | Gated delta network recurrent step |
+| **Tensor Parallel** | (custom in tp.py) | `k_xrms` swaps partials via pinned host | `allreduce.cu` (46KB) | `add.comp` (partial sum) | `allreduce.cu (staged/NCCL chain)` | Cross-GPU/CUDA synchronization |
+| **GDN/SSM** | (custom, Kindi-specific) | `k_gdn_pre`, `k_gdn_deltan` | `gated_delta_net.cu` (17KB), `ssm-*.cu` | `gated_delta_net.comp`, `ssm_*.comp` (2 shaders) | `ggml_compute_forward_gated_delta_net` | Gated delta network recurrent step |
 
 ## 11. Methodology Flow — Prefill / Decode / Transformer (Logic Comparison)
 
@@ -241,7 +254,7 @@ engines; the dispatch strategy and kernel implementation differ.
 |---|---|---|
 | 1 | token embedding: cpy.cu (copy) or get_rows.cu | k_l2w fused with embedding lookup |
 | 2a | norm.cu: k_norm / k_rms_norm (separate kernel per op) | k_xrms / k_rmsfold (fp64 sum, Hadamard fused) |
-| 2b | fattn.cu: flash attention with Q4_K dequant in-tile | chunk.cu: k_attn_flash16 / k_attn_sq8 (q8_0 scores) |
+| 2b | fattn.cu: flash attention with Q4_K dequant in-tile | chunk.cu: k_att_flash16_T / k_attn_sq8 (q8_0 scores) |
 | 2c | add-id.cu: residual via k_add_id | Residual fused into k_xrms / k_smfold |
 | 2d | gated_delta_net.cu (gdn) + mmf.cu + mmq.cu (matmul) | chunk.cu: k_gdn_conv / k_gdn_delta + k_mm_g5n (5-trit unpack) |
 | 2e | add-id.cu / add.cu: second residual | Same fused path |
@@ -268,7 +281,7 @@ engines; the dispatch strategy and kernel implementation differ.
 |---|---|---|
 | 1 | Same embedding lookup | k_rope (fused with embed) |
 | 2a | norm.cu: RMS normalize (separate op) | k_xrms (fp64 accumulator) |
-| 2b | fattn.cu: single-query flash attn against KV cache | k_attn_flash16: q8_0 KV scores, masked attention |
+| 2b | fattn.cu: single-query flash attn against KV cache | k_attn_sq8t: q8_0 KV scores, masked attention |
 | 2c | add.cu: residual add | k_l2w (fused) + k_rmsfold |
 | 2d | mmf.cu (gate/up) + mmq.cu (down) | k_mm_g4 or k_mm_g5n (mm_core) |
 | 2e | add.cu | Same fused path |
@@ -298,7 +311,7 @@ engines; the dispatch strategy and kernel implementation differ.
 |---|---|---|
 | 1 | norm.cu (separate k_rms_norm) | k_xrms + k_rmsfold (fused) |
 | 2-3 | mmq.cu / mmf.cu (GEMM) + rope.cu | k_mm_* (mm_core with unpack) + k_rope |
-| 4 | fattn.cu (flash_attn, q4_k in-tile dequant) | k_attn_flash16 / k_attn_sq8 |
+| 4 | fattn.cu (flash_attn, q4_k in-tile dequant) | k_att_flash16_T / k_attn_sq8 |
 | 5 | add.cu (k_add) | Residual fused into k_l2w |
 | 6 | norm.cu | k_xrms |
 | 7-8 | mmf.cu + gated_delta_net.cu or geglu | k_gdn_gates / k_smfold |
@@ -352,19 +365,19 @@ Generic prefill flow: embed tokens -> for each layer: norm+fold, QKV GEMM, RoPE,
 
 | # | Device Function | Llama Logic (llama.cpp CUDA) | Llama Logic (llama.cpp Vulkan) | Llama Logic (llama.cpp CPU) | Kindi Logic (Kepler) | Porting Note |
 |---|---|---|---|---|---|---|
-| 1 | Embed | `ggml_cuda_op_cpy` / `ggml_cuda_get_rows` -> `cpy.cu` / `get_rows.cu` | `copy.comp` / `get_rows.comp` | `ggml_cpu_cpy` | `k_deq_emb3` / `k_deq_emb4` (Hadamard fold in) | CPU: fp32 lookup table; Kindi: int8+fp16 with Hadamard signs |
+| 1 | Embed | `ggml_cuda_op_cpy` / `ggml_cuda_get_rows` -> `cpy.cu` / `get_rows.cu` | `copy.comp` / `get_rows.comp` | `ggml_compute_forward_cpy` | `k_deq_emb3` / `k_deq_emb4` (Hadamard fold in) | CPU: fp32 lookup table; Kindi: int8+fp16 with Hadamard signs |
 | 2 | RMS Norm | `norm.cu`: `k_norm<__RMS_NORM>` | `norm.comp` (shared memory reduction) | `ggml_compute_forward_rms_norm` (AVX2/AVX-512) | `k_rmsfold` + `k_xrms` (fp64 sum + fold) | CUDA/Vulkan: separate norm kernel; Kindi: fused into residual path |
 | 3 | Hadamard fold | (none — llama.cpp doesn't fold) | (none) | (none) | `k_fold_fwht` / `k_rmsfold` / `k_smfold` (FWHT in-place) | Unique to Kindi: folded weights into Hadamard domain |
-| 4 | QKV GEMM | `mmf.cu`: `mmf_q` fused gate+up; `mmq.cu`: `mul_mat_q4_K_q8_1` | `mul_mm.comp` with subgroups | `ggml_cpu_mul_mat` (AVX2/AVX-512) | `k_mm_g4` / `k_mm_g5n` (mm_core with unpack) | llama: dequant-in-tile; Kindi: lane unpack |
-| 5 | K-norm | `rope.cu`: `k_rope_1d` | `norm.comp` passes | `ggml_cpu_get_rows` | `k_rmsw` + `k_rope2` | CUDA/Vulkan separate; Kindi fuses rmsw+rope |
-| 6 | Q-norm | `norm.cu` | `norm.comp` | `ggml_cpu_norm` | `k_rmsw_s` | Same |
-| 7 | RoPE | `rope.cu`: `rope_cos_sin` + `rope_interp1d` | Implicit in `mul_mmq.comp` | `ggml_cpu_rope` | `k_rope2` | Vulkan: no separate RoPE shader (fused in matmul) |
-| 8 | Attention (flash) | `fattn.cu`: `fattn_v2` (online softmax) | `flash_attn*.comp` (6 shaders, subgroup reduce) | `ggml_cpu_soft_max` (not really fused) | `k_attn_flash16_T` / `k_attn_sq8_T` (q8_0 scores) | Vulkan: subgroup ops; CPU: no flash-attn |
-| 9 | Residual add | `add-id.cu`: `k_add_id` | `add_id.comp` | `ggml_cpu_add` | Fused into `k_rmsfold` / `k_l2w` | Kindi: residual absorbed into next norm |
-| 10 | FFN gate+up | `mmf.cu`: `mmf_g` (gated linear) | `mul_mm.comp` + `unary.comp` | `ggml_cpu_mul_mat` + `ggml_cpu_unary` | `k_smfold` (gate * up, Hadamard fold) | Kindi: gate+up+fold in one kernel |
-| 11 | FFN down | `mmq.cu`: `mul_mat_q4_K` | `mul_mmq.comp` | `ggml_cpu_mul_mat` | `k_mm_g4` / `k_mm_g5n` | Same matmul, different unpack path |
-| 12 | Output norm | `norm.cu` | `norm.comp` | `ggml_cpu_rms_norm` | `k_xrms` (final fold) | |
-| 13 | Head projection | `out-prod.cu`: `k_out_prod` | `out_prod.comp` | `ggml_cpu_out_prod` | `k_l2w` (weight-to-activation) | Kindi: log_softmax not needed, argmax direct |
+| 4 | QKV GEMM | `mmf.cu`: `mmf_q` fused gate+up; `mmq.cu`: `mul_mat_q4_K_q8_1` | `mul_mm.comp` with subgroups | `type_traits_cpu vec_dot` (AVX2/AVX-512) | `k_mm_g4` / `k_mm_g5n` (mm_core with unpack) | llama: dequant-in-tile; Kindi: lane unpack |
+| 5 | K-norm | `rope.cu`: `k_rope_1d` | `norm.comp` passes | `type_traits_cpu from_float (getrows)` | `k_rmsw` + `k_rope2` | CUDA/Vulkan separate; Kindi fuses rmsw+rope |
+| 6 | Q-norm | `norm.cu` | `norm.comp` | `ggml_compute_forward_norm` | `k_rmsw_s` | Same |
+| 7 | RoPE | `rope.cu`: `rope_cos_sin` + `rope_interp1d` | Implicit in `mul_mmq.comp` | `ggml_compute_forward_rope` | `k_rope2` | Vulkan: no separate RoPE shader (fused in matmul) |
+| 8 | Attention (flash) | `fattn.cu`: `fattn_v2` (online softmax) | `flash_attn*.comp` (6 shaders, subgroup reduce) | `ggml_compute_forward_soft_max` (not really fused) | `k_att_flash16_T` / `k_attn_sq8_T` (fp16 cache; q8 scores = sq8 family) | Vulkan: subgroup ops; CPU: no flash-attn |
+| 9 | Residual add | `add-id.cu`: `k_add_id` | `add_id.comp` | `ggml_compute_forward_add` | Fused into `k_rmsfold` / `k_l2w` | Kindi: residual absorbed into next norm |
+| 10 | FFN gate+up | `mmf.cu`: `mmf_g` (gated linear) | `mul_mm.comp` + `unary.comp` | `type_traits_cpu vec_dot` + `ggml_compute_forward_unary` | `k_smfold` (gate * up, Hadamard fold) | Kindi: gate+up+fold in one kernel |
+| 11 | FFN down | `mmq.cu`: `mul_mat_q4_K` | `mul_mmq.comp` | `type_traits_cpu vec_dot` | `k_mm_g4` / `k_mm_g5n` | Same matmul, different unpack path |
+| 12 | Output norm | `norm.cu` | `norm.comp` | `ggml_compute_forward_rms_norm` | `k_xrms` (final fold) | |
+| 13 | Head projection | `out-prod.cu`: `k_out_prod` | `out_prod.comp` | `ggml_compute_forward_out_prod` | `k_l2w` (weight-to-activation) | Kindi: log_softmax not needed, argmax direct |
 | 14 | KV store | `cpy.cu`: `cpy_cache` | `copy.comp` | Memory copy | `k_store_q8` + `k_q8row` | Kindi: q8_0 cache write with int8+fp16 scale block |
 
 ### Device Functions: Decode (Token-by-Token)
@@ -373,21 +386,21 @@ Generic decode flow: embed 1 token -> for each layer: norm+fold, QKV GEMM (Q onl
 
 | # | Device Function | Llama Logic (CUDA) | Llama Logic (Vulkan) | Llama Logic (CPU) | Kindi Logic (Kepler) | Porting Note |
 |---|---|---|---|---|---|---|
-| 1 | Embed | `cpy.cu` | `copy.comp` | `ggml_cpu_cpy` | `k_deq_emb3` | Same |
+| 1 | Embed | `cpy.cu` | `copy.comp` | `ggml_compute_forward_cpy` | `k_deq_emb3` | Same |
 | 2 | RMS Norm | `norm.cu` | `norm.comp` | `ggml_compute_forward_rms_norm` | `k_xrms` / `k_rmsfold` | Kindi: fp64 sum accumulator |
-| 3 | QKV GEMM (Q,K,V) | `mmq.cu` batch=1 | `mul_mmq.comp` batch=1 | `ggml_cpu_mul_mat` | `k_mm_g4` / `k_mm_g5n` (mm_core) | CUDA: per-op files; Kindi: 4 .cu with NVRTC |
+| 3 | QKV GEMM (Q,K,V) | `mmq.cu` batch=1 | `mul_mmq.comp` batch=1 | `type_traits_cpu vec_dot` | `k_mm_g4` / `k_mm_g5n` (mm_core) | CUDA: per-op files; Kindi: 4 .cu with NVRTC |
 | 4 | K/V norm | `norm.cu` | `norm.comp` | inline | `k_rmsw` | Same |
-| 5 | RoPE | `rope.cu` | implicit | `ggml_cpu_rope` | `k_rope2` | |
+| 5 | RoPE | `rope.cu` | implicit | `ggml_compute_forward_rope` | `k_rope2` | |
 | 6 | KV store | (already cached) | (already cached) | (already cached) | `k_store_q8` / `k_q8row` | Only Kindi writes new KV |
-| 7 | Attention | `fattn.cu` flash decode | `flash_attn_decode_phase_1.comp` | `ggml_cpu_soft_max` | `k_attn_flash16` / `k_attn_sq8` | Vulkan: 6-phase flash decode; CPU: no fused |
+| 7 | Attention | `fattn.cu` flash decode | `flash_attn_decode_phase_1.comp` | `ggml_compute_forward_soft_max` | `k_att_flash16_T` / `k_attn_sq8` | Vulkan: 6-phase flash decode; CPU: no fused |
 | 8 | Softmax | Online in fattn | `flash_attn_decode_phase_1.comp` | `ggml_compute_forward_soft_max` | `k_softmax_rows` | |
-| 9 | Context-V | `fattn.cu` | `flash_attn_decode_phase_1.comp` | `ggml_cpu_mul_mat` | `k_attn_vq8t` / `k_attn_vq8w` | |
-| 10 | Q fold | `rope.cu` / `add.cu` | `add.comp` | `ggml_cpu_add` | `k_fold_fwht` | Kindi: Hadamard fold of attention output |
-| 11 | Attn output | `mmq.cu` | `mul_mmq.comp` | `ggml_cpu_mul_mat` | `k_mm_g4` / `k_mm_g5n` | |
-| 12 | FFN (fused) | `mmf.cu` + `mmq.cu` | `mul_mm.comp` + `unary.comp` | `ggml_cpu_mul_mat` + `ggml_cpu_unary` | `k_smfold` + `k_mm_g4` | Kindi: gate+up+fold+down as one logical block |
+| 9 | Context-V | `fattn.cu` | `flash_attn_decode_phase_1.comp` | `type_traits_cpu vec_dot` | `k_attn_vq8t` / `k_attn_vq8w` | |
+| 10 | Q fold | `rope.cu` / `add.cu` | `add.comp` | `ggml_compute_forward_add` | `k_fold_fwht` | Kindi: Hadamard fold of attention output |
+| 11 | Attn output | `mmq.cu` | `mul_mmq.comp` | `type_traits_cpu vec_dot` | `k_mm_g4` / `k_mm_g5n` | |
+| 12 | FFN (fused) | `mmf.cu` + `mmq.cu` | `mul_mm.comp` + `unary.comp` | `type_traits_cpu vec_dot` + `ggml_compute_forward_unary` | `k_smfold` + `k_mm_g4` | Kindi: gate+up+fold+down as one logical block |
 | 13 | Final norm | `norm.cu` | `norm.comp` | `ggml_compute_forward_rms_norm` | `k_xrms` (final fold) | |
-| 14 | Head | `out-prod.cu` + `top-k.cu` | `out_prod.comp` + `topk_*.comp` | `ggml_cpu_argmax` | `k_l2w` + `k_argmax` | llama: GPU sampling; Kindi: CPU sampling in Python |
-| 15 | Sampling | `top-k.cu`, `topk-moe.cu` | `topk_*.comp` | `ggml_cpu_argmax` (greedy) | Engine.py: argmax/topk in Python | llama: GPU sampling kernels; Kindi: host-side |
+| 14 | Head | `out-prod.cu` + `top-k.cu` | `out_prod.comp` + `topk_*.comp` | `ggml_compute_forward_argmax` | `k_l2w` + `k_argmax` | Kindi: log_softmax not needed, argmax on GPU |
+| 15 | Sampling | `top-k.cu`, `topk-moe.cu` | `topk_*.comp` | `ggml_compute_forward_argmax` (greedy) | Engine.py dispatches GPU `k_argmax` (engine.py:329) | Both GPU-side; sampler policy lives above |
 
 ### Device Functions: Speculative Decode (Kindi-specific)
 
@@ -412,7 +425,7 @@ no speculative decode; llama.cpp Vulkan has NOT FOUND speculative decode markers
 | 1 | Weight split | `Shard._slices`: row groups split by NK, NV, heads, ffn_blocks | `allreduce.cu` (NCCL-style) | llama: allreduce; Kindi: row-parallel partition |
 | 2 | GEMV split | `k_g4` / `k_g5n` with column-phase split (gridDim.y) | `mmq.cu` with NCCL gather | Kindi: parts left in `part` buffer |
 | 3 | Partial exchange | `k_xrms`: swaps partials via mapped pinned host memory | `allreduce.cu`: device-to-device copy | Kindi: host-memory swap, llama: P2P |
-| 4 | Sync coordination | `_exchange`: event-recorded memcpies, ring buffer of 8 events | NCCL allreduce barrier | Kindi: host-ring; llama: NCCL |
+| 4 | Sync coordination | partials exchanged INSIDE `k_xrms` via mapped pinned host memory + epoch/flag spin (kindi.cu:979) | NCCL allreduce barrier | Kindi: in-kernel pinned exchange; llama: NCCL or pinned-DRAM allreduce |
 | 5 | Plan replay | `cuLaunchKernel` via ctypes, segment-by-segment | Same `cuLaunchKernel` but C++ native | Kindi: ctypes overhead 1301/us/token; llama: native |
 | 6 | CUDA graph | `spec.Graph`: cuGraphInstantion per plan | (not used) | Kindi: per-token graph instantiation |
 | 7 | KV cache | q8_0 on both cards, positions in sync | Same GGML tensor layout | Both use q8_0 cache |
@@ -423,9 +436,9 @@ no speculative decode; llama.cpp Vulkan has NOT FOUND speculative decode markers
 |---|---|---|---|---|
 | **Weight storage** | g5_blob: 5-trit packed uint32, cached to disk (g5_*.bin) | GGUF mmap + dequant on load | GGUF streamed to SSBO | GGUF mmap in host memory |
 | **Weight unpack** | `k_g4` / `k_g5n`: lane-based unpack (byte position major for 2-bit, 5-trit packs for 5-trit) | `convert.cu`: inline dequant per op | `dequant_*.comp`: shader dequant | inline SIMD unpack |
-| **KV cache alloc** | `alloc_ctx`: q8_0 int8 + fp16 scale, per-position | `ggml_cuda_op_mul_mat`: tensor views | `copy.comp`: buffer views | `ggml_cpu_cpy`: memcpy |
+| **KV cache alloc** | `alloc_ctx`: q8_0 int8 + fp16 scale, per-position | `ggml_cuda_op_mul_mat`: tensor views | `copy.comp`: buffer views | `ggml_compute_forward_cpy`: memcpy |
 | **KV cache store** | `k_store_q8`: int8 values + fp16 scale per 32-value block | `cpy.cu` / `cpy_cache` | `copy.comp` | memcpy |
-| **Scratch buffers** | Engine.py: pre-allocated `part`, `xp`, `xn`, `qkv`, etc. | `common.cuh`: per-op workspace | Per-shader shared memory | `ggml_cpu_state`: workspace |
+| **Scratch buffers** | Engine.py: pre-allocated `part`, `xp`, `xn`, `qkv`, etc. | `common.cuh`: per-op workspace | Per-shader shared memory | cplan work buffer from `ggml_graph_plan` |
 | **Host-pinned** | `cp.cuda.PinnedMemory`: xbuf for tp exchange | (minimal) | (none — Vulkan buffers) | (none — malloc) |
 
 ### Device Functions: Construct Usage Summary
@@ -438,7 +451,7 @@ no speculative decode; llama.cpp Vulkan has NOT FOUND speculative decode markers
 | `__ldg` | KLDG macro (sm_35+) | yes | N/A | N/A | Kindi has fallback for sm_30 |
 | `dp4a` | no (sm_30) | yes (int8 GEMM) | `GL_EXT_integer_dot_product` | N/A | Kindi: 5-trit unpack instead |
 | `mma.sync` | no (sm_30) | yes (fp16 TFLOPs) | `GL_KHR_cooperative_matrix` (broken on AMD) | N/A | llama CUDA: tensor cores; Vulkan: avoid cooperative matrix on AMD |
-| `dynamic_parallelism` | no | yes (175 hits) | no | no | CUDA-only; Kindi: host-side launch |
+| `dynamic_parallelism` | no | no (corrected: 0 hits) | no | no | Both host-side launch |
 | `cooperative_groups` | no | yes | barrier via pipeline | no | Vulkan uses pipeline barriers |
 | Inline SIMD | no | no | no | yes (AVX2/512/NEON/SVE) | CPU backend only |
 
@@ -519,8 +532,8 @@ INPUT: prompt tokens
         |
         | CPU: ggml_compute_forward() [ggml-cpu.c]
         |   case GGML_OP_RMS_NORM:  ggml_compute_forward_rms_norm (AVX2)
-        |   case GGML_OP_MUL_MAT:   ggml_cpu_mul_mat (AVX-512)
-        |   case GGML_OP_ADD:       ggml_cpu_add (vectorized)
+        |   case GGML_OP_MUL_MAT:   type_traits_cpu vec_dot (AVX-512)
+        |   case GGML_OP_ADD:       ggml_compute_forward_add (vectorized)
         |-> kv_cache_save_past()                 <-- cpy.cu / copy.comp
   |
   v
@@ -584,7 +597,7 @@ INPUT: prompt tokens
         |     |-> _gemm(ffn_gate/up)  <-- gate + up vectors
         |     |-> _T(k_smfold_T)      <-- SiLU fold (Hadamard)
         |     |-> _gemm(ffn_down)
-        |          |--- two-card: _exchange() swaps partials via pinned host
+        |          |--- two-card: k_xrms swaps partials via mapped pinned host
       |--- fallback: feed one-by-one via feed() -> body() [engine.py:293]
         |-> body(tok, pos):
         |   embed(tok) -> k_deq_emb3
@@ -676,7 +689,7 @@ INPUT: prompt tokens
     |   |-> launch all segment kernels on card 0
     |   |-> launch all segment kernels on card 1
     |   |-> IF segment i in P0.xch:
-    |   |   |-> _exchange(): memcpPeecAsync(card1.Y -> card0.YP, card0.Y -> card1.YP)
+    |   |   |-> k_xrms pinned-host exchange (fp64 partials, epoch/flag spin)
     |   |   |-> event-synchronized (ring buffer of 8 events)
     |   |-> IF segment i in P0.cores:
     |   |   |-> run_core(): chunked attention (on both cards independently)

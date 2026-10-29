@@ -37,6 +37,23 @@ from typing import Any
 #: How to build and disassemble one probe for each backend.
 #: `arch_flag` uses the literal token `{target}`.
 TOOLCHAINS: dict[str, dict[str, Any]] = {
+    "vulkan": {
+        # Vulkan compute: the "compiler" is glslc/glslangValidator compiling
+        # GLSL to SPIR-V. No device target flag — target selection happens at
+        # vkCreateDevice runtime, not compile time. A host C++ compiler is
+        # still needed for the loader stubs, but the shader toolchain alone
+        # is enough to claim a working Vulkan compute backend.
+        "compilers": ("glslc.exe", "glslc", "glslangValidator.exe",
+                      "glslangValidator"),
+        "roots": ("VULKAN_SDK", "VK_SDK_PATH"),
+        "default_roots": (r"C:\VulkanSDK", "/usr/share/vulkan"),
+        "arch_flag": "",  # SPIR-V is arch-agnostic; device picked at runtime
+        "language": ("",),
+        "device_only": ("",),
+        "include": "",
+        "objdump": ("spirv-dis.exe", "spirv-dis"),
+        "extension": ".comp",
+    },
     "hip": {
         "compilers": ("hipcc.exe", "hipcc.bat", "hipcc"),
         "roots": ("ROCM_PATH", "ROCM_HOME", "HIP_PATH"),
@@ -138,6 +155,13 @@ def find_compiler(backend: str) -> Path | None:
     search_dirs = []
     if root:
         search_dirs += [root / "bin", root / "compiler" / "latest" / "bin"]
+        # SDK layouts with version subdirs (VulkanSDK\1.4.x.y\Bin, oneAPI\yyyy.z\...)
+        try:
+            for child in sorted(root.iterdir(), reverse=True):
+                if child.is_dir():
+                    search_dirs += [child / "Bin", child / "bin"]
+        except OSError:
+            pass
     for name in spec["compilers"]:
         for d in search_dirs:
             p = d / name
@@ -754,7 +778,17 @@ def code_object_report(path: str, arch: str | None = None,
 def capability_report(target: str, backend: str = "auto") -> dict[str, Any]:
     """What this host can actually do for `target` — discovery, not assumption."""
     if backend == "auto":
-        backend = "cuda" if re.match(r"^(sm_|compute_)", target) else "hip"
+        if re.match(r"^(sm_|compute_)", target):
+            backend = "cuda"
+        elif re.match(r"^gfx(8|9|10|11|12)", target) or target.startswith("cdna"):
+            backend = "hip"
+        elif re.match(r"^(gen12|xe_|meteor|arc)", target):
+            backend = "vulkan"
+        else:
+            # gfx-numbers are HIP; anything else try in install order
+            backend = "hip" if find_compiler("hip") else (
+                      "cuda" if find_compiler("cuda") else (
+                      "vulkan" if find_compiler("vulkan") else "hip"))
     spec = TOOLCHAINS.get(backend, {})
     return {
         "backend": backend,

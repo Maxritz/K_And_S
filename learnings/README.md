@@ -33,8 +33,9 @@ Durable, distilled knowledge from porting engagements. **This folder is committe
 
 - `TINY_VLLM_CPU_PORT_LEARNINGS.md` — tiny-vllm CPU port: what transfers, what drops
 - `TINY_VLLM_CPU_WINDOWS_PORT_LEARNINGS.md` — tiny-vllm CPU/Windows: toolchain + BLAS reality
-- `LLAMA_CPP_vs_KINDI_PIPELINE_LEARNINGS.md` — pipeline comparison (698 lines)
+- `LLAMA_CPP_vs_KINDI_PIPELINE_LEARNINGS.md` — pipeline comparison (audited 2026-10-30; invented API names corrected — see banner)
+- `GPU_PIPELINE_DATAFLOW_METHODOLOGY.md` — **backend-agnostic pipeline methodology, verified file:line from llama.cpp @338fce6 (CUDA/HIP + Vulkan + CPU); the canonical data-flow reference**
 - `LLAMA_CPP_CPU_INFERENCE_LEARNINGS.md` — llama.cpp CPU inference notes
-- `GGUF_QUANTIZATION_LEARNINGS.md` — GGUF quantization (distilled from iuliaturc/gguf-docs)
+- `GGUF_QUANTIZATION_LEARNINGS.md` — GGUF quantization (CORRECTED 2026-10-30: block sizes, IQ type list, GPU I-quant support all verified against ggml-common.h/gguf.md)
 - `HYPERTHINK_ARXIV_2610_03039_LEARNINGS.md` — HYPERTHINK + 5 foundational papers
 - `VULKAN_SYNC_TDR_LEARNINGS.md` — Vulkan barriers, ping-pong queues, occupancy, TDR/hang prevention
