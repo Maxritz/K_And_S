@@ -24,6 +24,7 @@ Resources (URI: kands://...):
   kands://findings/{name}    Completed porting analysis for a specific engine
   kands://radical-experiments  RDNA-specific anti-patterns + radical kernel experiments
   kands://vulkan-sync        Vulkan barriers, sync hazards, TDR/hang prevention, occupancy
+  kands://gpu-pipelines      Backend-agnostic pipeline dataflow methodology (verified, canonical)
 
 Tools:
   discover_kernels()          Scan any repo for kernel/shader sources
@@ -87,6 +88,7 @@ _DIAGNOSTICS_PATH = _KANDS_ROOT / "docs" / "DIAGNOSTICS.md"
 _DOX_STYLE_PATH = _KANDS_ROOT / "docs" / "DOX_STYLE.md"
 _PORTING_STRATEGIES_PATH = _KANDS_ROOT / "docs" / "PORTING_STRATEGIES.md"
 _VULKAN_SYNC_TDR_PATH = _KANDS_ROOT / "learnings" / "VULKAN_SYNC_TDR_LEARNINGS.md"
+_GPU_PIPELINES_PATH = _KANDS_ROOT / "learnings" / "GPU_PIPELINE_DATAFLOW_METHODOLOGY.md"
 _MY_SKILLS_DIR = Path.home() / ".config" / "opencode" / "command" / "MySkills"
 if not _MY_SKILLS_DIR.exists():
     # Fallback: look for it relative to known locations
@@ -430,6 +432,7 @@ RES_PORTING_STRATEGIES = "kands://porting-strategies"
 RES_DIAGNOSTICS = "kands://diagnostics"
 RES_LESSONS = "kands://porting-lessons"
 RES_VULKAN_SYNC_TDR = "kands://vulkan-sync"
+RES_GPU_PIPELINES = "kands://gpu-pipelines"
 RES_DOX_STYLE = "kands://dox-style"
 RES_GOAL = "kands://goal"
 RES_STATUS = "kands://status"
@@ -795,6 +798,12 @@ def _list_resources() -> list[mcp_types.Resource]:
             mimeType="text/markdown",
         ),
         mcp_types.Resource(
+            uri=RES_GPU_PIPELINES,
+            name="GPU Pipeline Dataflow Methodology",
+            description="Backend-agnostic inference pipeline methodology, verified file:line against llama.cpp CUDA/HIP + Vulkan + CPU backends. Canonical reference for decode/prefill gating, capability-gated pipeline maps, quant dispatch, submission models, and the corrections ledger for invented API names.",
+            mimeType="text/markdown",
+        ),
+        mcp_types.Resource(
             uri=RES_MY_SKILLS,
             name="MySkills Directory",
             description="Lists all available skills from the MySkills framework. Use 'select_skill' to load a specific skill's instructions.",
@@ -901,6 +910,11 @@ def _read_resource(uri: str) -> str:
         if _VULKAN_SYNC_TDR_PATH.exists():
             return _VULKAN_SYNC_TDR_PATH.read_text(encoding="utf-8")
         return "# Vulkan Sync & TDR\n\n(Not found)"
+
+    if uri == RES_GPU_PIPELINES:
+        if _GPU_PIPELINES_PATH.exists():
+            return _GPU_PIPELINES_PATH.read_text(encoding="utf-8")
+        return "# GPU Pipeline Dataflow Methodology\n\n(Not found)"
 
     if str(uri) == RES_MY_SKILLS:
         skill_data = _load_myskills_index()
@@ -1013,7 +1027,7 @@ def _bundle_status() -> dict:
             })
     return {
         "bundle": "kands (Kernels & Shaders + MySkills)",
-        "version": "0.3.0",
+        "version": "0.3.1",
         "current_time_utc": now.isoformat(),
         "current_date": now.strftime("%Y-%m-%d"),
         "current_date_human": now.strftime("%B %d, %Y"),
@@ -1168,7 +1182,7 @@ then `read kands://porting-patterns` for transformation patterns.
             })
     return {
         "bundle": "kands (Kernels & Shaders + MySkills)",
-        "version": "0.3.0",
+        "version": "0.3.1",
         "current_time_utc": now.isoformat(),
         "current_date": now.strftime("%Y-%m-%d"),
         "resource_count": len(resources),
@@ -3057,57 +3071,46 @@ def _detect_local_cpu_arch(arch_map: dict) -> str | None:
             if vendor_match and model_match:
                 vendor = vendor_match.group(1).lower()
                 model = model_match.group(1).lower()
+                # NOTE: 'intel_core_ultra' is NOT an ARCH_MAP id; Core Ultra
+                # maps to 'meteor_lake' (audit T4: dead 'genuinintel' branch
+                # removed and unreachable return fixed).
+                if vendor == 'genuineintel':
+                    # Check /proc/cpuinfo flags for AVX-512
+                    flags_match = _re.search(r'flags\s*:\s*(.+)', cpuinfo)
+                    flags = flags_match.group(1).lower() if flags_match else ""
+                    if 'ultra' in model or 'meteor' in model:
+                        return 'meteor_lake'
+                    if 'avx512' in flags:
+                        if '12th' in model or 'alder' in model:
+                            return 'intel_12th'
+                        if '13th' in model or 'raptor' in model:
+                            return 'intel_13th'
+                        if '14th' in model:
+                            return 'intel_14th'
+                        if '11th' in model or 'rocket' in model:
+                            return 'intel_11th'
+                        if '10th' in model or 'comet' in model:
+                            return 'intel_10th'
+                        return 'intel_12th'  # assume modern if AVX-512 present
+                    else:
+                        if '12th' in model or 'alder' in model:
+                            return 'intel_12th'
+                        if '13th' in model or 'raptor' in model:
+                            return 'intel_13th'
+                        if '14th' in model:
+                            return 'intel_14th'
+                        return 'x86_64'
 
-                if vendor == 'genuineintel' or vendor == 'authentic_amd':
-                    # Intel
-                    if vendor == 'genuinintel':
-                        if 'avx512' in model or 'genuineintel' in vendor:
-                            # Check /proc/cpuinfo flags for AVX-512
-                            flags_match = _re.search(r'flags\s*:\s*(.+)', cpuinfo)
-                            if flags_match:
-                                flags = flags_match.group(1).lower()
-                                if 'avx512' in flags:
-                                    if 'meteor' in model or 'core ultra' in model:
-                                        return 'intel_core_ultra'
-                                    # Check generation from model string
-                                    if '12th' in model or 'alder' in model:
-                                        return 'intel_12th'
-                                    if '13th' in model or 'raptor' in model:
-                                        return 'intel_13th'
-                                    if '14th' in model:
-                                        return 'intel_14th'
-                                    if '11th' in model or 'rocket' in model:
-                                        return 'intel_11th'
-                                    if '10th' in model or 'comet' in model:
-                                        return 'intel_10th'
-                                    return 'intel_12th'  # assume modern if AVX-512 present
-                                else:
-                                    if '12th' in model or 'alder' in model:
-                                        return 'intel_12th'
-                                    if '13th' in model or 'raptor' in model:
-                                        return 'intel_13th'
-                                    if '14th' in model:
-                                        return 'intel_14th'
-
-                    # AMD
-                    if vendor == 'authentic_amd':
-                        if 'zen 4' in model or 'zen4' in model or '78' in model:
-                            return 'zen4'
-                        if 'zen 5' in model or 'zen5' in model:
-                            return 'zen5'
-                        if 'zen 3' in model or 'zen3' in model or 'vermeer' in model:
-                            return 'zen3'
-                        # Check for Neoverse
-                        if 'neoverse' in model or 'cortex' in model:
-                            return 'aarch64_neoverse'
-
-                elif vendor == 'authentic_amd':
-                    if 'zen 4' in model or 'zen4' in model:
-                        return 'zen4'
+                if vendor == 'authentic_amd':
                     if 'zen 5' in model or 'zen5' in model:
                         return 'zen5'
-                    if 'zen 3' in model or 'zen3' in model:
+                    if 'zen 4' in model or 'zen4' in model:
+                        return 'zen4'
+                    if 'zen 3' in model or 'zen3' in model or 'vermeer' in model:
                         return 'zen3'
+                    if 'neoverse' in model or 'cortex' in model:
+                        return 'aarch64_neoverse'
+                    return 'x86_64'
 
         # Architecture-based detection (fallback)
         if machine in ('aarch64', 'arm64'):
@@ -3137,33 +3140,61 @@ def _detect_local_cpu_arch(arch_map: dict) -> str | None:
 
     # ── Windows ──
     if is_windows:
+        # wmic is removed on current Windows 11 builds — use CIM via PowerShell.
+        cpu_name = ""
         try:
-            r = subprocess.run(['wmic', 'cpu', 'get', 'name'], capture_output=True, text=True, timeout=5)
-            if r.returncode == 0:
+            r = subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
+                 "(Get-CimInstance Win32_Processor).Name"],
+                capture_output=True, text=True, timeout=10)
+            if r.returncode == 0 and r.stdout.strip():
                 cpu_name = r.stdout.strip().lower()
-                if 'amd' in cpu_name:
-                    if 'zen 4' in cpu_name or 'zen4' in cpu_name or '78' in cpu_name:
-                        return 'zen4'
-                    if 'zen 5' in cpu_name or 'zen5' in cpu_name:
-                        return 'zen5'
-                    if 'zen 3' in cpu_name or 'zen3' in cpu_name:
-                        return 'zen3'
-                    # Check for AVX-512 (Zen 4 only on AMD)
-                    return 'zen3'  # default AMD CPU
-                if 'intel' in cpu_name:
-                    if '12th' in cpu_name or 'alder' in cpu_name:
-                        return 'intel_12th'
-                    if '13th' in cpu_name or 'raptor' in cpu_name:
-                        return 'intel_13th'
-                    if '14th' in cpu_name:
-                        return 'intel_14th'
-                    if '11th' in cpu_name or 'rocket' in cpu_name:
-                        return 'intel_11th'
-                    if '10th' in cpu_name or 'comet' in cpu_name:
-                        return 'intel_10th'
-                    return 'intel_12th'  # default to modern
         except Exception:
             pass
+
+        # Fallback: platform.processor() — "Intel64 Family 6 Model 170 Stepping 4"
+        if not cpu_name and processor:
+            cpu_name = processor
+            fam = _re.search(r'family\s+(\d+)', cpu_name)
+            mod = _re.search(r'model\s+(\d+)', cpu_name)
+            if fam and mod and fam.group(1) == '6':
+                m = int(mod.group(1))
+                # Intel CPUID model numbers (FACT: 170 = Meteor Lake, 189 =
+                # Lunar Lake, 197/198 = Arrow Lake, 183/186/191 = Raptor
+                # Lake, 151/154 = Alder Lake)
+                if m in (170, 189):
+                    return 'meteor_lake'
+                if m in (197, 198):
+                    return 'meteor_lake'  # nearest ARCH_MAP entry; note in report
+                if m in (183, 186, 191):
+                    return 'intel_13th'
+                if m in (151, 154):
+                    return 'intel_12th'
+
+        if cpu_name:
+            if 'amd' in cpu_name or 'zen' in cpu_name:
+                if 'zen 5' in cpu_name or 'zen5' in cpu_name:
+                    return 'zen5'
+                if 'zen 4' in cpu_name or 'zen4' in cpu_name:
+                    return 'zen4'
+                if 'zen 3' in cpu_name or 'zen3' in cpu_name:
+                    return 'zen3'
+                return 'zen3'
+            if 'intel' in cpu_name:
+                # Core Ultra (Meteor Lake and later) — "Ultra" is the marker.
+                if 'ultra' in cpu_name:
+                    return 'meteor_lake'
+                if '12th' in cpu_name or 'alder' in cpu_name:
+                    return 'intel_12th'
+                if '13th' in cpu_name or 'raptor' in cpu_name:
+                    return 'intel_13th'
+                if '14th' in cpu_name:
+                    return 'intel_14th'
+                if '11th' in cpu_name or 'rocket' in cpu_name:
+                    return 'intel_11th'
+                if '10th' in cpu_name or 'comet' in cpu_name:
+                    return 'intel_10th'
+                return 'intel_12th'  # default to modern
 
         # Fallback: platform.processor()
         if processor:
@@ -5015,9 +5046,6 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
             report += f"\n## Issues on {arguments['arch_a']}:\n"
             for issue in a.get("known_issues", []):
                 report += f"- {issue}\n"
-            if is_a_cpu and is_b_cpu:
-                report += "\n## Porting Implications:\n"
-                # CPU-specific porting implications
             report += f"\n## Issues on {arguments['arch_b']}:\n"
             for issue in b.get("known_issues", []):
                 report += f"- {issue}\n"
@@ -5234,16 +5262,34 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
             else:
                 _kernel_names = []  # github_url clone — no local tree to scan
 
+            def _has_real_compiler(tk: dict) -> bool:
+                """True only when a detection field names an existing binary.
+
+                Detection fields may be: a path str, None, or a dict like
+                {"exists": False} / {"path": ..., "exists": True}. The dict
+                form is truthy even when exists is False, so a plain `or`
+                chain false-credits toolchains with no compiler (audit F1:
+                hip scored +25 from windows_path={"exists": False})."""
+                for key in ("hipcc", "nvcc", "glslc", "icpx",
+                            "path", "windows_path", "linux_path"):
+                    v = tk.get(key)
+                    if isinstance(v, dict):
+                        if v.get("exists") and v.get("path"):
+                            return True
+                    elif v:  # non-empty string
+                        return True
+                return False
+
             backend_scores: dict[str, int] = {}
+            backend_compiler: dict[str, bool] = {}
             for bk in ("hip", "cuda", "vulkan", "directx", "sycl"):
                 score = 0
                 tk = det.get({"hip":"rocm","cuda":"cuda","vulkan":"vulkan","directx":"directx","sycl":"oneapi"}[bk], {})
-                has_compiler = bool(tk.get("hipcc") or tk.get("nvcc") or tk.get("glslc") or
-                                    tk.get("icpx") or tk.get("path") or tk.get("windows_path") or
-                                    tk.get("linux_path"))
+                has_compiler = _has_real_compiler(tk)
+                backend_compiler[bk] = has_compiler
                 if has_compiler:
                     score += 25
-                if tk.get("env_var", {}).get("exists"):
+                if isinstance(tk.get("env_var"), dict) and tk["env_var"].get("exists"):
                     score += 10
                 if source_vendor == "NVIDIA" and bk == "hip":
                     score += 15
@@ -5257,6 +5303,13 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
                 if src_feats.get("bf16_native") and bk in ("hip","cuda","sycl"):
                     score += 5
                 backend_scores[bk] = score
+
+            # Rank: score first, then prefer backends with a real compiler on
+            # ties (audit F1: dict-order tie-break let compiler-less hip beat
+            # a working vulkan toolchain).
+            chosen_backend = max(backend_scores,
+                                 key=lambda b: (backend_scores[b],
+                                                backend_compiler[b]))
 
             cross_scores: list[tuple[int, str, str, int, int, int]] = []
             same_scores: list[tuple[int, str, str, int, int, int]] = []
@@ -5275,7 +5328,7 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
             same_scores.sort(reverse=True)
             arch_scores = cross_scores if cross_scores else same_scores
 
-            chosen_backend = max(backend_scores, key=backend_scores.get)
+            # chosen_backend selected above (score + real-compiler tie-break)
             chosen_arch = arch_scores[0][1] if arch_scores else params.target_arch
             chosen_info = arch_map.get("entries", {}).get(chosen_arch, {})
             chosen_arch_name = chosen_info.get("name", chosen_arch)
