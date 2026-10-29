@@ -102,9 +102,21 @@ in flight, not with barrier existence: fuse between big kernels, not around smal
   host-memory import (`VK_EXT_external_memory_host`) when usable.
 - Scratch is **preallocated and persistent** (`prealloc_x/y/split_k`) — never
   per-dispatch allocation (kindi: `allocation: 0 allocs` in all healthy traces).
-- **The backend has NO KV-cache object.** K/V arrive as ordinary graph tensors;
-  rope is a graph op applied before the cache write; quantized KV gets dequantized to
-  an f16 scratch once per pass when beneficial. KV dtype lives at the model layer.
+- **Layer separation on the KV cache** (stated precisely): llama.cpp DOES have a
+  full KV-cache object — `llama_kv_cache` in `src/llama-kv-cache.cpp` (~2000 lines:
+  unified/SWA streams, quantized `type_k`/`type_v` allocation at :232-233,
+  cache-shift rope at :1915-1964). What the *ggml backend* (CUDA/Vulkan/CPU) has
+  is NO cache: it sees K/V only as ordinary graph tensors arriving as FA inputs,
+  allocated and owned upstream. The backend's only KV awareness is dtype/layout
+  handling at FA time (quantized K/V detected and dequantized to an f16 scratch
+  once per pass when beneficial).
+- Rope is a graph op applied by the model graph BEFORE K enters the cache; V is
+  not roped in the standard path. Cache-shift re-ropes stored K.
+- **Porting rule:** if your engine keeps the cache inside the accelerator backend
+  (device-side append, in-kernel rope-on-cache like kindi's `k_store_q8`), that is
+  a *different layer split* than llama.cpp's — both are valid, but the port target
+  must know which contract it is implementing: "backend sees tensors" (llama.cpp)
+  vs "backend owns the cache" (kindi).
 
 **Porting rule:** if your port re-copies weights or re-stages per pass, fix that before
 touching shaders (kindi 27B: 5.9 GB of staging copies = 18% of wall).
