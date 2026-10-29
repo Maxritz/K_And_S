@@ -526,24 +526,39 @@
       }
     },
     "meteor_lake": {
-      "name": "Intel Core Ultra (Meteor Lake) iGPU",
+      "name": "Intel Core Ultra (Meteor Lake) iGPU + hybrid CPU (Xe-LPG)",
       "vendor": "Intel",
       "vendor_id": "meteor_lake",
-      "wave_size": 16,
-      "lds_kib": 128,
+      "measured": true,
+      "measurement_source": "kindi Vulkan port device dump on Core Ultra 5 135H (PORTING-DEEP-DIVE.md 2026-10-28); supersedes assumed values",
+      "wave_size": 32,
+      "wave_size_note": "driver reports min subgroup 8; pin 32 via VK_EXT_subgroup_size_control or subgroup reductions silently corrupt (kindi measured)",
+      "lds_kib": 48,
+      "lds_kib_note": "maxComputeSharedMemorySize=49152 measured; larger assumed values are wrong",
       "tensor_cores": false,
       "wmma": false,
       "dot4": true,
+      "dot4_accelerated": false,
+      "dot4_note": "shaderIntegerDotProduct=1 but 4x8BitPackedSignedAccelerated=0 and 4x8BitPackedUnsignedAccelerated=0 — OpSDotKHR SCALARIZES; do not select packed-int8 idot4 paths (capability-ladder veto, kindi measured slower)",
       "dot8": false,
       "bf16_native": true,
       "fp8_native": false,
       "compute_units": 8,
       "eu_count": 128,
+      "memory_bandwidth_gb_s": 37,
+      "memory_bandwidth_note": "sustained shared-DDR5 fabric ceiling measured 37 GB/s via bwtest; scalar == 16B-vector == 8-chain loads plateau identically => true ceiling, not outstanding-loads limit (kindi measured)",
+      "cpu_side": {
+        "topology": "Core Ultra 5 135H: 4 P-cores + 8 E-cores + 2 LP-E, 18 threads",
+        "isa": "AVX2 + FMA + AVX-VNNI(256-bit); AVX-512 fused off on retail MTL",
+        "implication": "vnpu/AVX-512 VNNI GEMM paths never fire; INT8 loses to F32 without dpbusd — same feature-present-not-accelerated veto as the GPU dot4"
+      },
       "known_issues": [
-        "Integrated GPU shares system memory bandwidth",
+        "Integrated GPU shares system memory bandwidth — 37 GB/s measured ceiling, thermal throttling swings +-25%",
         "No dedicated VRAM — performance depends on DDR5 speed",
-        "Use DPAS for matrix ops via oneAPI DPC++ (SYCL)",
-        "Power/thermal constraints on laptop APUs"
+        "Driver hands out 8-lane subgroups unless pinned to 32 via VK_EXT_subgroup_size_control — silently corrupts reductions",
+        "OpSDotKHR scalarizes (4x8BitPacked*Accelerated=0) — float FMA paths win",
+        "Use DPAS via oneAPI DPC++ (SYCL) if available; Vulkan compute should stick to float FMA",
+        "Power/thermal constraints on laptop APUs — measure ratios in same thermal window, not absolutes"
       ],
       "perf_limits": {
         "max_package_watts": 28,
@@ -552,7 +567,7 @@
       "isa_docs": "https://intel.github.io/pisa/",
       "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)",
       "vulkan": {
-        "notes": "Vulkan CooperativeMatrix extension requires Mesa 24.3+"
+        "notes": "Vulkan CooperativeMatrix requires Mesa 24.3+; on Windows Intel driver prefer plain float-FMA compute shaders; verify subgroupSize pinned at 32"
       }
     },
     "gfx1031": {
