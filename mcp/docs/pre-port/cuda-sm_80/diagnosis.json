@@ -1,0 +1,223 @@
+{
+  "known": true,
+  "backend": "cuda",
+  "name": "NVIDIA CUDA",
+  "vendor": "NVIDIA",
+  "target_arch": "sm_80",
+  "source_arch": "",
+  "host_os": "windows",
+  "probed": true,
+  "rebar": {
+    "id": "pcie.rebar",
+    "backend": "cuda",
+    "supported": true,
+    "api": "cudaHostAllocMapped / cudaHostRegister + cudaHostGetDevicePointer",
+    "benefit": "larger mapped window for zero-copy weight streaming",
+    "fallback": "pinned staging buffers + chunked cudaMemcpyAsync, hot tensors resident",
+    "status": "UNVALIDATED",
+    "confidence": "none",
+    "evidence": [
+      "no machine-readable ReBAR source on windows"
+    ],
+    "host_os": "windows",
+    "manual": [
+      "GPU-Z -> Graphics Card -> 'Resizable BAR' field",
+      "vendor control panel (AMD Smart Access Memory / NVIDIA Resizable BAR / Intel ReBAR) toggle state",
+      "`nvidia-smi -q` only if the driver prints a 'Resizable BAR' line"
+    ]
+  },
+  "rows": [
+    {
+      "id": "toolchain.nvcc",
+      "kind": "tool",
+      "category": "toolchain",
+      "need": "nvcc for the target compute capability",
+      "probe": "nvcc --version",
+      "fallback": "match the toolkit to the driver; a newer toolkit than the driver supports produces a load failure, not a compile error",
+      "source": "TK_TOOLS.json#gpu_toolkits.cuda",
+      "impact": 5.0,
+      "likelihood": 0.9,
+      "score": 4.5,
+      "status": "PASS",
+      "confidence": "probed",
+      "evidence": [
+        "CUDA_PATH=C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.4",
+        "declared root exists"
+      ],
+      "cumulative": 0.298,
+      "vital": true
+    },
+    {
+      "id": "toolchain.cuobjdump",
+      "kind": "tool",
+      "category": "toolchain",
+      "need": "inspect the cubin the build produced",
+      "probe": "cuobjdump --version",
+      "fallback": "nvdisasm on the extracted cubin",
+      "source": "mcp/isa_tools.py#code_object_report",
+      "impact": 3.0,
+      "likelihood": 0.5,
+      "score": 1.5,
+      "status": "PASS",
+      "confidence": "probed",
+      "evidence": [
+        "found `C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v13.4\\bin\\cuobjdump.EXE`"
+      ],
+      "cumulative": 0.921,
+      "vital": false
+    },
+    {
+      "id": "capability.matrix",
+      "kind": "capability",
+      "category": "capability",
+      "need": "tensor cores for an mma.sync port",
+      "probe": "probe_isa(mma candidate)",
+      "fallback": "fp32 FMA path; keep it selectable, not a silent downgrade",
+      "source": "ARCH_MAP.json",
+      "impact": 4.0,
+      "likelihood": 0.5,
+      "score": 2.0,
+      "status": "PASS",
+      "confidence": "documented",
+      "evidence": [
+        "ARCH_MAP.json sm_80.tensor_cores = True"
+      ],
+      "cumulative": 0.589,
+      "vital": true
+    },
+    {
+      "id": "runtime.graphs",
+      "kind": "manual",
+      "category": "runtime",
+      "need": "graph capture behaviour confirmed on this driver",
+      "probe": "capture one launch graph",
+      "fallback": "rebuild with events; a failed capture must re-run the work, not drop it",
+      "source": "PORTING-LESSONS.md#8",
+      "impact": 3.0,
+      "likelihood": 0.5,
+      "score": 1.5,
+      "status": "NOT RUN",
+      "confidence": "none",
+      "evidence": [
+        "manual: capture one launch graph"
+      ],
+      "cumulative": 0.821,
+      "vital": true
+    },
+    {
+      "id": "memory.managed",
+      "kind": "manual",
+      "category": "runtime",
+      "need": "managed-memory oversubscription behaviour measured",
+      "probe": "one oversubscribed allocation",
+      "fallback": "explicit device/host copies with a residency plan",
+      "source": "PORTING_PATTERNS.json#memory_models.cuda",
+      "impact": 3.0,
+      "likelihood": 0.4,
+      "score": 1.2,
+      "status": "NOT RUN",
+      "confidence": "none",
+      "evidence": [
+        "manual: one oversubscribed allocation"
+      ],
+      "cumulative": 1.0,
+      "vital": false
+    },
+    {
+      "id": "artifact.cubin",
+      "kind": "artifact",
+      "category": "artifact",
+      "need": "cubin inspected: registers, spills, shared memory, symbols",
+      "probe": "code_object_report(path, arch)",
+      "fallback": "assert the exported kernel list before trusting a successful build",
+      "source": "PORTING-LESSONS.md#1",
+      "impact": 4.0,
+      "likelihood": 0.6,
+      "score": 2.4,
+      "status": "NOT RUN",
+      "confidence": "none",
+      "evidence": [
+        "requires a build: code_object_report(path, arch)"
+      ],
+      "cumulative": 0.457,
+      "vital": true
+    },
+    {
+      "id": "pcie.rebar",
+      "kind": "pcie",
+      "category": "memory",
+      "need": "a BAR window large enough for the streaming working set",
+      "probe": "cudaHostAllocMapped / cudaHostRegister + cudaHostGetDevicePointer",
+      "fallback": "pinned staging buffers + chunked cudaMemcpyAsync, hot tensors resident",
+      "source": "BACKEND_REQUIREMENTS.json#rebar",
+      "impact": 4,
+      "likelihood": 0.5,
+      "score": 2.0,
+      "status": "UNVALIDATED",
+      "confidence": "none",
+      "evidence": [
+        "no machine-readable ReBAR source on windows"
+      ],
+      "supported": true,
+      "rebar": {
+        "id": "pcie.rebar",
+        "backend": "cuda",
+        "supported": true,
+        "api": "cudaHostAllocMapped / cudaHostRegister + cudaHostGetDevicePointer",
+        "benefit": "larger mapped window for zero-copy weight streaming",
+        "fallback": "pinned staging buffers + chunked cudaMemcpyAsync, hot tensors resident",
+        "status": "UNVALIDATED",
+        "confidence": "none",
+        "evidence": [
+          "no machine-readable ReBAR source on windows"
+        ],
+        "host_os": "windows",
+        "manual": [
+          "GPU-Z -> Graphics Card -> 'Resizable BAR' field",
+          "vendor control panel (AMD Smart Access Memory / NVIDIA Resizable BAR / Intel ReBAR) toggle state",
+          "`nvidia-smi -q` only if the driver prints a 'Resizable BAR' line"
+        ]
+      },
+      "cumulative": 0.722,
+      "vital": true
+    }
+  ],
+  "ranking": {
+    "total": 15.1,
+    "vital_few": [
+      "toolchain.nvcc",
+      "artifact.cubin",
+      "capability.matrix",
+      "pcie.rebar",
+      "runtime.graphs"
+    ],
+    "tail": [
+      "toolchain.cuobjdump",
+      "memory.managed"
+    ]
+  },
+  "counts": {
+    "PASS": 3,
+    "FAIL": 0,
+    "NOT RUN": 3,
+    "UNVALIDATED": 1
+  },
+  "blockers": [],
+  "fallback_rows": [
+    "pcie.rebar"
+  ],
+  "source": {
+    "file_count": 0,
+    "by_backend": {}
+  },
+  "fault_tree": [
+    "port to `cuda` does not build or load",
+    "  +-- toolchain/host rows PASS",
+    "port builds but the artifact is not what was intended",
+    "  +-- artifact rows PASS (build first)",
+    "port builds but results are wrong or a kernel restructured",
+    "  +-- capability rows PASS",
+    "port builds and is correct but streams slowly",
+    "  +-- pcie.rebar"
+  ]
+}

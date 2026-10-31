@@ -120,7 +120,7 @@
       "vulkan": {
         "cooperative_matrix": false,
         "dp4a_alternative": "GL_KHR_shader_integer_dot_product (spv_dp4) for matmul",
-        "notes": "AMD Vulkan drivers do not support GL_KHR_cooperative_matrix. Matmul must use DP4a-style SPIR-V instructions instead.; Vulkan GL_KHR_cooperative_matrix broken on AMD drivers — use DP4a instead"
+        "notes": "AMD Vulkan drivers do not support GL_KHR_cooperative_matrix. Matmul must use DP4a-style SPIR-V instructions instead.; Vulkan GL_KHR_cooperative_matrix broken on AMD drivers \u2014 use DP4a instead"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/",
       "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
@@ -140,12 +140,12 @@
       "known_issues": [
         "rocWMMA required for WMMA path",
         "community-validated",
-        "Strix Point APU iGPU (gfx1100-class) shares system memory — bandwidth bottleneck for large models"
+        "Strix Point APU iGPU (gfx1100-class) shares system memory \u2014 bandwidth bottleneck for large models"
       ],
       "vulkan": {
         "cooperative_matrix": true,
         "dp4a_alternative": "Available as fallback for matmul",
-        "notes": "rocWMMA provides WMMA-like ops for HIP/CUDA. Vulkan path uses DP4a.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "notes": "rocWMMA provides WMMA-like ops for HIP/CUDA. Vulkan path uses DP4a.; Vulkan GL_KHR_cooperative_matrix broken on AMD \u2014 use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/",
       "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
@@ -169,7 +169,7 @@
       "vulkan": {
         "cooperative_matrix": true,
         "dp4a_alternative": "Available as fallback",
-        "notes": "Same as gfx1100; Vulkan CM working but unverified. Prefer DP4a for production.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "notes": "Same as gfx1100; Vulkan CM working but unverified. Prefer DP4a for production.; Vulkan GL_KHR_cooperative_matrix broken on AMD \u2014 use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/"
     },
@@ -193,7 +193,7 @@
       "vulkan": {
         "cooperative_matrix": false,
         "dp4a_alternative": "GL_KHR_shader_integer_dot_product (spv_dp4)",
-        "notes": "No WMMA support. Vulkan matmul must use DP4a-style SPIR-V instructions.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "notes": "No WMMA support. Vulkan matmul must use DP4a-style SPIR-V instructions.; Vulkan GL_KHR_cooperative_matrix broken on AMD \u2014 use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/",
       "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
@@ -233,7 +233,7 @@
         "unified memory APU",
         "experimental",
         "code same as gfx1100",
-        "Strix Halo APU — high CU count (40 CU rumored), shared DDR5/LPDDR5X memory"
+        "Strix Halo APU \u2014 high CU count (40 CU rumored), shared DDR5/LPDDR5X memory"
       ],
       "isa_docs": "https://gpuopen.com/machine-readable-isa/"
     },
@@ -257,7 +257,7 @@
       "vulkan": {
         "cooperative_matrix": true,
         "dp4a_alternative": "Available as fallback",
-        "notes": "Unified memory APU; same as gfx1100 Vulkan caveats.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "notes": "Unified memory APU; same as gfx1100 Vulkan caveats.; Vulkan GL_KHR_cooperative_matrix broken on AMD \u2014 use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/"
     },
@@ -280,7 +280,7 @@
       "vulkan": {
         "cooperative_matrix": false,
         "dp4a_alternative": "GL_KHR_shader_integer_dot_product (spv_dp4)",
-        "notes": "No WMMA support. Vulkan matmul must use DP4a-style SPIR-V instructions.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "notes": "No WMMA support. Vulkan matmul must use DP4a-style SPIR-V instructions.; Vulkan GL_KHR_cooperative_matrix broken on AMD \u2014 use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/"
     },
@@ -367,7 +367,7 @@
       "vulkan": {
         "cooperative_matrix": false,
         "dp4a_alternative": "GL_KHR_shader_integer_dot_product (spv_dp4)",
-        "notes": "No WMMA/rocWMMA. Vulkan matmul must use DP4a-style SPIR-V.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "notes": "No WMMA/rocWMMA. Vulkan matmul must use DP4a-style SPIR-V.; Vulkan GL_KHR_cooperative_matrix broken on AMD \u2014 use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/",
       "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
@@ -385,19 +385,19 @@
       "bf16_native": true,
       "fp8_native": false,
       "known_issues": [
-        "wave64 → logical-32 half-wavefront compat layer in hip_compat/intrinsics.hpp",
+        "wave64 \u2192 logical-32 half-wavefront compat layer in hip_compat/intrinsics.hpp",
         "experimental"
       ],
       "vulkan": {
         "cooperative_matrix": true,
         "dp4a_alternative": "Available as fallback",
-        "notes": "CDNA1 uses wave64 mode. Vulkan support via radv/AMDVLK; CM unverified, use DP4a.; Vulkan GL_KHR_cooperative_matrix broken on AMD — use DP4a"
+        "notes": "CDNA1 uses wave64 mode. Vulkan support via radv/AMDVLK; CM unverified, use DP4a.; Vulkan GL_KHR_cooperative_matrix broken on AMD \u2014 use DP4a"
       },
       "isa_docs": "https://gpuopen.com/machine-readable-isa/",
       "isa_disassembler": "IsaDecoder API (https://github.com/GPUOpen-Tools/isa_spec_manager)"
     },
     "gen12_lp": {
-      "name": "Intel Xe-LP (GEN12_LP — Arc A-series Alchemist, Meteor Lake iGPU, UHD Gen12)",
+      "name": "Intel Xe-LP (GEN12_LP \u2014 Arc A-series Alchemist, Meteor Lake iGPU, UHD Gen12)",
       "vendor": "Intel",
       "vendor_id": "gen12_lp",
       "wave_size": 8,
@@ -413,9 +413,9 @@
         "DPAS matrix instruction",
         "no rocWMMA equivalent",
         "uses IGA for disassembly",
-        "Meteor Lake iGPU (8 CU): 72 GB/s shared memory — memory-bound for LLM",
-        "Arc A770 (32 CU): 560 GB/s GDDR6 — viable for LLM inference",
-        "UHD Gen12 (10th-14th Gen Intel iGPU): not a real compute target — no DPAS"
+        "Meteor Lake iGPU (8 CU): 72 GB/s shared memory \u2014 memory-bound for LLM",
+        "Arc A770 (32 CU): 560 GB/s GDDR6 \u2014 viable for LLM inference",
+        "UHD Gen12 (10th-14th Gen Intel iGPU): not a real compute target \u2014 no DPAS"
       ],
       "isa_docs": "https://intel.github.io/pisa/",
       "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)",
@@ -471,9 +471,9 @@
       "known_issues": [
         "Same as gen12_lp",
         "uses DPAS for matrix ops",
-        "Battlemage (B580, 24 CU): 512 GB/s GDDR6 — viable for LLM inference",
+        "Battlemage (B580, 24 CU): 512 GB/s GDDR6 \u2014 viable for LLM inference",
         "FP8 native on Battlemage (check ISA docs for exact FP8 support)",
-        "Battlemage is GEN12_HPC-class — not the same as Arc A-series (GEN12_LP)"
+        "Battlemage is GEN12_HPC-class \u2014 not the same as Arc A-series (GEN12_LP)"
       ],
       "isa_docs": "https://intel.github.io/pisa/",
       "isa_disassembler": "IGA (https://github.com/intel/intel-graphics-compiler/tree/master/visa/iga)",
@@ -512,9 +512,9 @@
       "l2_cache_mb": 12,
       "known_issues": [
         "DPAS is the matrix path (not WMMA)",
-        "FP8 native — verify exact FP8 datatype support in Battlemage ISA docs",
-        "Subgroup size 8 (EU subgroup of 8 threads) — different from AMD wave32, NVIDIA warp32",
-        "Battlemage is discrete Arc B-series — not an iGPU",
+        "FP8 native \u2014 verify exact FP8 datatype support in Battlemage ISA docs",
+        "Subgroup size 8 (EU subgroup of 8 threads) \u2014 different from AMD wave32, NVIDIA warp32",
+        "Battlemage is discrete Arc B-series \u2014 not an iGPU",
         "oneAPI DPC++/SYCL is the primary compute path; Vulkan and DirectX 12 also supported"
       ],
       "isa_docs": "https://intel.github.io/pisa/",
@@ -539,7 +539,7 @@
       "wmma": false,
       "dot4": true,
       "dot4_accelerated": false,
-      "dot4_note": "shaderIntegerDotProduct=1 but 4x8BitPackedSignedAccelerated=0 and 4x8BitPackedUnsignedAccelerated=0 — OpSDotKHR SCALARIZES; do not select packed-int8 idot4 paths (capability-ladder veto, kindi measured slower)",
+      "dot4_note": "shaderIntegerDotProduct=1 but 4x8BitPackedSignedAccelerated=0 and 4x8BitPackedUnsignedAccelerated=0 \u2014 OpSDotKHR SCALARIZES; do not select packed-int8 idot4 paths (capability-ladder veto, kindi measured slower)",
       "dot8": false,
       "bf16_native": true,
       "fp8_native": false,
@@ -550,15 +550,15 @@
       "cpu_side": {
         "topology": "Core Ultra 5 135H: 4 P-cores + 8 E-cores + 2 LP-E, 18 threads",
         "isa": "AVX2 + FMA + AVX-VNNI(256-bit); AVX-512 fused off on retail MTL",
-        "implication": "vnpu/AVX-512 VNNI GEMM paths never fire; INT8 loses to F32 without dpbusd — same feature-present-not-accelerated veto as the GPU dot4"
+        "implication": "vnpu/AVX-512 VNNI GEMM paths never fire; INT8 loses to F32 without dpbusd \u2014 same feature-present-not-accelerated veto as the GPU dot4"
       },
       "known_issues": [
-        "Integrated GPU shares system memory bandwidth — 37 GB/s measured ceiling, thermal throttling swings +-25%",
-        "No dedicated VRAM — performance depends on DDR5 speed",
-        "Driver hands out 8-lane subgroups unless pinned to 32 via VK_EXT_subgroup_size_control — silently corrupts reductions",
-        "OpSDotKHR scalarizes (4x8BitPacked*Accelerated=0) — float FMA paths win",
+        "Integrated GPU shares system memory bandwidth \u2014 37 GB/s measured ceiling, thermal throttling swings +-25%",
+        "No dedicated VRAM \u2014 performance depends on DDR5 speed",
+        "Driver hands out 8-lane subgroups unless pinned to 32 via VK_EXT_subgroup_size_control \u2014 silently corrupts reductions",
+        "OpSDotKHR scalarizes (4x8BitPacked*Accelerated=0) \u2014 float FMA paths win",
         "Use DPAS via oneAPI DPC++ (SYCL) if available; Vulkan compute should stick to float FMA",
-        "Power/thermal constraints on laptop APUs — measure ratios in same thermal window, not absolutes"
+        "Power/thermal constraints on laptop APUs \u2014 measure ratios in same thermal window, not absolutes"
       ],
       "perf_limits": {
         "max_package_watts": 28,
@@ -580,7 +580,7 @@
         "tensor_cores": false,
         "fp8_native": false
       },
-      "notes": "gfx1031 is RDNA 3.5 — same generation as gfx1150 family. No WMMA. Native BF16 + dot4. CDNA sibling: cdna3."
+      "notes": "gfx1031 is RDNA 3.5 \u2014 same generation as gfx1150 family. No WMMA. Native BF16 + dot4. CDNA sibling: cdna3."
     },
     "cdna2": {
       "name": "AMD CDNA 2 (MI200)",
@@ -623,12 +623,12 @@
         "aes": true,
         "sha": true
       },
-      "notes": "Zen 3 is AMD's 2020 desktop CPU. No AVX-512 (AMD dropped it on Zen 2/Zen 3). No AMX (AMX is Zen 4+). Good hipcc host (Clang 12+ under ROCm 6+). GCC 11+ recommended. 64-bit only. Not a GPU — CPU host for HIP/ROCm or CPU kernel path.",
+      "notes": "Zen 3 is AMD's 2020 desktop CPU. No AVX-512 (AMD dropped it on Zen 2/Zen 3). No AMX (AMX is Zen 4+). Good hipcc host (Clang 12+ under ROCm 6+). GCC 11+ recommended. 64-bit only. Not a GPU \u2014 CPU host for HIP/ROCm or CPU kernel path.",
       "porting_notes": {
         "hipcc_host": "ROCm hipcc works on Zen 3. Use Clang++ from ROCm's LLVM. GCC 11+ for native GCC builds.",
         "cpu_kernel_path": "If CPU kernel uses AVX-512 or AMX, rewrite for AVX2 + FMA3. Use -march=znver3 for GCC.",
         "cuda_host": "Zen 3 as CUDA host on Linux: GCC 11+ or Clang 12+. No AVX-512 issues (CUDA host code doesn't typically use AVX-512).",
-        "windows_cuda": "Zen 3 + Windows needs MSVC — AMD CPU doesn't matter for Windows CUDA host (MSVC version matters, not CPU vendor)."
+        "windows_cuda": "Zen 3 + Windows needs MSVC \u2014 AMD CPU doesn't matter for Windows CUDA host (MSVC version matters, not CPU vendor)."
       }
     },
     "intel_10th": {
@@ -648,11 +648,11 @@
         "aes": true,
         "sha": true
       },
-      "notes": "Intel 10th Gen (Comet Lake, 14nm) — i9-10900K, i7-10700K, i5-10400. Has AVX-512. No AMX (AMX is 12th Gen+). iGPU is Gen12 LP UHD (not a compute target). Good CUDA host on Windows (MSVC 2019 v142). Good oneAPI host on Linux (GCC 10+).",
+      "notes": "Intel 10th Gen (Comet Lake, 14nm) \u2014 i9-10900K, i7-10700K, i5-10400. Has AVX-512. No AMX (AMX is 12th Gen+). iGPU is Gen12 LP UHD (not a compute target). Good CUDA host on Windows (MSVC 2019 v142). Good oneAPI host on Linux (GCC 10+).",
       "porting_notes": {
-        "cuda_host_windows": "MSVC 2019 (v142) for CUDA 11.x. Intel CPU works as CUDA host — CPU vendor doesn't matter.",
+        "cuda_host_windows": "MSVC 2019 (v142) for CUDA 11.x. Intel CPU works as CUDA host \u2014 CPU vendor doesn't matter.",
         "oneapi_host_linux": "GCC 10+ for oneAPI DPC++ on Linux. Intel CPU is the natural host for oneAPI.",
-        "avx512_cpu_kernel": "If CPU kernel uses AVX-512, it works on 10th Gen. But 12th-14th Gen Intel disables AVX-512 — if targeting 12th+ Gen, rewrite for AVX2.",
+        "avx512_cpu_kernel": "If CPU kernel uses AVX-512, it works on 10th Gen. But 12th-14th Gen Intel disables AVX-512 \u2014 if targeting 12th+ Gen, rewrite for AVX2.",
         "igpu_compute": "Gen12 LP UHD iGPU (1-2 CU) is NOT a real compute target. No DPAS. Use OpenVINO CPU inference or Vulkan light compute only."
       }
     },
@@ -673,12 +673,12 @@
         "aes": true,
         "sha": true
       },
-      "notes": "Intel 11th Gen (Rocket Lake, 14nm) — i9-11900K, i7-11700K, i5-11600K. Has AVX-512. No AMX. iGPU is Gen12 UHD (similar to 10th Gen — not a compute target). Good CUDA host on Windows (MSVC 2019 v142).",
+      "notes": "Intel 11th Gen (Rocket Lake, 14nm) \u2014 i9-11900K, i7-11700K, i5-11600K. Has AVX-512. No AMX. iGPU is Gen12 UHD (similar to 10th Gen \u2014 not a compute target). Good CUDA host on Windows (MSVC 2019 v142).",
       "porting_notes": {
         "cuda_host_windows": "MSVC 2019 (v142) for CUDA 11.x.",
         "oneapi_host_linux": "GCC 11+ for oneAPI DPC++ on Linux.",
-        "avx512_cpu_kernel": "AVX-512 available. Same caveats as 10th Gen — disable on 12th+.",
-        "igpu_compute": "Gen12 UHD iGPU — not a compute target."
+        "avx512_cpu_kernel": "AVX-512 available. Same caveats as 10th Gen \u2014 disable on 12th+.",
+        "igpu_compute": "Gen12 UHD iGPU \u2014 not a compute target."
       }
     },
     "intel_12th": {
@@ -698,13 +698,13 @@
         "aes": true,
         "sha": true
       },
-      "notes": "Intel 12th Gen (Alder Lake, hybrid P-core + E-core) — i9-12900K, i7-12700K, i5-12600K. AVX-512 DISABLED (Intel disabled AVX-512 on hybrid arch). No AMX. iGPU is Gen12 UHD (not a compute target). Good CUDA host on Windows (MSVC 2022 v143). Hybrid CPU: use taskset or CMake to pin to P-cores for performance.",
+      "notes": "Intel 12th Gen (Alder Lake, hybrid P-core + E-core) \u2014 i9-12900K, i7-12700K, i5-12600K. AVX-512 DISABLED (Intel disabled AVX-512 on hybrid arch). No AMX. iGPU is Gen12 UHD (not a compute target). Good CUDA host on Windows (MSVC 2022 v143). Hybrid CPU: use taskset or CMake to pin to P-cores for performance.",
       "porting_notes": {
         "cuda_host_windows": "MSVC 2022 (v143) for CUDA 12.x. Intel CPU works as CUDA host.",
         "oneapi_host_linux": "GCC 12+ for oneAPI DPC++ on Linux.",
         "avx512_disabled": "AVX-512 is NOT available on 12th Gen. If CPU kernel uses AVX-512, rewrite for AVX2. This is the first Intel gen where AVX-512 is gone.",
         "hybrid_cpu": "P-cores + E-cores. Pin performance-critical CPU kernel paths to P-cores (taskset or CMake). E-cores have lower IPC and no AVX-512.",
-        "igpu_compute": "Gen12 UHD iGPU (or Arc graphics on some SKUs) — UHD is not a compute target. If the SKU has Arc graphics, it's a discrete-ish GPU (still on the motherboard) — check if it's GEN12_LP (Arc A-series class) or better."
+        "igpu_compute": "Gen12 UHD iGPU (or Arc graphics on some SKUs) \u2014 UHD is not a compute target. If the SKU has Arc graphics, it's a discrete-ish GPU (still on the motherboard) \u2014 check if it's GEN12_LP (Arc A-series class) or better."
       }
     },
     "intel_13th": {
@@ -724,14 +724,14 @@
         "aes": true,
         "sha": true
       },
-      "notes": "Intel 13th Gen (Raptor Lake, hybrid) — i9-13900K, i7-13700K, i5-13600K. AVX-512 DISABLED. No AMX. iGPU is Gen12 UHD (not a compute target). Good CUDA host on Windows (MSVC 2022 v143). Hybrid CPU — pin to P-cores. Note: 13th/14th Gen i9 instability issues (Vmin shift) — be aware if running sustained GPU compute workloads that stress CPU power delivery.",
+      "notes": "Intel 13th Gen (Raptor Lake, hybrid) \u2014 i9-13900K, i7-13700K, i5-13600K. AVX-512 DISABLED. No AMX. iGPU is Gen12 UHD (not a compute target). Good CUDA host on Windows (MSVC 2022 v143). Hybrid CPU \u2014 pin to P-cores. Note: 13th/14th Gen i9 instability issues (Vmin shift) \u2014 be aware if running sustained GPU compute workloads that stress CPU power delivery.",
       "porting_notes": {
         "cuda_host_windows": "MSVC 2022 (v143) for CUDA 12.x.",
         "oneapi_host_linux": "GCC 12+ for oneAPI DPC++ on Linux.",
         "avx512_disabled": "AVX-512 not available. Same as 12th Gen.",
         "hybrid_cpu": "P-cores + E-cores. Pin to P-cores for CPU kernel perf.",
-        "cpu_instability": "13th/14th Gen i9 instability (Vmin shift) — sustained high-load workloads may trigger instability. Monitor CPU temps/power if running long GPU compute jobs that also stress the CPU power delivery.",
-        "igpu_compute": "Gen12 UHD iGPU — not a compute target. Meteor Lake iGPU (Intel Core Ultra) is the first Intel iGPU worth computing on."
+        "cpu_instability": "13th/14th Gen i9 instability (Vmin shift) \u2014 sustained high-load workloads may trigger instability. Monitor CPU temps/power if running long GPU compute jobs that also stress the CPU power delivery.",
+        "igpu_compute": "Gen12 UHD iGPU \u2014 not a compute target. Meteor Lake iGPU (Intel Core Ultra) is the first Intel iGPU worth computing on."
       }
     },
     "intel_14th": {
@@ -751,14 +751,14 @@
         "aes": true,
         "sha": true
       },
-      "notes": "Intel 14th Gen (Raptor Lake Refresh, hybrid) — i9-14900K, i7-14700K, i5-14600K. AVX-512 DISABLED. No AMX. iGPU is Gen12 UHD (not a compute target). Good CUDA host on Windows (MSVC 2022 v143). Same as 13th Gen with minor clock bumps. Same instability caveats for i9.",
+      "notes": "Intel 14th Gen (Raptor Lake Refresh, hybrid) \u2014 i9-14900K, i7-14700K, i5-14600K. AVX-512 DISABLED. No AMX. iGPU is Gen12 UHD (not a compute target). Good CUDA host on Windows (MSVC 2022 v143). Same as 13th Gen with minor clock bumps. Same instability caveats for i9.",
       "porting_notes": {
         "cuda_host_windows": "MSVC 2022 (v143) for CUDA 12.x.",
         "oneapi_host_linux": "GCC 13+ for oneAPI DPC++ on Linux.",
         "avx512_disabled": "AVX-512 not available. Same as 12th/13th Gen.",
         "hybrid_cpu": "P-cores + E-cores. Pin to P-cores.",
         "cpu_instability": "Same 13th/14th Gen i9 instability caveats. Monitor temps/power for sustained workloads.",
-        "igpu_compute": "Gen12 UHD iGPU — not a compute target. Meteor Lake (Intel Core Ultra) is the first Intel iGPU worth computing on."
+        "igpu_compute": "Gen12 UHD iGPU \u2014 not a compute target. Meteor Lake (Intel Core Ultra) is the first Intel iGPU worth computing on."
       }
     },
     "strix_point": {
@@ -782,8 +782,8 @@
       "porting_notes": {
         "hipcc_target": "Use hipcc --offload-arch=gfx1100 for Strix Point iGPU. Same as discrete RDNA 3 gfx1100 target.",
         "wmma_available": "WMMA fp16 path available on Strix Point iGPU (gfx1100-class). Same as discrete RX 7900 XT WMMA path.",
-        "shared_memory": "DDR5/LPDDR5X shared memory — ~72-128 GB/s bandwidth. Bottleneck for large models. Not for models that don't fit in iGPU memory.",
-        "cpu_path": "Zen 4 CPU (Strix Point CPU) — has AVX-512? No, Zen 4 has AVX-512 but it's been disabled on some APU configs. Check specific APU — Strix Point may have AVX-512 enabled or disabled depending on the SKU.",
+        "shared_memory": "DDR5/LPDDR5X shared memory \u2014 ~72-128 GB/s bandwidth. Bottleneck for large models. Not for models that don't fit in iGPU memory.",
+        "cpu_path": "Zen 4 CPU (Strix Point CPU) \u2014 has AVX-512? No, Zen 4 has AVX-512 but it's been disabled on some APU configs. Check specific APU \u2014 Strix Point may have AVX-512 enabled or disabled depending on the SKU.",
         "use_case": "Laptop LLM inference (7B-13B quantized). Power/thermal constrained (laptop). Not for high-throughput serving."
       }
     },
@@ -805,13 +805,13 @@
         "fp8_native": false,
         "tensor_cores": false
       },
-      "notes": "Strix Halo is AMD's upcoming 2025 laptop APU (Zen 5 CPU + RDNA 3.5 iGPU, gfx1150-class, 40 CU rumored). RDNA 3.5 iGPU — same as gfx1150 feature set (WMMA, BF16 native, dot4, dot8). Shares DDR5/LPDDR5X system memory. Much higher CU count than Strix Point (40 CU vs 12 CU). HIP/ROCm supports gfx1150 iGPU. Best for laptop LLM inference with higher throughput than Strix Point.",
+      "notes": "Strix Halo is AMD's upcoming 2025 laptop APU (Zen 5 CPU + RDNA 3.5 iGPU, gfx1150-class, 40 CU rumored). RDNA 3.5 iGPU \u2014 same as gfx1150 feature set (WMMA, BF16 native, dot4, dot8). Shares DDR5/LPDDR5X system memory. Much higher CU count than Strix Point (40 CU vs 12 CU). HIP/ROCm supports gfx1150 iGPU. Best for laptop LLM inference with higher throughput than Strix Point.",
       "porting_notes": {
         "hipcc_target": "Use hipcc --offload-arch=gfx1151 for Strix Halo iGPU. Same as gfx1151 target (RDNA 3.5).",
         "wmma_available": "WMMA fp16 path available on Strix Halo iGPU (gfx1151-class). Same as gfx1150 WMMA path.",
-        "shared_memory": "DDR5/LPDDR5X shared memory — higher bandwidth than Strix Point (more CUs, more memory channels rumored). Still a bottleneck vs discrete GPU (960 GB/s).",
+        "shared_memory": "DDR5/LPDDR5X shared memory \u2014 higher bandwidth than Strix Point (more CUs, more memory channels rumored). Still a bottleneck vs discrete GPU (960 GB/s).",
         "use_case": "Higher-throughput laptop LLM inference than Strix Point. 40 CU iGPU can do more than 12 CU Strix Point. Still laptop power/thermal constrained.",
-        "status": "Rumored/upcoming — verify exact CU count and feature set when hardware ships."
+        "status": "Rumored/upcoming \u2014 verify exact CU count and feature set when hardware ships."
       }
     },
     "x86_64": {
@@ -898,7 +898,7 @@
         "apx": "APX adds 3-operand instructions for better code density. Requires GCC 14+ or Clang 18+.",
         "hipcc_host": "ROCm hipcc works on Zen 5 (ROCm 6.2+).",
         "cuda_host": "Zen 5 as CUDA host: GCC 13+ or Clang 17+.",
-        "l1d_16k_warning": "16KB L1D (vs 32KB Zen4) — cache-sensitive kernels may need tuning."
+        "l1d_16k_warning": "16KB L1D (vs 32KB Zen4) \u2014 cache-sensitive kernels may need tuning."
       }
     },
     "apple_m2": {
@@ -922,7 +922,7 @@
       "notes": "Apple M2 (2023) ARM64 SoC. NEON SIMD (128-bit, 4-wide vector). No AVX/AVX-512 (ARM SIMD is fundamentally different). Hardware AES/SHA. Unified memory (shared LPDDR5). CPU is the primary porting concern: x86 code must be translated (Rosetta 2) or recompiled. Metal is the native GPU API; Vulkan via MoltenVK; CUDA not supported.",
       "porting_notes": {
         "compiler_flags": "Clang: -arch arm64 -mcpu=apple-m2. GCC: -arch arm64 -mcpu=native (via cross-compile on Linux).",
-        "avx_replacement": "AVX2 (256-bit) → NEON (128-bit): need 2x iterations. AVX-512 (512-bit) → 4x NEON iterations. Use ACLE __builtin vectors or inline asm.",
+        "avx_replacement": "AVX2 (256-bit) \u2192 NEON (128-bit): need 2x iterations. AVX-512 (512-bit) \u2192 4x NEON iterations. Use ACLE __builtin vectors or inline asm.",
         "hipcc_host": "Not supported (no ROCm on Linux ARM desktop). Use Metal Performance Shaders (MPS) instead.",
         "cuda_host": "Not supported on Apple Silicon. Use Metal Performance Shaders (MPS) / MoltenVK / Vulkan.",
         "simd_width": "NEON is 128-bit (4x float32 or 8x int16). Wave/warp analogy = 4 lanes for float32."
@@ -953,7 +953,7 @@
         "fp16_native": "M3 has hardware FP16 multiply-add (unlike M1/M2). Can use native bf16/fp16 kernels.",
         "hipcc_host": "Not supported. Use Apple MLX framework for LLM on Apple Silicon.",
         "cuda_host": "Not supported. Use Metal Performance Shaders (MPS) / MoltenVK / Vulkan.",
-        "avx_replacement": "AVX → NEON via Apple's simd.h or ACLE intrinsics. For LLM inference, MLX framework provides optimized kernels."
+        "avx_replacement": "AVX \u2192 NEON via Apple's simd.h or ACLE intrinsics. For LLM inference, MLX framework provides optimized kernels."
       }
     },
     "apple_m4": {
@@ -980,7 +980,7 @@
         "compiler_flags": "Clang: -arch arm64 -mcpu=apple-m4. Xcode 16+ recommended.",
         "hipcc_host": "Not supported. Use Apple MLX framework.",
         "cuda_host": "Not supported. Use Metal / MoltenVK / Vulkan.",
-        "avx_replacement": "AVX → NEON via Apple's simd.h or ACLE intrinsics.",
+        "avx_replacement": "AVX \u2192 NEON via Apple's simd.h or ACLE intrinsics.",
         "best_for": "On-device LLM inference via MLX (Qwen, Llama, etc.) with native GPU acceleration through Metal."
       }
     },

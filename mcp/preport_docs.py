@@ -1,4 +1,4 @@
-# mcp\preport_docs.py — mandatory pre-port analysis document set
+# mcp\\preport_docs.py — mandatory pre-port analysis document set
 from __future__ import annotations
 from pathlib import Path
 import json
@@ -17,14 +17,14 @@ def write_preport_docs(diag: dict[str, Any], rendered: str, docs_dir: Path) -> d
       05-waivers.md              — human decision for every non-PASS row, never overwritten
       diagnosis.json             — the same diagnosis, machine-readable
     """
-    diag_dir = Path(diag.get("_diag_dir", "docs\pre-port"))
+    diag_dir = Path(diag.get("_diag_dir", "docs\\pre-port"))
     backend = diag.get("backend", "unknown")
     arch = diag.get("target_arch", "unknown")
-    d = diag_dir \ f"{backend}-{arch}"
+    d = diag_dir / f"{backend}-{arch}"
     d.mkdir(parents=True, exist_ok=True)
 
     # 00-README.md — gate and sign-off
-    (d \ "00-README.md").write_text(
+    (d / "00-README.md").write_text(
         f"# Pre-port analysis: {backend} → {arch}\n\n"
         f"**Gate:** {diag.get('directive', {}).get('gate', 'unknown')}\n\n"
         f"**Sign-off:** diagnosis complete, ready to start port.\n",
@@ -37,7 +37,7 @@ def write_preport_docs(diag: dict[str, Any], rendered: str, docs_dir: Path) -> d
         ev = "; ".join(r.get("evidence", [])) or "—"
         ev_lines.append(f"- `{r['id']}`: {ev}")
     evidence_text = "\n".join(ev_lines) if ev_lines else "—"
-    (d \ "01-target-and-evidence.md").write_text(
+    (d / "01-target-and-evidence.md").write_text(
         f"# Target and Evidence: {backend} → {arch}\n\n"
         f"**Target arch:** `{arch}`\n"
         f"**Host OS:** `{diag.get('host_os', 'unknown')}`\n\n"
@@ -63,7 +63,7 @@ def write_preport_docs(diag: dict[str, Any], rendered: str, docs_dir: Path) -> d
             f"{r.get('cumulative', 0):.0%} | "
             f"{r['status']} | {r.get('probe', '—')} | "
             f"{r.get('fallback', '—')} |")
-    (d \ "02-requirement-matrix.md").write_text("\n".join(matrix_lines), encoding="utf-8")
+    (d / "02-requirement-matrix.md").write_text("\n".join(matrix_lines), encoding="utf-8")
 
     # 03-directive.md — marching order, stop conditions, definition of done
     steps = diag.get("directive", {}).get("steps", [])
@@ -76,24 +76,24 @@ def write_preport_docs(diag: dict[str, Any], rendered: str, docs_dir: Path) -> d
         dir_lines.append(f"- [{s.get('priority', '?')}] {s.get('step', '—')}: {s.get('reason', '—')}")
     dir_lines.append("")
     dir_lines.append("Definition of done: all PASS rows resolved, fallbacks applied where needed.")
-    (d \ "03-directive.md").write_text("\n".join(dir_lines), encoding="utf-8")
+    (d / "03-directive.md").write_text("\n".join(dir_lines), encoding="utf-8")
 
     # 04-fault-tree.md — failure modes, each gated by named rows
     ft = diag.get("fault_tree", [])
     ft_lines = ["# Fault Tree"]
     for line in ft:
         ft_lines.append(line)
-    (d \ "04-fault-tree.md").write_text("\n".join(ft_lines), encoding="utf-8")
+    (d / "04-fault-tree.md").write_text("\n".join(ft_lines), encoding="utf-8")
 
     # 05-waivers.md — human decision for every non-PASS row, never overwritten
-    (d \ "05-waivers.md").write_text("", encoding="utf-8")
+    (d / "05-waivers.md").write_text("", encoding="utf-8")
 
     # diagnosis.json — machine-readable
-    (d \ "diagnosis.json").write_text(
+    (d / "diagnosis.json").write_text(
         json.dumps(diag, indent=2), encoding="utf-8",
     )
 
-    return {"dir": str(d), "files": sorted(str(d \ f) for f in ["00-README.md", "01-target-and-evidence.md", "02-requirement-matrix.md", "03-directive.md", "04-fault-tree.md", "05-waivers.md", "diagnosis.json"])}
+    return {"dir": str(d), "files": sorted(str(d / f) for f in ["00-README.md", "01-target-and-evidence.md", "02-requirement-matrix.md", "03-directive.md", "04-fault-tree.md", "05-waivers.md", "diagnosis.json"])}
 
 
 def check(diag: dict[str, Any], docs_dir: Path) -> dict[str, Any]:
@@ -114,7 +114,7 @@ def check(diag: dict[str, Any], docs_dir: Path) -> dict[str, Any]:
         return {"gate": "stale", "drift": f"extra files: {', '.join(sorted(extra))}"}
 
     # Check that waiver ledger has content if there were waivers
-    waiver = d \ "05-waivers.md"
+    waiver = d / "05-waivers.md"
     if waiver.is_file() and waiver.stat().st_size > 0:
         # Document set exists and matches the live probe → complete
         return {"gate": "complete"}
@@ -129,9 +129,9 @@ def check(diag: dict[str, Any], docs_dir: Path) -> dict[str, Any]:
 def register_diag(diag: dict[str, Any], docs_dir: Path) -> None:
     """Register a diagnosis into the document set without overwriting the waiver ledger."""
     d = Path(docs_dir)
-    diag_dir = d \ f"{diag.get('backend', 'unknown')}-{diag.get('target_arch', 'unknown')}"
+    diag_dir = d / f"{diag.get('backend', 'unknown')}-{diag.get('target_arch', 'unknown')}"
     diag_dir.mkdir(parents=True, exist_ok=True)
     # Only write files that don't already exist (preserves waiver ledger)
-    diag_file = diag_dir \ "diagnosis.json"
+    diag_file = diag_dir / "diagnosis.json"
     if not diag_file.is_file():
         diag_file.write_text(json.dumps(diag, indent=2), encoding="utf-8")

@@ -53,26 +53,26 @@ class PortingModeParams(BaseModel):
 
 class AutoModeSelector:
     """Intelligently selects optimal porting mode based on context analysis"""
-    
+
     def __init__(self):
         self.mode_criteria = {
             "complexity_threshold": 0.7,
             "arch_capability_threshold": 0.6,
             "resource_threshold": 0.5
         }
-    
+
     def analyze_and_select_mode(self, repo_path, target_arch, target_backend):
         """Automatically select optimal mode based on comprehensive analysis"""
-        
+
         # Analyze codebase complexity
         complexity = self._analyze_codebase_complexity(repo_path)
-        
+
         # Analyze target architecture capabilities
         arch_capabilities = self._analyze_arch_capabilities(target_arch)
-        
+
         # Analyze available resources
         resource_constraints = self._analyze_resource_constraints()
-        
+
         # Select optimal mode
         if complexity > 0.8 and arch_capabilities < 0.5:
             return "strict"  # Complex code, limited arch
@@ -84,17 +84,17 @@ class AutoModeSelector:
             return "batch"  # Limited resources - use batch processing
         else:
             return "balanced"  # Default balanced approach
-    
+
     def _analyze_codebase_complexity(self, repo_path):
         """Analyze codebase complexity"""
         import os
         total_files = 0
         total_lines = 0
         complex_patterns = 0
-        
+
         if not repo_path or not Path(repo_path).exists():
             return 0.5  # Default moderate complexity
-        
+
         for root, dirs, files in os.walk(repo_path):
             for file in files:
                 if file.endswith(('.cu', '.hip', '.cpp', '.comp')):
@@ -108,23 +108,23 @@ class AutoModeSelector:
                             for line in lines:
                                 if any(pattern in line for pattern in ['__shared__', '__syncthreads', 'atomic', 'warp']):
                                     complex_patterns += 1
-                    except:
+                    except Exception:
                         continue
-        
+
         # Normalize complexity (0-1 scale)
         complexity = min(1.0, (total_files * 0.1 + total_lines * 0.001 + complex_patterns * 0.01))
         return complexity
-    
+
     def _analyze_arch_capabilities(self, target_arch):
         """Analyze target architecture capabilities"""
         try:
             from mcp.server import _load_json, _ARCH_MAP_PATH
         except ImportError:
             from server import _load_json, _ARCH_MAP_PATH
-        
+
         arch_map = _load_json(_ARCH_MAP_PATH)
         arch_info = arch_map.get("entries", {}).get(target_arch, {})
-        
+
         # Score capabilities
         capabilities = 0.0
         if arch_info.get("tensor_cores", False):
@@ -137,72 +137,72 @@ class AutoModeSelector:
             capabilities += 0.1
         if arch_info.get("wave_size", 32) >= 64:
             capabilities += 0.2
-        
+
         return min(1.0, capabilities)
-    
+
     def _analyze_resource_constraints(self):
         """Analyze available system resources"""
         try:
             import psutil
             cpu_count = psutil.cpu_count()
-            memory_gb = psutil.virtual_memory().total \ (1024**3)
-            disk_free_gb = psutil.disk_usage('\').free \ (1024**3)
-            
+            memory_gb = psutil.virtual_memory().total / (1024**3)
+            disk_free_gb = psutil.disk_usage('\\').free / (1024**3)
+
             # Normalize resource score (0-1 scale)
-            resource_score = min(1.0, (cpu_count \ 8.0 + memory_gb \ 16.0 + disk_free_gb \ 100.0) \ 3.0)
+            resource_score = min(1.0, (cpu_count / 8.0 + memory_gb / 16.0 + disk_free_gb / 100.0) / 3.0)
             return resource_score
-        except:
+        except Exception:
             return 0.5  # Default moderate resources
 
 # ── Performance Mode ───────────────────────────────────────────────────────
 
 class PerformanceMode:
     """Optimized for maximum performance, may sacrifice some correctness checks"""
-    
+
     def __init__(self):
         self.optimization_priorities = [
             "native_instructions",
-            "memory_bandwidth", 
+            "memory_bandwidth",
             "kernel_fusion",
             "register_optimization",
             "shared_memory_tiling"
         ]
-    
+
     def apply_performance_optimizations(self, kernel_code, target_arch):
         """Apply aggressive performance optimizations"""
         optimizations = []
-        
+
         # Native instruction optimization
         try:
             from mcp.server import _load_json, _ARCH_MAP_PATH
         except ImportError:
             from server import _load_json, _ARCH_MAP_PATH
-        
+
         arch_map = _load_json(_ARCH_MAP_PATH)
         arch_info = arch_map.get("entries", {}).get(target_arch, {})
-        
+
         if arch_info.get("dot4", False):
             optimizations.append("use_native_dot4")
         if arch_info.get("wmma", False):
             optimizations.append("use_wmma_matrix")
         if arch_info.get("tensor_cores", False):
             optimizations.append("use_tensor_cores")
-        
+
         # Memory optimization
         optimizations.append("optimize_memory_access")
         optimizations.append("reduce_global_memory_traffic")
         optimizations.append("use_shared_memory_tiling")
-        
+
         # Kernel fusion
         optimizations.append("fuse_kernels")
         optimizations.append("reduce_launch_overhead")
-        
+
         # Register optimization
         optimizations.append("optimize_register_usage")
         optimizations.append("minimize_register_spills")
-        
+
         return optimizations
-    
+
     def get_performance_config(self):
         """Get performance-optimized configuration"""
         return {
@@ -220,7 +220,7 @@ class PerformanceMode:
 
 class SafetyMode:
     """Maximum validation and safety checks"""
-    
+
     def __init__(self):
         self.validation_levels = [
             "numerical_equivalence",
@@ -230,36 +230,36 @@ class SafetyMode:
             "overflow_checks",
             "boundary_validation"
         ]
-    
+
     def apply_safety_checks(self, kernel_code):
         """Apply comprehensive safety checks"""
         safety_checks = []
-        
+
         # Numerical safety
         safety_checks.append("add_overflow_checks")
         safety_checks.append("validate_all_inputs")
         safety_checks.append("check_array_bounds")
         safety_checks.append("validate_numerical_ranges")
-        
+
         # Memory safety
         safety_checks.append("add_memory_leak_detection")
         safety_checks.append("validate_memory_access")
         safety_checks.append("check_resource_cleanup")
         safety_checks.append("validate_memory_alignment")
-        
+
         # Thread safety
         safety_checks.append("add_race_condition_checks")
         safety_checks.append("validate_synchronization")
         safety_checks.append("check_thread_bounds")
         safety_checks.append("validate_workgroup_sizes")
-        
+
         # Additional safety
         safety_checks.append("add_input_validation")
         safety_checks.append("check_output_bounds")
         safety_checks.append("validate_resource_limits")
-        
+
         return safety_checks
-    
+
     def get_safety_config(self):
         """Get safety-optimized configuration"""
         return {
@@ -277,7 +277,7 @@ class SafetyMode:
 
 class MigrationMode:
     """Optimized for migrating between similar backends"""
-    
+
     def __init__(self):
         self.migration_strategies = [
             "direct_translation",
@@ -286,31 +286,31 @@ class MigrationMode:
             "performance_parity",
             "feature_mapping"
         ]
-    
+
     def apply_migration_optimizations(self, source_code, source_backend, target_backend):
         """Optimize for backend migration"""
         migration_opts = []
-        
+
         # Direct translation where possible
         if source_backend == "cuda" and target_backend == "hip":
             migration_opts.append("direct_cuda_to_hip")
         elif source_backend == "vulkan" and target_backend == "directx":
             migration_opts.append("direct_vulkan_to_directx")
-        
+
         # Pattern matching
         migration_opts.append("match_kernel_patterns")
         migration_opts.append("preserve_semantics")
-        
+
         # Performance parity
         migration_opts.append("maintain_performance")
         migration_opts.append("optimize_for_target")
-        
+
         # Feature mapping
         migration_opts.append("map_features")
         migration_opts.append("handle_missing_features")
-        
+
         return migration_opts
-    
+
     def get_migration_config(self, source_backend, target_backend):
         """Get migration-optimized configuration"""
         return {
@@ -325,8 +325,8 @@ class MigrationMode:
 # ── Batch Mode ────────────────────────────────────────────────────────────
 
 class BatchMode:
-    """Process multiple files\projects in parallel"""
-    
+    """Process multiple files\\projects in parallel"""
+
     def __init__(self):
         self.batch_config = {
             "max_parallel_jobs": 4,
@@ -335,42 +335,42 @@ class BatchMode:
             "progress_tracking": True,
             "failure_isolation": True
         }
-    
+
     async def process_batch(self, projects, config):
         """Process multiple projects in parallel"""
         # Adaptive resource allocation
         available_resources = self._detect_available_resources()
         optimal_parallelism = min(available_resources, len(projects))
-        
+
         # Process in parallel batches
         results = []
         for i in range(0, len(projects), optimal_parallelism):
             batch = projects[i:i + optimal_parallelism]
             batch_results = await self._process_batch_parallel(batch, config)
             results.extend(batch_results)
-        
+
         return results
-    
+
     def _detect_available_resources(self):
         """Detect available system resources"""
         try:
             import psutil
             cpu_count = psutil.cpu_count()
-            memory_gb = psutil.virtual_memory().total \ (1024**3)
-            return min(cpu_count, int(memory_gb \ 2))
-        except:
+            memory_gb = psutil.virtual_memory().total / (1024**3)
+            return min(cpu_count, int(memory_gb / 2))
+        except Exception:
             return 2  # Default to 2 parallel jobs
-    
+
     async def _process_batch_parallel(self, batch, config):
         """Process a batch of projects in parallel"""
         tasks = []
         for project in batch:
             task = asyncio.create_task(self._process_project(project, config))
             tasks.append(task)
-        
+
         results = await asyncio.gather(*tasks, return_exceptions=True)
         return [r for r in results if not isinstance(r, Exception)]
-    
+
     async def _process_project(self, project, config):
         """Process a single project"""
         # This would call the enhanced autonomous porting
@@ -380,7 +380,7 @@ class BatchMode:
 
 class InteractiveMode:
     """Allows user input at key decision points"""
-    
+
     def __init__(self):
         self.interaction_points = [
             "strategy_selection",
@@ -389,13 +389,13 @@ class InteractiveMode:
             "performance_tradeoffs",
             "fallback_decisions"
         ]
-    
+
     def get_user_input(self, decision_point, options):
         """Present options to user and get choice"""
         print(f"\n=== {decision_point.upper()} ===")
         for i, option in enumerate(options, 1):
             print(f"{i}. {option['name']}: {option['description']}")
-        
+
         while True:
             try:
                 choice = int(input("Select option (1-{}): ".format(len(options))))
@@ -403,23 +403,23 @@ class InteractiveMode:
                     return options[choice - 1]
             except ValueError:
                 print("Invalid input. Please enter a number.")
-    
+
     def interactive_strategy_selection(self, strategies):
         """Let user select from available strategies"""
         options = []
         for strategy in strategies:
             options.append({
                 "name": strategy["approach"],
-                "description": f"Performance: {strategy['estimated_performance']:.1f} tok\s, Risk: {strategy['risk_level']:.2f}"
+                "description": f"Performance: {strategy['estimated_performance']:.1f} tok\\s, Risk: {strategy['risk_level']:.2f}"
             })
-        
+
         return self.get_user_input("strategy_selection", options)
 
 # ── Mode Manager ──────────────────────────────────────────────────────────
 
 class PortingModeManager:
     """Manages all porting modes and provides unified interface"""
-    
+
     def __init__(self):
         self.auto_selector = AutoModeSelector()
         self.performance_mode = PerformanceMode()
@@ -427,14 +427,14 @@ class PortingModeManager:
         self.migration_mode = MigrationMode()
         self.batch_mode = BatchMode()
         self.interactive_mode = InteractiveMode()
-    
+
     async def execute_porting_mode(
         self,
         mode: str,
         params: PortingModeParams
     ) -> Dict[str, Any]:
         """Execute porting in the specified mode"""
-        
+
         # Auto-select mode if needed
         if mode == "auto":
             mode = self.auto_selector.analyze_and_select_mode(
@@ -442,7 +442,7 @@ class PortingModeManager:
                 params.target_arch,
                 params.target_backend
             )
-        
+
         # Execute in selected mode
         if mode == "performance":
             return await self._execute_performance_mode(params)
@@ -455,16 +455,16 @@ class PortingModeManager:
         elif mode == "interactive":
             return await self._execute_interactive_mode(params)
         else:
-            # Default to balanced\standard mode
+            # Default to balanced\\standard mode
             return await self._execute_standard_mode(params)
-    
+
     async def _execute_performance_mode(self, params: PortingModeParams) -> Dict[str, Any]:
         """Execute performance-optimized porting"""
         optimizations = self.performance_mode.apply_performance_optimizations(
             "", params.target_arch
         )
         config = self.performance_mode.get_performance_config()
-        
+
         return {
             "mode": "performance",
             "optimizations_applied": optimizations,
@@ -472,12 +472,12 @@ class PortingModeManager:
             "estimated_performance_gain": "20-40%",
             "status": "success"
         }
-    
+
     async def _execute_safety_mode(self, params: PortingModeParams) -> Dict[str, Any]:
         """Execute safety-optimized porting"""
         safety_checks = self.safety_mode.apply_safety_checks("")
         config = self.safety_mode.get_safety_config()
-        
+
         return {
             "mode": "safety",
             "safety_checks_applied": safety_checks,
@@ -485,7 +485,7 @@ class PortingModeManager:
             "validation_level": "maximum",
             "status": "success"
         }
-    
+
     async def _execute_migration_mode(self, params: PortingModeParams) -> Dict[str, Any]:
         """Execute migration-optimized porting"""
         migration_opts = self.migration_mode.apply_migration_optimizations(
@@ -494,7 +494,7 @@ class PortingModeManager:
         config = self.migration_mode.get_migration_config(
             params.source_arch, params.target_backend
         )
-        
+
         return {
             "mode": "migration",
             "migration_optimizations": migration_opts,
@@ -502,12 +502,12 @@ class PortingModeManager:
             "translation_mode": "semantic_preservation",
             "status": "success"
         }
-    
+
     async def _execute_batch_mode(self, params: PortingModeParams) -> Dict[str, Any]:
         """Execute batch-optimized porting"""
         projects = [params.repo_path] if params.repo_path else []
         results = await self.batch_mode.process_batch(projects, params.mode_params)
-        
+
         return {
             "mode": "batch",
             "projects_processed": len(projects),
@@ -515,7 +515,7 @@ class PortingModeManager:
             "parallelism": self.batch_mode._detect_available_resources(),
             "status": "success"
         }
-    
+
     async def _execute_interactive_mode(self, params: PortingModeParams) -> Dict[str, Any]:
         """Execute interactive porting"""
         # This would involve user interaction
@@ -525,9 +525,9 @@ class PortingModeManager:
             "user_guided": True,
             "status": "success"
         }
-    
+
     async def _execute_standard_mode(self, params: PortingModeParams) -> Dict[str, Any]:
-        """Execute standard\balanced porting"""
+        """Execute standard\\balanced porting"""
         return {
             "mode": "standard",
             "strategy": "balanced",
@@ -547,7 +547,7 @@ async def enhanced_porting_modes(
     try:
         mode_manager = PortingModeManager()
         result = await mode_manager.execute_porting_mode(params.mode, params)
-        
+
         return {
             "status": "success",
             "mode_requested": params.mode,
@@ -555,7 +555,7 @@ async def enhanced_porting_modes(
             "result": result,
             "optimizations_applied": result.get("optimizations_applied", []),
             "config": result.get("config", {}),
-            "estimated_performance_gain": result.get("estimated_performance_gain", "N\A"),
+            "estimated_performance_gain": result.get("estimated_performance_gain", "N\\A"),
             "validation_level": result.get("validation_level", "standard"),
             "recommendations": {
                 "next_steps": [
@@ -566,7 +566,7 @@ async def enhanced_porting_modes(
                 "mode_specific_tips": _get_mode_specific_tips(result.get("mode", params.mode))
             }
         }
-        
+
     except Exception as e:
         return {
             "status": "error",
@@ -609,7 +609,7 @@ def _get_mode_specific_tips(mode: str) -> List[str]:
             "Best for complex decisions"
         ]
     }
-    
+
     return tips.get(mode, ["Standard mode selected", "Use specific modes for better results"])
 
 # ── Tool Registration ─────────────────────────────────────────────────────
@@ -619,30 +619,30 @@ def _get_mode_specific_tips(mode: str) -> List[str]:
 
 if __name__ == "__main__":
     import asyncio
-    
+
     async def test_modes():
         mode_manager = PortingModeManager()
-        
+
         # Test auto mode
         params = PortingModeParams(
             mode="auto",
-            repo_path="C:\Users\rr\K_And_S",
+            repo_path="C:\\Users\\rr\\K_And_S",
             target_arch="gfx1201",
             target_backend="hip"
         )
-        
+
         result = await mode_manager.execute_porting_mode("auto", params)
         print("Auto Mode Result:", result)
-        
+
         # Test performance mode
         params.mode = "performance"
         result = await mode_manager.execute_porting_mode("performance", params)
         print("Performance Mode Result:", result)
-        
+
         # Test safety mode
         params.mode = "safety"
         result = await mode_manager.execute_porting_mode("safety", params)
         print("Safety Mode Result:", result)
-    
+
     asyncio.run(test_modes())
     print("Enhanced Porting Modes initialized successfully!")

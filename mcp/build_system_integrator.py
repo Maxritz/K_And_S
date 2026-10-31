@@ -30,7 +30,7 @@ class BuildIntegrationResult:
 
 class BuildSystemIntegrator:
     """Integrates with various build systems"""
-    
+
     def __init__(self):
         self.build_systems = {
             "cmake": self._integrate_cmake,
@@ -40,7 +40,7 @@ class BuildSystemIntegrator:
             "ninja": self._integrate_ninja,
             "scons": self._integrate_scons
         }
-    
+
     async def integrate_build_system(self, project_path: str, build_system: str, backend_config: Dict[str, Any]) -> BuildIntegrationResult:
         """Integrate with specified build system"""
         if build_system not in self.build_systems:
@@ -53,7 +53,7 @@ class BuildSystemIntegrator:
                 errors=[f"Unsupported build system: {build_system}"],
                 warnings=[]
             )
-        
+
         try:
             result = await self.build_systems[build_system](project_path, backend_config)
             return result
@@ -67,26 +67,26 @@ class BuildSystemIntegrator:
                 errors=[str(e)],
                 warnings=[]
             )
-    
+
     async def _integrate_cmake(self, project_path: str, backend_config: Dict[str, Any]) -> BuildIntegrationResult:
         """Integrate with CMake build system"""
         cmake_template = self._generate_cmake_template(backend_config)
-        cmake_file = Path(project_path) \ "CMakeLists.txt"
-        
+        cmake_file = Path(project_path) / "CMakeLists.txt"
+
         files_created = []
         files_modified = []
         backup_files = []
-        
+
         # Backup existing CMakeLists.txt
         if cmake_file.exists():
             backup_file = cmake_file.with_suffix('.txt.bak')
             cmake_file.rename(backup_file)
             backup_files.append(str(backup_file))
-        
+
         # Generate new CMakeLists.txt
         cmake_file.write_text(cmake_template, encoding="utf-8")
         files_created.append(str(cmake_file))
-        
+
         return BuildIntegrationResult(
             status="success",
             build_system="cmake",
@@ -96,23 +96,23 @@ class BuildSystemIntegrator:
             errors=[],
             warnings=[]
         )
-    
+
     async def _integrate_make(self, project_path: str, backend_config: Dict[str, Any]) -> BuildIntegrationResult:
         """Integrate with Make build system"""
         makefile_template = self._generate_makefile_template(backend_config)
-        makefile = Path(project_path) \ "Makefile"
-        
+        makefile = Path(project_path) / "Makefile"
+
         files_created = []
         backup_files = []
-        
+
         if makefile.exists():
             backup_file = makefile.with_suffix('.bak')
             makefile.rename(backup_file)
             backup_files.append(str(backup_file))
-        
+
         makefile.write_text(makefile_template, encoding="utf-8")
         files_created.append(str(makefile))
-        
+
         return BuildIntegrationResult(
             status="success",
             build_system="make",
@@ -122,23 +122,23 @@ class BuildSystemIntegrator:
             errors=[],
             warnings=[]
         )
-    
+
     async def _integrate_meson(self, project_path: str, backend_config: Dict[str, Any]) -> BuildIntegrationResult:
         """Integrate with Meson build system"""
         meson_template = self._generate_meson_template(backend_config)
-        meson_file = Path(project_path) \ "meson.build"
-        
+        meson_file = Path(project_path) / "meson.build"
+
         files_created = []
         backup_files = []
-        
+
         if meson_file.exists():
             backup_file = meson_file.with_suffix('.bak')
             meson_file.rename(backup_file)
             backup_files.append(str(backup_file))
-        
+
         meson_file.write_text(meson_template, encoding="utf-8")
         files_created.append(str(meson_file))
-        
+
         return BuildIntegrationResult(
             status="success",
             build_system="meson",
@@ -148,23 +148,23 @@ class BuildSystemIntegrator:
             errors=[],
             warnings=[]
         )
-    
+
     async def _integrate_bazel(self, project_path: str, backend_config: Dict[str, Any]) -> BuildIntegrationResult:
         """Integrate with Bazel build system"""
         bazel_template = self._generate_bazel_template(backend_config)
-        bazel_file = Path(project_path) \ "BUILD"
-        
+        bazel_file = Path(project_path) / "BUILD"
+
         files_created = []
         backup_files = []
-        
+
         if bazel_file.exists():
             backup_file = bazel_file.with_suffix('.bak')
             bazel_file.rename(backup_file)
             backup_files.append(str(backup_file))
-        
+
         bazel_file.write_text(bazel_template, encoding="utf-8")
         files_created.append(str(bazel_file))
-        
+
         return BuildIntegrationResult(
             status="success",
             build_system="bazel",
@@ -174,23 +174,23 @@ class BuildSystemIntegrator:
             errors=[],
             warnings=[]
         )
-    
+
     async def _integrate_ninja(self, project_path: str, backend_config: Dict[str, Any]) -> BuildIntegrationResult:
         """Integrate with Ninja build system"""
         ninja_template = self._generate_ninja_template(backend_config)
-        ninja_file = Path(project_path) \ "build.ninja"
-        
+        ninja_file = Path(project_path) / "build.ninja"
+
         files_created = []
         backup_files = []
-        
+
         if ninja_file.exists():
             backup_file = ninja_file.with_suffix('.bak')
             ninja_file.rename(backup_file)
             backup_files.append(str(backup_file))
-        
+
         ninja_file.write_text(ninja_template, encoding="utf-8")
         files_created.append(str(ninja_file))
-        
+
         return BuildIntegrationResult(
             status="success",
             build_system="ninja",
@@ -200,23 +200,23 @@ class BuildSystemIntegrator:
             errors=[],
             warnings=[]
         )
-    
+
     async def _integrate_scons(self, project_path: str, backend_config: Dict[str, Any]) -> BuildIntegrationResult:
         """Integrate with SCons build system"""
         scons_template = self._generate_scons_template(backend_config)
-        scons_file = Path(project_path) \ "SConstruct"
-        
+        scons_file = Path(project_path) / "SConstruct"
+
         files_created = []
         backup_files = []
-        
+
         if scons_file.exists():
             backup_file = scons_file.with_suffix('.bak')
             scons_file.rename(backup_file)
             backup_files.append(str(backup_file))
-        
+
         scons_file.write_text(scons_template, encoding="utf-8")
         files_created.append(str(scons_file))
-        
+
         return BuildIntegrationResult(
             status="success",
             build_system="scons",
@@ -226,12 +226,13 @@ class BuildSystemIntegrator:
             errors=[],
             warnings=[]
         )
-    
+
     def _generate_cmake_template(self, backend_config: Dict[str, Any]) -> str:
         """Generate CMake template"""
         compiler = backend_config.get("compiler", "gcc")
         extensions = backend_config.get("extensions", [".cpp"])
-        
+        ext = extensions[0].lstrip('.')
+
         return f"""# CMakeLists.txt - Generated by K_And_S Build System Integrator
 cmake_minimum_required(VERSION 3.10)
 project(KernelPorting LANGUAGES CXX)
@@ -244,7 +245,7 @@ set(COMPILER "{compiler}")
 find_package(Threads REQUIRED)
 
 # Source files
-file(GLOB SOURCES "src\*.{extensions[0].lstrip('.')}")
+file(GLOB SOURCES "src\\*.{ext}")
 
 # Create executable
 add_executable(kernel_port ${{SOURCES}})
@@ -265,20 +266,21 @@ endif()
 # Installation
 install(TARGETS kernel_port DESTINATION bin)
 """
-    
+
     def _generate_makefile_template(self, backend_config: Dict[str, Any]) -> str:
         """Generate Makefile template"""
         compiler = backend_config.get("compiler", "gcc")
         extensions = backend_config.get("extensions", [".cpp"])
-        
+        ext = extensions[0].lstrip('.')
+
         return f"""# Makefile - Generated by K_And_S Build System Integrator
 CC = {compiler}
 CFLAGS = -O3 -std=c++17
 BACKEND = {backend_config.get('backend', 'cpu')}
 
 # Source files
-SOURCES = $(wildcard src\*{extensions[0]})
-OBJECTS = $(SOURCES:.{extensions[0].lstrip('.')}=.o)
+SOURCES = $(wildcard src\\*{extensions[0]})
+OBJECTS = $(SOURCES:.{ext}=.o)
 
 # Target
 TARGET = kernel_port
@@ -297,7 +299,7 @@ clean:
 
 .PHONY: all clean
 """
-    
+
     def _generate_meson_template(self, backend_config: Dict[str, Any]) -> str:
         """Generate Meson template"""
         return f"""# meson.build - Generated by K_And_S Build System Integrator
@@ -307,23 +309,23 @@ project('kernel_porting', 'cpp', default_options: ['cpp_std=c++17'])
 backend = get_option('backend')
 
 # Source files
-sources = files('src\main.cpp')
+sources = files('src\\main.cpp')
 
 # Executable
 executable('kernel_port', sources, install: true)
 """
-    
+
     def _generate_bazel_template(self, backend_config: Dict[str, Any]) -> str:
         """Generate Bazel template"""
         return f"""# BUILD - Generated by K_And_S Build System Integrator
 cc_binary(
     name = "kernel_port",
-    srcs = ["src\main.cpp"],
+    srcs = ["src\\main.cpp"],
     copts = ["-O3", "-std=c++17"],
     deps = [],
 )
 """
-    
+
     def _generate_ninja_template(self, backend_config: Dict[str, Any]) -> str:
         """Generate Ninja template"""
         return f"""# build.ninja - Generated by K_And_S Build System Integrator
@@ -336,37 +338,37 @@ rule compile
 rule link
   command = $cc $cflags $in -o $out
 
-build src\main.o: compile src\main.cpp
-build kernel_port: link src\main.o
+build src\\main.o: compile src\\main.cpp
+build kernel_port: link src\\main.o
 """
-    
+
     def _generate_scons_template(self, backend_config: Dict[str, Any]) -> str:
         """Generate SCons template"""
         return f"""# SConstruct - Generated by K_And_S Build System Integrator
 env = Environment(CXX='{backend_config.get('compiler', 'g++')}', CXXFLAGS='-O3 -std=c++17')
-env.Program('kernel_port', ['src\main.cpp'])
+env.Program('kernel_port', ['src\\main.cpp'])
 """
 
 # ── Tool Registration ─────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import asyncio
-    
+
     async def test_integrator():
         integrator = BuildSystemIntegrator()
-        
+
         config = {
             "backend": "hip",
             "compiler": "hipcc",
             "extensions": [".hip", ".cu"]
         }
-        
+
         result = await integrator.integrate_build_system(
-            "C:\Users\rr\K_And_S",
+            "C:\\Users\\rr\\K_And_S",
             "cmake",
             config
         )
         print("Build Integration Result:", result)
-    
+
     asyncio.run(test_integrator())
     print("Build System Integrator initialized successfully!")

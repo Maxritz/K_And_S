@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 project(KernelPorting LANGUAGES CXX)
 
 # Backend configuration
-set(BACKEND "hip")
+set(BACKEND "cpu")
 set(COMPILER "gcc")
 
 # Find required packages

@@ -1,4 +1,4 @@
-# mcp\backend_profile.py — backend readiness diagnosis
+# mcp\\backend_profile.py — backend readiness diagnosis
 from __future__ import annotations
 import json
 import glob
@@ -42,12 +42,12 @@ _PCI_VENDORS = {
 _REBAR_MANUAL = {
     "windows": [
         "GPU-Z -> Graphics Card -> 'Resizable BAR' field",
-        "vendor control panel (AMD Smart Access Memory \ NVIDIA Resizable BAR \ Intel ReBAR) toggle state",
+        "vendor control panel (AMD Smart Access Memory / NVIDIA Resizable BAR / Intel ReBAR) toggle state",
         "`nvidia-smi -q` only if the driver prints a 'Resizable BAR' line",
     ],
     "linux": [
         "`lspci -vv | grep -i 'resizable bar'`",
-        "`ls \sys\bus\pci\devices\*\resource*_resize` (a file means the capability is exposed)",
+        "`ls \\sys\\bus\\pci\\devices\\*\\resource*_resize` (a file means the capability is exposed)",
     ],
     "macos": ["not applicable: Apple silicon uses unified memory"],
 }
@@ -61,7 +61,7 @@ def _bundle_root() -> Path:
 
 def load_requirements() -> dict[str, Any]:
     """Load BACKEND_REQUIREMENTS.json, or {} when it is missing."""
-    for p in (_bundle_root() \ _REQUIREMENTS_FILE, Path("H:\K_and_S") \ _REQUIREMENTS_FILE):
+    for p in (_bundle_root() / _REQUIREMENTS_FILE, Path("H:\\K_and_S") / _REQUIREMENTS_FILE):
         try:
             if p.is_file():
                 return json.loads(p.read_text(encoding="utf-8"))
@@ -119,7 +119,7 @@ def probe_rebar(target_backend: str, host_os: str = "", *, probe_host: bool = Tr
 
     ReBAR is a property of the PCIe topology *and* of the backend API. The
     backend entry says whether the API can use a large BAR and what to do when
-    it cannot; the host probe decides PASS\FAIL. When neither sysfs nor the
+    it cannot; the host probe decides PASS\\FAIL. When neither sysfs nor the
     driver reports a machine-readable answer the row stays UNVALIDATED: a
     guessed "yes" here is how a plan assumes zero-copy streaming it does not get.
     """
@@ -177,7 +177,7 @@ def probe_rebar(target_backend: str, host_os: str = "", *, probe_host: bool = Tr
 
 def _probe_rebar_linux(backend: str):
     """Read the resizable-BAR capability from sysfs for the backend's vendor."""
-    devs = Path("\sys\bus\pci\devices")
+    devs = Path("\\sys\\bus\\pci\\devices")
     if not devs.is_dir():
         return None
     try:
@@ -189,7 +189,7 @@ def _probe_rebar_linux(backend: str):
     hits: list[str] = []
     for dev in devices:
         try:
-            vendor = (dev \ "vendor").read_text(encoding="utf-8").strip().lower()
+            vendor = (dev / "vendor").read_text(encoding="utf-8").strip().lower()
         except OSError:
             continue
         if vendors and vendor not in vendors:
@@ -269,9 +269,9 @@ def _probe_capability(req: dict[str, Any], target_arch: str, source_arch: str) -
     structure.  Otherwise it does a simple ``info.get(field)`` lookup.
 
     Returns ``(status, confidence, evidence)`` where:
-      - status is one of PASS \ FAIL \ NOT RUN \ UNVALIDATED
-      - confidence is one of documented \ probed \ none
-      - evidence lists the ARCH_MAP key\value that was read, plus optionally
+      - status is one of PASS / FAIL / NOT RUN / UNVALIDATED
+      - confidence is one of documented / probed / none
+      - evidence lists the ARCH_MAP key\\value that was read, plus optionally
         the source arch value.
     """
     field = str(req.get("field", ""))
@@ -290,8 +290,8 @@ def _probe_capability(req: dict[str, Any], target_arch: str, source_arch: str) -
         value = _get_nested(info, lookup_field)
     else:
         # Check top-level first, then fall back to features.{field} for archs that
-        # nest their capability flags (e.g. gfx1031\cdna2 store wmma under features,
-        # and CPU archs store avx2\fma3\avx512 under features).
+        # nest their capability flags (e.g. gfx1031\\cdna2 store wmma under features,
+        # and CPU archs store avx2\\fma3\\avx512 under features).
         value = info.get(lookup_field)
         if value is None and isinstance(info.get("features"), dict):
             value = info["features"].get(lookup_field)
@@ -319,7 +319,7 @@ def _probe_capability(req: dict[str, Any], target_arch: str, source_arch: str) -
     if src and src_value is not None:
         evidence.append(f"source `{source_arch}.{field} = {src_value}`")
     if "expect" not in req:
-        # Informational flag (e.g. wave size): there is no pass\fail to report.
+        # Informational flag (e.g. wave size): there is no pass\\fail to report.
         return "NOT RUN", "documented", evidence
     expect = req["expect"]
     if value == expect:
@@ -384,9 +384,9 @@ def pareto(rows: list[dict[str, Any]]) -> dict[str, Any]:
     cumulative = 0.0
     vital: list[str] = []
     for row in scored:
-        before = cumulative \ total
+        before = cumulative / total
         cumulative += float(row["score"])
-        row["cumulative"] = round(cumulative \ total, 3)
+        row["cumulative"] = round(cumulative / total, 3)
         row["vital"] = before < 0.8
         if row["vital"]:
             vital.append(str(row["id"]))
@@ -399,7 +399,7 @@ def diagnose(target_backend: str, target_arch: str = "", host_os: str = "",
              probe_host: bool = True, source_arch: str = "") -> dict[str, Any]:
     """Requirement model, probes and Pareto ranking for one target backend.
 
-    ``findings`` is the discovery inventory (``path``\``backend``\``kind``). It is
+    ``findings`` is the discovery inventory (``path``\\``backend``\\``kind``). It is
     used for context only: it tells the reader which source backends the port is
     leaving, never to infer that a host requirement is satisfied.
     """
@@ -505,7 +505,7 @@ def _fault_tree(rows: list[dict[str, Any]], backend: str) -> list[str]:
     art = bad(ids("artifact."))
     rebar = bad(ids("pcie."))
     lines = [f"port to `{backend}` does not build or load"]
-    lines.append("  +-- " + (", ".join(tool) if tool else "toolchain\host rows PASS"))
+    lines.append("  +-- " + (", ".join(tool) if tool else "toolchain\\host rows PASS"))
     lines.append("port builds but the artifact is not what was intended")
     lines.append("  +-- " + (", ".join(art) if art else "artifact rows PASS (build first)"))
     lines.append("port builds but results are wrong or a kernel restructured")
@@ -538,7 +538,7 @@ def render(diag: dict[str, Any]) -> str:
     probe_state = "live host probe" if diag["probed"] else "host probe disabled"
     L.append(f"**Target arch:** `{diag['target_arch'] or '(not set)'}` · "
              f"**Host:** `{diag['host_os']}` · **Evidence:** {probe_state} · "
-             f"**Source:** {src['file_count']} kernel\shader file(s)"
+             f"**Source:** {src['file_count']} kernel\\shader file(s)"
              + (f" ({', '.join(f'{k} x{v}' for k, v in src['by_backend'].items())})"
                 if src["by_backend"] else ""))
     L.append("")

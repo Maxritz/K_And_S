@@ -1,4 +1,4 @@
-#!\usr\bin\env python
+#!\\usr\\bin\\env python
 """Exercise every script and every MCP surface in the bundle.
 
 What this covers, in one run:
@@ -6,9 +6,9 @@ What this covers, in one run:
   1. every ``.py`` file compiles;
   2. every JSON file parses, and the cross-file references hold (arch ids,
      requirement rows, toolchain keys);
-  3. every tool advertised by ``tools\list`` is called through the real
+  3. every tool advertised by ``tools\\list`` is called through the real
      dispatcher with realistic arguments, and returns text without a traceback;
-  4. every resource advertised by ``resources\list`` reads non-empty;
+  4. every resource advertised by ``resources\\list`` reads non-empty;
   5. the JSON-RPC handlers return the promised shapes;
   6. the other test scripts are run as subprocesses and their exit codes are
      reported.
@@ -64,17 +64,17 @@ py_files = sorted(list(ROOT.glob("*.py")) + list(HERE.glob("*.py")))
 bad: list[str] = []
 for path in py_files:
     try:
-        py_compile.compile(str(path), doraise=True, cfile=str(Path(tempfile.gettempdir()) \ "kands.pyc"))
+        py_compile.compile(str(path), doraise=True, cfile=str(Path(tempfile.gettempdir()) / "kands.pyc"))
     except py_compile.PyCompileError as exc:
         bad.append(f"{path.name}: {exc.msg}")
 check(f"{len(py_files)} Python files compile", not bad, "; ".join(bad))
 check("the bundle root was located (not a hardcoded drive)",
-      (ROOT \ "ARCH_MAP.json").is_file() and (HERE \ "server.py").is_file(), str(ROOT))
+      (ROOT / "ARCH_MAP.json").is_file() and (HERE / "server.py").is_file(), str(ROOT))
 
 # --------------------------------------------------------------------------- 2. JSON
 print("\n== every JSON file parses, and references hold ==")
 json_files = sorted(list(ROOT.glob("*.json")) + list(HERE.glob("*.json")) +
-                    list((HERE \ "state").glob("*.json")))
+                    list((HERE / "state").glob("*.json")))
 parse_errors = []
 docs: dict[str, object] = {}
 for path in json_files:
@@ -94,17 +94,17 @@ for name, spec in reqs.items():
         row_problems.append(f"{name}: no requirements")
     rebar = spec.get("rebar") or {}
     if "supported" not in rebar or not rebar.get("fallback"):
-        row_problems.append(f"{name}: rebar has no supported\fallback")
+        row_problems.append(f"{name}: rebar has no supported\\fallback")
     for row in spec.get("requirements") or []:
         for field in ("id", "kind", "need", "probe", "impact", "likelihood"):
             if field not in row:
-                row_problems.append(f"{name}\{row.get('id', '?')}: no {field}")
+                row_problems.append(f"{name}\\{row.get('id', '?')}: no {field}")
         if row.get("kind") == "capability" and "field" not in row:
-            row_problems.append(f"{name}\{row.get('id')}: capability without a field")
+            row_problems.append(f"{name}\\{row.get('id')}: capability without a field")
         if row.get("kind") == "capability" and "expect" not in row:
-            row_problems.append(f"{name}\{row.get('id')}: capability without expect")
+            row_problems.append(f"{name}\\{row.get('id')}: capability without expect")
         if not str(row.get("fallback") or "").strip():
-            row_problems.append(f"{name}\{row.get('id')}: no fallback")
+            row_problems.append(f"{name}\\{row.get('id')}: no fallback")
 check(f"{sum(len(s.get('requirements') or []) for s in reqs.values())} requirement rows are complete",
       not row_problems, "; ".join(row_problems[:6]))
 
@@ -141,9 +141,9 @@ check("the shipped MCP client config names a server entry", bool(servers), str(c
 import server as s  # noqa: E402
 
 WORK = Path(tempfile.mkdtemp(prefix="kands-all-"))
-REPO = WORK \ "repo"
-(REPO \ "kernels").mkdir(parents=True)
-(REPO \ "kernels" \ "attn.cu").write_text(
+REPO = WORK / "repo"
+(REPO / "kernels").mkdir(parents=True)
+(REPO / "kernels" / "attn.cu").write_text(
     '#include <cuda_runtime.h>\n'
     '#define WARPS 4\n'
     'extern "C" __global__ void attn(const float* q, const float* k, float* out) {\n'
@@ -154,37 +154,37 @@ REPO = WORK \ "repo"
     '  __syncthreads();\n'
     '  out[threadIdx.x] = tile[0][0] + q[threadIdx.x] + k[threadIdx.x] + m + d;\n'
     '}\n', encoding="utf-8")
-(REPO \ "kernels" \ "matmul.comp").write_text(
+(REPO / "kernels" / "matmul.comp").write_text(
     '#version 460\nlayout(local_size_x = 64) in;\n'
     'layout(std430, binding = 0) buffer B { float data[]; };\n'
     'shared float tile[64];\nvoid main() { uint i = gl_GlobalInvocationID.x; '
     'tile[gl_LocalInvocationIndex] = data[i]; barrier(); data[i] = tile[i]; }\n', encoding="utf-8")
-(REPO \ "kernels" \ "blit.hlsl").write_text(
+(REPO / "kernels" / "blit.hlsl").write_text(
     "RWStructuredBuffer<float> outBuf : register(u0);\n"
     "[numthreads(64,1,1)] void CSMain(uint3 id : SV_DispatchThreadID) { outBuf[id.x] = 1.0; }\n",
     encoding="utf-8")
-(REPO \ "kernels" \ "conv.metal").write_text(
+(REPO / "kernels" / "conv.metal").write_text(
     "#include <metal_stdlib>\nusing namespace metal;\n"
     "kernel void conv(device float* out [[buffer(0)]], uint gid [[thread_position_in_grid]]) "
     "{ simdgroup_float8x8 m; out[gid] = 0; }\n", encoding="utf-8")
-(REPO \ "kernels" \ "reduce.cpp").write_text(
-    "#include <sycl\sycl.hpp>\nvoid r(sycl::queue& q, float* x) { q.parallel_for(64, [=](sycl::id<1> i)"
+(REPO / "kernels" / "reduce.cpp").write_text(
+    "#include <sycl\\sycl.hpp>\nvoid r(sycl::queue& q, float* x) { q.parallel_for(64, [=](sycl::id<1> i)"
     "{ x[i] = sycl::reduce_over_group(sycl::sub_group{}, x[i], sycl::plus<>()); }); }\n",
     encoding="utf-8")
-(REPO \ "kernels" \ "cpu_kernel.c").write_text(
+(REPO / "kernels" / "cpu_kernel.c").write_text(
     "void axpy(int n, float a, const float* x, float* y) { for (int i = 0; i < n; i++) y[i] += a * x[i]; }\n",
     encoding="utf-8")
-CU = str(REPO \ "kernels" \ "attn.cu")
-COMP = str(REPO \ "kernels" \ "matmul.comp")
-HLSL = str(REPO \ "kernels" \ "blit.hlsl")
-METAL = str(REPO \ "kernels" \ "conv.metal")
-SYCL = str(REPO \ "kernels" \ "reduce.cpp")
-CPU_K = str(REPO \ "kernels" \ "cpu_kernel.c")
+CU = str(REPO / "kernels" / "attn.cu")
+COMP = str(REPO / "kernels" / "matmul.comp")
+HLSL = str(REPO / "kernels" / "blit.hlsl")
+METAL = str(REPO / "kernels" / "conv.metal")
+SYCL = str(REPO / "kernels" / "reduce.cpp")
+CPU_K = str(REPO / "kernels" / "cpu_kernel.c")
 
 # Mutating tools must not touch the checkout: point their state at the temp dir.
-s._GOAL_STATE_PATH = WORK \ "state" \ "goal.json"
-s._PERF_HISTORY_PATH = WORK \ "state" \ "perf_history.json"
-s._ANALYSIS_CACHE_DIR = WORK \ "state" \ "analysis"
+s._GOAL_STATE_PATH = WORK / "state" / "goal.json"
+s._PERF_HISTORY_PATH = WORK / "state" / "perf_history.json"
+s._ANALYSIS_CACHE_DIR = WORK / "state" / "analysis"
 for _p in (s._GOAL_STATE_PATH, s._PERF_HISTORY_PATH, s._ANALYSIS_CACHE_DIR):
     _p.parent.mkdir(parents=True, exist_ok=True)
 
@@ -197,7 +197,7 @@ TRACE_B = ("PERF_TRACING component=attn phase=prefill ops=1 total_ms=9.0 gpu_ms=
 CASES: dict[str, tuple[dict, bool]] = {
     "discover_kernels": ({"repo": str(REPO), "target_backend": "hip",
                           "target_arch": "gfx1201", "host_os": "linux",
-                          "preport_dir": str(WORK \ "docs")}, False),
+                          "preport_dir": str(WORK / "docs")}, False),
     "write_preport_analysis": ({"target_backend": "cuda", "target_arch": "sm_80",
                                 "repo": str(REPO)}, False),
     "postport_recheck": ({"backend": "vulkan", "arch": "meteor_lake",
@@ -213,7 +213,7 @@ CASES: dict[str, tuple[dict, bool]] = {
                           "extensions": [{"name": "VK_KHR_timeline_semaphore",
                                           "advertised": True, "enabled": False,
                                           "used": False}],
-                          "out_dir": str(WORK \ "postport")}, False),
+                          "out_dir": str(WORK / "postport")}, False),
     "check_arch_compatibility": ({"kernel_list": ["attn", "matmul"], "arch": "gfx1201"}, False),
     "query_kernel_features": ({"repo": str(REPO), "pattern": "shfl|subgroup|dp4a|simdgroup",
                                "extensions": [".cu", ".comp", ".metal"]}, False),
@@ -236,14 +236,14 @@ CASES: dict[str, tuple[dict, bool]] = {
                                "target_tok_per_s": 200}, False),
     "export_contribution": ({"engine_name": "tiny-vllm", "arch": "gfx1201",
                              "workload": "flash_attn",
-                             "output_path": str(WORK \ "contribution.md")}, False),
+                             "output_path": str(WORK / "contribution.md")}, False),
     "set_goal": ({"goal": "port attention kernels to gfx1201", "target_arch": "gfx1201",
                   "source_arch": "sm_80", "target_backend": "hip"}, False),
     "update_goal": ({"override_field": "target_tok_per_s", "new_value": "150",
                      "reason": "suite"}, False),
     "check_guardrail": ({"action": "edit attention kernel", "reason": "port step"}, False),
-    "prepare_pull_request": ({"repo_url": "https:\\github.com\example\kands",
-                              "branch_name": "kands\gfx1201-attn",
+    "prepare_pull_request": ({"repo_url": "https:\\\\github.com\\example\\kands",
+                              "branch_name": "kands\\gfx1201-attn",
                               "change_types": ["docs", "kernels"]}, False),
     "verify_numerical_equivalence": ({"arch": "gfx1201", "workload": "flash_attn",
                                       "source_values": [1.0, 2.0, 3.0],
@@ -267,8 +267,8 @@ CASES: dict[str, tuple[dict, bool]] = {
                                    "stmt": 'acc = __builtin_amdgcn_mfma_f32_16x16x16f16(a, b, acc, 0, 0, 0);'}]}, True),
     "scan_residual_asm": ({"files": [CU], "backend": "hip"}, False),
     "build_module": ({"sources": [CU], "target": "gfx1201",
-                      "out": str(WORK \ "attn.hsaco"), "backend": "hip"}, True),
-    "code_object_report": ({"path": str(WORK \ "attn.hsaco"), "arch": "gfx1201"}, True),
+                      "out": str(WORK / "attn.hsaco"), "backend": "hip"}, True),
+    "code_object_report": ({"path": str(WORK / "attn.hsaco"), "arch": "gfx1201"}, True),
     "build_porting_map": ({"files": [CU, COMP, HLSL, METAL, SYCL, CPU_K],
                            "source_arch": "sm_80", "target_arch": "gfx1201"}, False),
     "lookup_construct": ({"construct": "__shfl_xor_sync", "target_arch": "gfx1201"}, False),
@@ -277,6 +277,13 @@ CASES: dict[str, tuple[dict, bool]] = {
     "build_function_reference": ({"files": [CU], "source_arch": "sm_80",
                                   "target_arch": "gfx1201"}, False),
     "lookup_api": ({"api": "cudaMallocManaged", "target_arch": "gfx1201"}, False),
+    "list_skills": ({}, True),
+    "analyze_full_pipeline": ({"repo": str(REPO)}, True),
+    "analyze_core_engine": ({"repo": str(REPO)}, True),
+    "ecc_status": ({}, False),
+    "ecc_guidance": ({"concerns": ["planning", "review", "build"]}, False),
+    "ecc_list_skills": ({}, False),
+    "detect_toolchain": ({"backend_name": "hip", "os_type": "linux"}, False),
 }
 
 
@@ -326,7 +333,7 @@ def run_resources() -> None:
     uris = []
     for item in s._list_resources():
         uris.append(str(getattr(item, "uri", "")))
-    check("resources\list is non-empty", bool(uris), str(len(uris)))
+    check("resources\\list is non-empty", bool(uris), str(len(uris)))
     empties, throwers = [], []
     for uri in uris:
         try:
@@ -345,9 +352,9 @@ async def run_handlers() -> None:
     print("\n== JSON-RPC handlers return the promised shapes ==")
     list_tools = s._make_list_tools_handler()
     result = await list_tools(None, None)
-    check("tools\list returns ToolsResult with tools", bool(getattr(result, "tools", None)),
+    check("tools\\list returns ToolsResult with tools", bool(getattr(result, "tools", None)),
           type(result).__name__)
-    check("tools\list marks no tool as requiring an unknown field",
+    check("tools\\list marks no tool as requiring an unknown field",
           all(getattr(t, "name", "") for t in result.tools))
 
     call = s._make_call_tool_handler()
@@ -355,7 +362,7 @@ async def run_handlers() -> None:
         name="check_arch_compatibility",
         arguments={"kernel_list": ["attn"], "arch": "gfx1201"}))
     texts = [getattr(c, "text", "") for c in getattr(answers, "content", [])]
-    check("tools\call returns content for a cheap tool", any(texts), str(answers)[:200])
+    check("tools\\call returns content for a cheap tool", any(texts), str(answers)[:200])
 
     ping = s._make_ping_handler() if hasattr(s, "_make_ping_handler") else None
     if ping:
@@ -366,11 +373,11 @@ async def run_handlers() -> None:
 
     read = s._make_read_resource_handler() if hasattr(s, "_make_read_resource_handler") else None
     if read:
-        res = await read(None, SimpleNamespace(uri="kands:\\status"))
-        check("resources\read answers", bool(getattr(res, "contents", None)),
+        res = await read(None, SimpleNamespace(uri="kands:\\\\status"))
+        check("resources\\read answers", bool(getattr(res, "contents", None)),
               type(res).__name__)
     else:
-        skip("resources\read handler", "no _make_read_resource_handler in this server build")
+        skip("resources\\read handler", "no _make_read_resource_handler in this server build")
 
 
 # --------------------------------------------------------------------------- 6. scripts
@@ -382,7 +389,7 @@ def run_scripts() -> None:
     scripts = ["_test_discovery.py", "_test_gpu.py", "_smoke_register.py",
                "_final_test.py", "_validate_bundle.py"]
     for name in scripts:
-        path = HERE \ name
+        path = HERE / name
         if not path.is_file():
             skip(name, "not present")
             continue
@@ -410,7 +417,7 @@ async def run_regressions() -> None:
     tc = await _call("query_toolchain", {"gpu_vendor": "amd", "os": "linux",
                                                "host_compiler": "gcc"})
     check("query_toolchain renders the list-shaped sdk_paths",
-          "SDK paths" in tc and "\opt\rocm" in tc, tc[:200])
+          "SDK paths" in tc and "\\opt\\rocm" in tc, tc[:200])
 
     ne = await _call("verify_numerical_equivalence",
                            {"arch": "gfx1201", "workload": "flash_attn",

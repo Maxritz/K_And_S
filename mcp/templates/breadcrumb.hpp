@@ -1,6 +1,6 @@
-\\ Breadcrumb tracing header — zero-cost instrumentation for GPU ports.
-\\ Copy into your project, #include, then use STRACE() before every kernel launch.
-\\ Enable: set env var TRACE_BREADCRUMB=1 or pass --breadcrumb CLI flag.
+\\\\ Breadcrumb tracing header — zero-cost instrumentation for GPU ports.
+\\\\ Copy into your project, #include, then use STRACE() before every kernel launch.
+\\\\ Enable: set env var TRACE_BREADCRUMB=1 or pass --breadcrumb CLI flag.
 #pragma once
 #include <cstdio>
 #include <cstdlib>
@@ -29,4 +29,4 @@ inline bool perf_enabled() {
     STRACE(c,p,t,__VA_ARGS__)
 #define PERF_SUMMARY(c,p,o,g,h) if(::kands_trace::perf_enabled()){ \
     std::fprintf(stderr,"PERF_TRACING component=%s phase=%s ops=%lld gpu_ms=%.2f host_ms=%.2f\n",c,p,(long long)o,g,h);}
-\\ Usage: STRACE("attention","dispatch","flash_attn","seq=%d layer=%d",seq,layer); before kernel launch
+\\\\ Usage: STRACE("attention","dispatch","flash_attn","seq=%d layer=%d",seq,layer); before kernel launch

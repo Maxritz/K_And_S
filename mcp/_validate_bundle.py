@@ -1,8 +1,8 @@
-#!\usr\bin\env python
+#!\\usr\\bin\\env python
 """Validate the K_and_S bundle after all edits.
 
 Root paths come from this file's location, so the validator runs on any machine
-(and on any OS) instead of only where ``h:\K_and_S`` exists.
+(and on any OS) instead of only where ``h:\\K_and_S`` exists.
 """
 import json, ast, sys, os
 
@@ -36,7 +36,7 @@ try:
     for name, spec in reqs.get('backends', {}).items():
         rebar = spec.get('rebar', {})
         if 'supported' not in rebar or not rebar.get('fallback'):
-            errors.append(f'BACKEND_REQUIREMENTS.json: {name} has no rebar.supported\fallback')
+            errors.append(f'BACKEND_REQUIREMENTS.json: {name} has no rebar.supported\\fallback')
         if not spec.get('requirements'):
             errors.append(f'BACKEND_REQUIREMENTS.json: {name} has no requirements')
 except Exception as e:
@@ -58,7 +58,7 @@ try:
     print(f'Resources: {len(resources)}')
 
     # Test key resources
-    for uri in ['kands:\\perf-benchmarks', 'kands:\\status', 'kands:\\setup-guide', 'kands:\\goal', 'kands:\\porting-patterns']:
+    for uri in ['kands:\\\\perf-benchmarks', 'kands:\\\\status', 'kands:\\\\setup-guide', 'kands:\\\\goal', 'kands:\\\\porting-patterns']:
         try:
             text = s._read_resource(uri)
             print(f'  {uri}: OK ({len(text)} chars)')
@@ -66,17 +66,17 @@ try:
             errors.append(f'{uri}: {e}')
 
     # Verify roofline_models
-    perf = json.loads(s._read_resource('kands:\\perf-benchmarks'))
+    perf = json.loads(s._read_resource('kands:\\\\perf-benchmarks'))
     roofline = perf.get('roofline_models', {}).get('models', {})
     print(f'Roofline models: {len(roofline)} entries')
     print(f'Has meteor_lake roofline: {"meteor_lake" in roofline}')
 
     # Verify sync_patterns
-    patterns = json.loads(s._read_resource('kands:\\porting-patterns'))
+    patterns = json.loads(s._read_resource('kands:\\\\porting-patterns'))
     print(f'Has sync_patterns: {"sync_patterns" in patterns}')
 
     # Verify meteor_lake in architectures
-    arch = json.loads(s._read_resource('kands:\\architectures'))
+    arch = json.loads(s._read_resource('kands:\\\\architectures'))
     entries = arch.get('entries', {})
     print(f'Architectures: {len(entries)} entries')
     print(f'Has meteor_lake: {"meteor_lake" in entries}')
@@ -113,7 +113,7 @@ try:
     print(f'  timeout_seconds in schema: {"timeout_seconds" in ap_props}')
 
 except Exception as e:
-    errors.append(f'Server import\test: {e}')
+    errors.append(f'Server import\\test: {e}')
 
 # Check reference_search.py
 try:

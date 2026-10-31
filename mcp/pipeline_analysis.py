@@ -20,17 +20,17 @@ import porting_map  # noqa: E402
 # ---------------------------------------------------------------------------
 
 _PIPELINE_STAGES: list[tuple[str, str, str]] = [
-    ("engine_init",   "Engine\GPU initialization",      r"cudaInit|cublasInit|hipInit|init_.*(engine|gpu|device|model)|Engine\s*\(|TPEngine\s*\(|ggml_init|ggml_backend_init"),
-    ("model_load",    "Model loading from GGUF\safetensors\onnx", r"gguf_init|load_model|load_tensor|load_weight|llama_load|read_gguf|mmap|ggml_load_tensor"),
-    ("weight_repack", "Weight format repack\layout transform", r"repack|convert_weight|reformat|layout.*weight|quantize_row|to_g4|g5n|unpack_weight|layout\.py|ggml_transform_tensor|dequantize"),
-    ("prompt",        "Prompt\prefill processing",      r"prefill|prompt|chunk.*plan|k_chunk|k_attn.*flash|prompt_tokens|process_batch|feed_batch|process_batch"),
+    ("engine_init",   "Engine\\GPU initialization",      r"cudaInit|cublasInit|hipInit|init_.*(engine|gpu|device|model)|Engine\s*\(|TPEngine\s*\(|ggml_init|ggml_backend_init"),
+    ("model_load",    "Model loading from GGUF\\safetensors\\onnx", r"gguf_init|load_model|load_tensor|load_weight|llama_load|read_gguf|mmap|ggml_load_tensor"),
+    ("weight_repack", "Weight format repack\\layout transform", r"repack|convert_weight|reformat|layout.*weight|quantize_row|to_g4|g5n|unpack_weight|layout\.py|ggml_transform_tensor|dequantize"),
+    ("prompt",        "Prompt\\prefill processing",      r"prefill|prompt|chunk.*plan|k_chunk|k_attn.*flash|prompt_tokens|process_batch|feed_batch|process_batch"),
     ("decode_loop",   "Token-by-token decode dispatch", r"decode|next_token|k_xrms|k_gdn|evaluate|step_token|forward\b|eval\b|decode_prompt"),
     ("attention",     "Attention kernel",               r"k_attn|attn_flash|attention\s*\(|scaled_dot|q_attn|kv_cache.*update|flash.*attn"),
-    ("kv_cache",      "KV cache store\retrieve",        r"k_store_q8|kv_cache|store_kv|q8_.*scale|k_cache|cache.*append|cache_copy|ggml_kv_cache"),
-    ("gemm",          "GEMM\matmul core",               r"k_mm|mm_core|gemm|gemv|matmul|k_g4|k_g5|dequant|dequantize|ggml_gemm|ggml_mul"),
-    ("normalization", "LayerNorm\RMSNorm",              r"k_xrms|k_norm|layer_norm|rms_norm|k_l2w|normalize|folding|rms_norm|norm"),
+    ("kv_cache",      "KV cache store\\retrieve",        r"k_store_q8|kv_cache|store_kv|q8_.*scale|k_cache|cache.*append|cache_copy|ggml_kv_cache"),
+    ("gemm",          "GEMM\\matmul core",               r"k_mm|mm_core|gemm|gemv|matmul|k_g4|k_g5|dequant|dequantize|ggml_gemm|ggml_mul"),
+    ("normalization", "LayerNorm\\RMSNorm",              r"k_xrms|k_norm|layer_norm|rms_norm|k_l2w|normalize|folding|rms_norm|norm"),
     ("ffn",           "Feed-forward network",           r"ffn|swiglu|gate.*up|mlp|mlp_gate|up_proj|down_proj|moe|expert"),
-    ("gdn_ssm",       "GDN\SSM recurrent state",        r"k_gdn|gdn_pre|gdn_delta|ssm|delta.*state|conv.*state|recurrent|state.*write|hidden.*state"),
+    ("gdn_ssm",       "GDN\\SSM recurrent state",        r"k_gdn|gdn_pre|gdn_delta|ssm|delta.*state|conv.*state|recurrent|state.*write|hidden.*state"),
     ("speculative",   "Speculative decoding",           r"speculat|verify.*pass|k_sgdn|commit.*token|draft.*token|accept|medusa|draft"),
     ("tensor_parallel", "Tensor-parallel \ multi-GPU",  r"TPEngine|tensor_parallel|all_reduce|all_gather|xchg|partial.*sum|two.card|distribute|nccl|rpc|mpi"),
     ("output",        "Output projection \ logit head", r"k_l2w|logit|head.*output|tied.*head|output.*norm|lm_head|embed|result_logits"),
@@ -57,7 +57,7 @@ _DISPATCH_PATTERNS: list[tuple[str, str, str]] = [
 _MEMORY_PATTERNS: list[tuple[str, str, str]] = [
     ("host_mapped", "Host-mapped \ pinned memory", r"host.*map|pinned|ReBAR|rebar|host_register|hostGetPointer|hipHostMalloc|cudaHostRegister|fine\.grained|ggml_mmap"),
     ("staging",     "Staging copy buffer",         r"staging|intermediate.*copy|memcpy.*async|transfer.*buffer|ring\.buffer|staging_copy"),
-    ("managed",     "Unified\Managed memory",      r"cudaMallocManaged|hipMallocManaged|managed.*memory|cuMemMap|um.*alloc"),
+    ("managed",     "Unified\\Managed memory",      r"cudaMallocManaged|hipMallocManaged|managed.*memory|cuMemMap|um.*alloc"),
     ("custom_alloc", "Custom allocator",            r"alloc.*pool|gpu.*allocator|memory.*arena|buf.*alloc|custom.*allocat|ggml_init_params|salloc"),
     ("zero_copy",   "Zero-copy \ mmap weights",    r"mmap|zero\.copy|direct.*map|weight.*stream|model.*map|gguf_init_from|read_only"),
 ]
@@ -113,7 +113,7 @@ def analyze_pipeline(repo: str, target_arch: str = "", source_arch: str = "") ->
 
     Scans for pipeline-stage markers across all source files and collects
     dispatch + memory management patterns. Scores porting-critical constructs
-    against target\source arch family using the existing porting_map module.
+    against target\\source arch family using the existing porting_map module.
     """
     files = _scan_tree(repo)
     stage_hits: dict[str, list[dict[str, Any]]] = {}

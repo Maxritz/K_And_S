@@ -320,8 +320,8 @@ class AutonomousIntelligenceEngine:
         model["success_rates"].append(1.0 if outcome.success else 0.0)
         
         # Update averages
-        model["avg_performance"] = sum(model["performances"]) \ len(model["performances"])
-        model["success_rate"] = sum(model["success_rates"]) \ len(model["success_rates"])
+        model["avg_performance"] = sum(model["performances"]) / len(model["performances"])
+        model["success_rate"] = sum(model["success_rates"]) / len(model["success_rates"])
         model["sample_count"] += 1
 
     def _adapt_strategies(self, outcome: PortingOutcome) -> None:
@@ -339,7 +339,7 @@ class AutonomousIntelligenceEngine:
         performance_delta = outcome.performance - model["avg_performance"]
         
         # Apply adaptation if delta exceeds threshold
-        if abs(performance_delta) \ max(abs(model["avg_performance"]), 1.0) > self.adaptation_threshold:
+        if abs(performance_delta) / max(abs(model["avg_performance"]), 1.0) > self.adaptation_threshold:
             new_strategy = self._generate_adapted_strategy(current_strategy, outcome)
             self._update_strategy(key, new_strategy)
 
@@ -528,7 +528,7 @@ class AutonomousIntelligenceEngine:
         
         # Performance score (40%)
         performance_weight = 0.4
-        normalized_perf = min(option.estimated_performance \ 100.0, 1.0)
+        normalized_perf = min(option.estimated_performance / 100.0, 1.0)
         score += normalized_perf * performance_weight * option.confidence
         
         # Success probability score (30%)
@@ -542,7 +542,7 @@ class AutonomousIntelligenceEngine:
         
         # Resource efficiency score (10%)
         resource_weight = 0.1
-        resource_efficiency = 1.0 \ (1.0 + sum(option.resource_requirements.values()))
+        resource_efficiency = 1.0 / (1.0 + sum(option.resource_requirements.values()))
         score += resource_efficiency * resource_weight
         
         # Constraint satisfaction
@@ -553,25 +553,92 @@ class AutonomousIntelligenceEngine:
 
     def _adapt_option(self, option: SolutionOption) -> SolutionOption:
         """Adapt a solution option based on learning."""
-        # Create adapted version with slight modifications
+        # Create adapted version based on historical data, not random values
         adapted_option = SolutionOption(
             id=option.id + "_adapted",
             name=option.name,
             description=option.description,
             approach=option.approach,
-            estimated_performance=option.estimated_performance * (1.0 + random.uniform(-0.05, 0.05)),
+            # Use historical performance data for adaptation
+            estimated_performance=self._calculate_adapted_performance(option),
             complexity=option.complexity,
-            risk_level=max(0.0, min(1.0, option.risk_level + random.uniform(-0.02, 0.02))),
+            risk_level=self._calculate_adapted_risk(option),
             resource_requirements=option.resource_requirements.copy(),
             edge_cases=option.edge_cases.copy(),
             expected_failures=option.expected_failures.copy(),
             success_probability=option.success_probability,
-            confidence=max(0.5, min(0.95, option.confidence + random.uniform(-0.02, 0.02))),
+            confidence=self._calculate_adapted_confidence(option),
             implementation_cost=option.implementation_cost,
             maintenance_cost=option.maintenance_cost
         )
         
         return adapted_option
+    
+    def _calculate_adapted_performance(self, option: SolutionOption) -> float:
+        """Calculate adapted performance based on historical data."""
+        # Find relevant historical data
+        relevant_outcomes = [
+            outcome for outcome in self.outcome_history
+            if outcome.workload in option.approach or option.approach in str(outcome.solutions)
+        ]
+        
+        if not relevant_outcomes:
+            return option.estimated_performance
+        
+        # Calculate average performance from relevant outcomes
+        performances = [outcome.performance for outcome in relevant_outcomes]
+        avg_performance = sum(performances) / len(performances)
+        
+        # Adjust based on success rate
+        success_rate = sum(1 for o in relevant_outcomes if o.success) / len(relevant_outcomes)
+        
+        # Weighted adaptation: 70% historical, 30% current estimate
+        adapted = 0.7 * avg_performance + 0.3 * option.estimated_performance
+        
+        # Apply success rate factor
+        adapted *= (0.5 + 0.5 * success_rate)
+        
+        return adapted
+    
+    def _calculate_adapted_risk(self, option: SolutionOption) -> float:
+        """Calculate adapted risk based on historical data."""
+        relevant_outcomes = [
+            outcome for outcome in self.outcome_history
+            if outcome.workload in option.approach or option.approach in str(outcome.solutions)
+        ]
+        
+        if not relevant_outcomes:
+            return option.risk_level
+        
+        # Calculate failure rate from historical data
+        failure_rate = sum(1 for o in relevant_outcomes if not o.success) / len(relevant_outcomes)
+        
+        # Weighted adaptation: 60% historical, 40% current estimate
+        adapted = 0.6 * failure_rate + 0.4 * option.risk_level
+        
+        return min(1.0, max(0.0, adapted))
+    
+    def _calculate_adapted_confidence(self, option: SolutionOption) -> float:
+        """Calculate adapted confidence based on historical data."""
+        relevant_outcomes = [
+            outcome for outcome in self.outcome_history
+            if outcome.workload in option.approach or option.approach in str(outcome.solutions)
+        ]
+        
+        if not relevant_outcomes:
+            return option.confidence
+        
+        # Calculate confidence based on sample size and success rate
+        sample_size = len(relevant_outcomes)
+        success_rate = sum(1 for o in relevant_outcomes if o.success) / sample_size
+        
+        # More samples = higher confidence
+        sample_factor = min(1.0, sample_size / 10.0)
+        
+        # Weighted adaptation: 50% historical, 50% current estimate
+        adapted = 0.5 * (success_rate * sample_factor) + 0.5 * option.confidence
+        
+        return min(0.95, max(0.5, adapted))
 
     def _check_constraint_satisfaction(
         self,
@@ -583,20 +650,20 @@ class AutonomousIntelligenceEngine:
         
         # Check performance constraint
         if "min_performance" in constraints:
-            perf_ratio = option.estimated_performance \ constraints["min_performance"]
+            perf_ratio = option.estimated_performance / constraints["min_performance"]
             satisfaction *= min(1.0, perf_ratio)
         
         # Check time constraint
         if "max_time" in constraints:
             # Simplified time estimation
             estimated_time = self._estimate_time(option)
-            time_ratio = constraints["max_time"] \ estimated_time
+            time_ratio = constraints["max_time"] / estimated_time
             satisfaction *= min(1.0, time_ratio)
         
         # Check resource constraints
         for resource, limit in constraints.get("resource_limits", {}).items():
             if resource in option.resource_requirements:
-                usage_ratio = option.resource_requirements[resource] \ limit
+                usage_ratio = option.resource_requirements[resource] / limit
                 satisfaction *= min(1.0, 1.0 - usage_ratio)
         
         return satisfaction
@@ -884,11 +951,11 @@ class AutonomousIntelligenceEngine:
         
         # Calculate average performance from historical data
         performances = [outcome.performance for outcome in historical_data]
-        avg_performance = sum(performances) \ len(performances)
+        avg_performance = sum(performances) / len(performances)
         
         # Calculate success rate
         successes = [outcome.success for outcome in historical_data]
-        success_rate = sum(successes) \ len(successes)
+        success_rate = sum(successes) / len(successes)
         
         return {
             "estimated_performance": avg_performance,
@@ -932,13 +999,13 @@ class AutonomousIntelligenceEngine:
         successes = [outcome.success for outcome in approach_outcomes]
         
         return {
-            "avg_performance": sum(performances) \ len(performances),
+            "avg_performance": sum(performances) / len(performances),
             "complexity": 5.0,
-            "risk_level": 1.0 - (sum(successes) \ len(successes)),
+            "risk_level": 1.0 - (sum(successes) / len(successes)),
             "resource_requirements": {"cpu": 1.0, "memory": 1.0},
             "edge_cases": [],
             "expected_failures": [],
-            "success_probability": sum(successes) \ len(successes),
+            "success_probability": sum(successes) / len(successes),
             "confidence": min(0.95, 0.5 + len(approach_outcomes) * 0.1),
             "implementation_cost": 5.0,
             "maintenance_cost": 2.0

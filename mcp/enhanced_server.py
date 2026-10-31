@@ -42,37 +42,37 @@ _enhanced_ecc_integration = EnhancedECCIntegration()
 # ── Paths ──────────────────────────────────────────────────────────────────
 
 _KANDS_ROOT = Path(__file__).resolve().parent.parent
-_ARCH_MAP_PATH = _KANDS_ROOT \ "ARCH_MAP.json"
-_MODEL_MAP_PATH = _KANDS_ROOT \ "MODEL_MAP.json"
-_METHOD_PATH = _KANDS_ROOT \ "PORTING_METHOD.md"
-_TEMPLATE_PATH = _KANDS_ROOT \ "TEMPLATE.md"
-_ISA_REF_PATH = _KANDS_ROOT \ "ISA_REFERENCES.md"
-_TK_TOOLS_PATH = _KANDS_ROOT \ "TK_TOOLS.json"
-_CROSS_PORT_PATH = _KANDS_ROOT \ "CROSS_PORT.json"
-_AI_FRAMEWORKS_PATH = _KANDS_ROOT \ "AI_FRAMEWORKS.json"
-_MODEL_FORMATS_PATH = _KANDS_ROOT \ "MODEL_FORMATS.json"
-_PORTING_PATTERNS_PATH = _KANDS_ROOT \ "PORTING_PATTERNS.json"
-_PERF_BENCHMARKS_PATH = _KANDS_ROOT \ "PERF_BENCHMARKS.json"
-_TARGET_LANGUAGES_PATH = _KANDS_ROOT \ "TARGET_LANGUAGES.json"
-_DIAGNOSTICS_PATH = _KANDS_ROOT \ "docs" \ "DIAGNOSTICS.md"
-_DOX_STYLE_PATH = _KANDS_ROOT \ "docs" \ "DOX_STYLE.md"
-_PORTING_STRATEGIES_PATH = _KANDS_ROOT \ "docs" \ "PORTING_STRATEGIES.md"
-_VULKAN_SYNC_TDR_PATH = _KANDS_ROOT \ "learnings" \ "VULKAN_SYNC_TDR_LEARNINGS.md"
-_GPU_PIPELINES_PATH = _KANDS_ROOT \ "learnings" \ "GPU_PIPELINE_DATAFLOW_METHODOLOGY.md"
-_HIP_DOCS_PATH = _KANDS_ROOT \ "learned" \ "rocm_docs_amd_com_hip_en_docs_6.1.5.md"
-_HIP_GUIDE_PATH = _KANDS_ROOT \ "learned" \ "hip_programming_guide_texts.md"
-_HIP_INTRO_PATH = _KANDS_ROOT \ "learned" \ "intro_hip_programming.md"
-_MY_SKILLS_DIR = Path.home() \ ".config" \ "opencode" \ "command" \ "MySkills"
-_GOAL_STATE_PATH = Path(__file__).resolve().parent \ "state" \ "goal.json"
-_GOAL_TEMPLATE_PATH = _KANDS_ROOT \ "docs" \ "GOAL_TEMPLATE.md"
-_ANALYSIS_CACHE_DIR = Path(__file__).resolve().parent \ "state" \ "analysis"
+_ARCH_MAP_PATH = _KANDS_ROOT / "ARCH_MAP.json"
+_MODEL_MAP_PATH = _KANDS_ROOT / "MODEL_MAP.json"
+_METHOD_PATH = _KANDS_ROOT / "PORTING_METHOD.md"
+_TEMPLATE_PATH = _KANDS_ROOT / "TEMPLATE.md"
+_ISA_REF_PATH = _KANDS_ROOT / "ISA_REFERENCES.md"
+_TK_TOOLS_PATH = _KANDS_ROOT / "TK_TOOLS.json"
+_CROSS_PORT_PATH = _KANDS_ROOT / "CROSS_PORT.json"
+_AI_FRAMEWORKS_PATH = _KANDS_ROOT / "AI_FRAMEWORKS.json"
+_MODEL_FORMATS_PATH = _KANDS_ROOT / "MODEL_FORMATS.json"
+_PORTING_PATTERNS_PATH = _KANDS_ROOT / "PORTING_PATTERNS.json"
+_PERF_BENCHMARKS_PATH = _KANDS_ROOT / "PERF_BENCHMARKS.json"
+_TARGET_LANGUAGES_PATH = _KANDS_ROOT / "TARGET_LANGUAGES.json"
+_DIAGNOSTICS_PATH = _KANDS_ROOT / "docs" / "DIAGNOSTICS.md"
+_DOX_STYLE_PATH = _KANDS_ROOT / "docs" / "DOX_STYLE.md"
+_PORTING_STRATEGIES_PATH = _KANDS_ROOT / "docs" / "PORTING_STRATEGIES.md"
+_VULKAN_SYNC_TDR_PATH = _KANDS_ROOT / "learnings" / "VULKAN_SYNC_TDR_LEARNINGS.md"
+_GPU_PIPELINES_PATH = _KANDS_ROOT / "learnings" / "GPU_PIPELINE_DATAFLOW_METHODOLOGY.md"
+_HIP_DOCS_PATH = _KANDS_ROOT / "learned" / "rocm_docs_amd_com_hip_en_docs_6.1.5.md"
+_HIP_GUIDE_PATH = _KANDS_ROOT / "learned" / "hip_programming_guide_texts.md"
+_HIP_INTRO_PATH = _KANDS_ROOT / "learned" / "intro_hip_programming.md"
+_MY_SKILLS_DIR = Path.home() / ".config" / "opencode" / "command" / "MySkills"
+_GOAL_STATE_PATH = Path(__file__).resolve().parent / "state" / "goal.json"
+_GOAL_TEMPLATE_PATH = _KANDS_ROOT / "docs" / "GOAL_TEMPLATE.md"
+_ANALYSIS_CACHE_DIR = Path(__file__).resolve().parent / "state" / "analysis"
 
 # ── Enhanced Pydantic Models ──────────────────────────────────────────────
 
 class AutonomousPortParams(BaseModel):
     """Enhanced autonomous porting parameters with factory-like behavior."""
     repo_path: str = Field("", description="Path to the engine repo (must exist).")
-    github_url: str = Field("", description="GitHub URL to clone (e.g., https:\\github.com\ggerganov\llama.cpp).")
+    github_url: str = Field("", description="GitHub URL to clone (e.g., https:\\\\github.com\\ggerganov\\llama.cpp).")
     source_arch: str = Field("auto", description="Source arch ID (e.g., 'sm_80', 'gfx1100'). 'auto' = auto-detect from repo")
     target_arch: str = Field("auto", description="Target arch ID (e.g., 'gfx1201'). 'auto' = suggest based on installed hardware")
     project_type: str = Field("auto", description="Type of project: 'llm', 'game', 'sdk', 'compute', 'inference', or 'auto'")

@@ -1,8 +1,8 @@
-#!\usr\bin\env python
+#!\\usr\\bin\\env python
 """Final comprehensive test of K_and_S bundle.
 
 The bundle root is derived from this file's location, not a hardcoded drive
-letter: the previous version pointed at ``h:\K_and_S`` and could only ever run
+letter: the previous version pointed at ``h:\\K_and_S`` and could only ever run
 on the machine it was written on.
 """
 import sys, json, os
@@ -87,30 +87,30 @@ for r in resources:
     print(f"    {uri}")
 
 # Test key resource reads
-for uri in ['kands:\\perf-benchmarks', 'kands:\\status', 'kands:\\goal',
-            'kands:\\architectures', 'kands:\\setup-guide', 'kands:\\porting-patterns',
-            'kands:\\radical-experiments']:
+for uri in ['kands:\\\\perf-benchmarks', 'kands:\\\\status', 'kands:\\\\goal',
+            'kands:\\\\architectures', 'kands:\\\\setup-guide', 'kands:\\\\porting-patterns',
+            'kands:\\\\radical-experiments']:
     try:
         text = s._read_resource(uri)
     except Exception as e:
         errors.append(f'{uri}: {e}')
 
 # Check key features
-perf = json.loads(s._read_resource('kands:\\perf-benchmarks'))
+perf = json.loads(s._read_resource('kands:\\\\perf-benchmarks'))
 print(f'\n  Perf benchmarks: {len(perf.get("hardware_theoretical", {}))} archs')
 print(f'  Roofline models: {len(perf.get("roofline_models", {}).get("models", {}))} arches')
 print(f'  Has meteor_lake roofline: {"meteor_lake" in perf.get("roofline_models", {}).get("models", {})}')
 
-patterns = json.loads(s._read_resource('kands:\\porting-patterns'))
+patterns = json.loads(s._read_resource('kands:\\\\porting-patterns'))
 print(f'  Sync patterns: {"sync_patterns" in patterns}')
 sync = patterns.get('sync_patterns', {})
 print(f'  TDR limits defined: {len(sync.get("tdr_limits_ms", {}))} platforms')
 
-arch = json.loads(s._read_resource('kands:\\architectures'))
+arch = json.loads(s._read_resource('kands:\\\\architectures'))
 archs = arch.get('entries', {})
 print(f'  Architectures: {len(archs)} (meteor_lake: {"meteor_lake" in archs})')
 
-ai_fw = json.loads(s._read_resource('kands:\\ai-frameworks'))
+ai_fw = json.loads(s._read_resource('kands:\\\\ai-frameworks'))
 fw = ai_fw.get('frameworks', {})
 print(f'  AI frameworks: {len(fw)} (tilelang: {"tilelang" in fw}, hipkittens: {"hipkittens" in fw})')
 

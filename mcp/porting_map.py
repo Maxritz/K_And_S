@@ -50,10 +50,10 @@ def worst(grades: list[str]) -> str:
 
 
 # --------------------------------------------------------------------------- construct table
-# `family` keys: amd_rdna (gfx10\11\12), amd_cdna (gfx90x\94x), nv_sm80, nv_sm70,
+# `family` keys: amd_rdna (gfx10\\11\\12), amd_cdna (gfx90x\\94x), nv_sm80, nv_sm70,
 # intel_xe. "any" applies to every target.
 CONSTRUCTS: dict[str, dict[str, Any]] = {
-    # ---- NVIDIA PTX matrix \ async ----
+    # ---- NVIDIA PTX matrix / async ----
     "mma.sync": {
         "kind": "isa", "family": "nvidia-ptx", "role": "matrix multiply-accumulate",
         "pattern": r"mma\.sync\.[a-z0-9.]+",
@@ -61,8 +61,8 @@ CONSTRUCTS: dict[str, dict[str, Any]] = {
             "amd_rdna": {"use": "wmma (rocWMMA) if a tile matches, else scalar dot reconstruction",
                          "grade": "approximate",
                          "note": "gfx12 has no mma.sync; cross-lane K fragments cannot be reproduced 1:1"},
-            "amd_cdna": {"use": "mfma \ v_mfma_*", "grade": "portable"},
-            "intel_xe": {"use": "joint_matrix \ DPAS", "grade": "portable"},
+            "amd_cdna": {"use": "mfma / v_mfma_*", "grade": "portable"},
+            "intel_xe": {"use": "joint_matrix / DPAS", "grade": "portable"},
         },
     },
     "cp.async": {
@@ -72,7 +72,7 @@ CONSTRUCTS: dict[str, dict[str, Any]] = {
             "amd_rdna": {"use": "plain global->lds store + __syncthreads()", "grade": "portable",
                          "note": "no async-copy ISA; prefetch manually or rely on occupancy"},
             "amd_cdna": {"use": "global_load_lds + s_waitcnt", "grade": "portable"},
-            "intel_xe": {"use": "async_copy \ prefetch", "grade": "portable"},
+            "intel_xe": {"use": "async_copy / prefetch", "grade": "portable"},
         },
     },
     "bar.sync": {
@@ -81,7 +81,7 @@ CONSTRUCTS: dict[str, dict[str, Any]] = {
         "map": {"any": {"use": "__syncthreads() (or s_barrier)", "grade": "portable"}},
     },
     "ld.global.cv": {
-        "kind": "isa", "family": "nvidia-ptx", "role": "uncached\volatile global load",
+        "kind": "isa", "family": "nvidia-ptx", "role": "uncached\\volatile global load",
         "pattern": r"ld\.global\.(?:cv|nc|ca|lu)",
         "map": {"any": {"use": "ordinary load (or __ldg for read-only)", "grade": "drop"}},
     },
@@ -99,7 +99,7 @@ CONSTRUCTS: dict[str, dict[str, Any]] = {
                          "note": "measured on gfx1201: the builtins DO emit v_dot4 hardware. "
                                  "Only the raw `v_dot4_i32_i8` spelling fails (gfx9 encoding) — "
                                  "do not hand-write the mnemonic, use the builtin."},
-            "amd_cdna": {"use": "v_dot4_i32_i8 \ __builtin_amdgcn_sdot4", "grade": "exact"},
+            "amd_cdna": {"use": "v_dot4_i32_i8 / __builtin_amdgcn_sdot4", "grade": "exact"},
             "nv_sm80": {"use": "__dp4a", "grade": "exact"},
         },
     },
@@ -118,8 +118,8 @@ CONSTRUCTS: dict[str, dict[str, Any]] = {
     "ballot_sync": {
         "kind": "intrinsic", "family": "cuda", "role": "warp vote",
         "pattern": r"__(?:ballot|any|all)_sync\s*\(",
-        "map": {"amd_rdna": {"use": "__ballot \ __any \ __all", "grade": "portable"},
-                "intel_xe": {"use": "sub_group any\all", "grade": "portable"}},
+        "map": {"amd_rdna": {"use": "__ballot / __any / __all", "grade": "portable"},
+                "intel_xe": {"use": "sub_group any\\all", "grade": "portable"}},
     },
     "activemask": {
         "kind": "intrinsic", "family": "cuda", "role": "active lane mask",
@@ -155,13 +155,13 @@ CONSTRUCTS: dict[str, dict[str, Any]] = {
         "kind": "isa", "family": "mixed", "role": "fp16<->fp32 conversion",
         "pattern": r"cvt\.(?:rn\.)?f16|__float2half|__half2float|__half2|v_cvt_",
         "map": {
-            "amd_rdna": {"use": "v_cvt_f16_f32 \ v_cvt_f32_f16 (both encode on gfx12); "
+            "amd_rdna": {"use": "v_cvt_f16_f32 / v_cvt_f32_f16 (both encode on gfx12); "
                                 "v_cvt_pk_f16_f32 does NOT",
                          "grade": "portable"},
             "nv_sm80": {"use": "__float2half etc.", "grade": "exact"},
         },
     },
-    # ---- launch \ host side ----
+    # ---- launch / host side ----
     "launch_bounds": {
         "kind": "qualifier", "family": "cuda", "role": "occupancy hint",
         "pattern": r"__launch_bounds__\s*\(",
@@ -177,13 +177,13 @@ CONSTRUCTS: dict[str, dict[str, Any]] = {
                         "grade": "portable"}},
     },
     "texture": {
-        "kind": "feature", "family": "cuda", "role": "texture\surface read",
+        "kind": "feature", "family": "cuda", "role": "texture\\surface read",
         "pattern": r"\btexture\s*<|tex1Dfetch|tex2D\s*\(",
         "map": {"amd_rdna": {"use": "image object or plain global load", "grade": "lossy"},
                 "intel_xe": {"use": "image accessor", "grade": "lossy"}},
     },
     "cooperative_groups": {
-        "kind": "feature", "family": "cuda", "role": "grid-wide sync \ groups",
+        "kind": "feature", "family": "cuda", "role": "grid-wide sync / groups",
         "pattern": r"cooperative_groups|grid\.sync\s*\(",
         "map": {"amd_rdna": {"use": "no grid sync; restructure into multiple launches",
                              "grade": "manual"}},
@@ -199,7 +199,7 @@ CONSTRUCTS: dict[str, dict[str, Any]] = {
         "pattern": r"__syncthreads\s*\(",
         "map": {"any": {"use": "__syncthreads()", "grade": "exact"}},
     },
-    # ---- cross-ecosystem: kernel entry \ barrier \ local memory \ ids ----
+    # ---- cross-ecosystem: kernel entry / barrier / local memory / ids ----
     "kernel_entry": {
         "kind": "qualifier", "family": "cross", "role": "kernel entry point",
         "pattern": (r"__global__|\b__kernel\b|\bkernel\s+void\b|\bparallel_for\b|"
@@ -218,7 +218,7 @@ CONSTRUCTS: dict[str, dict[str, Any]] = {
         "map": {
             "amd_rdna": {"use": "__syncthreads()", "grade": "portable"},
             "nv_sm80": {"use": "__syncthreads()", "grade": "portable"},
-            "intel_xe": {"use": "group_barrier(group) \ nd_item::barrier", "grade": "portable"},
+            "intel_xe": {"use": "group_barrier(group) / nd_item::barrier", "grade": "portable"},
         },
         "notes": "a work-group is a thread-block: same semantics, different spelling",
     },
@@ -244,16 +244,16 @@ CONSTRUCTS: dict[str, dict[str, Any]] = {
         },
     },
     "subgroup_ops": {
-        "kind": "intrinsic", "family": "cross", "role": "subgroup\wave exchange",
+        "kind": "intrinsic", "family": "cross", "role": "subgroup\\wave exchange",
         "pattern": (r"sub_group_\w+|simd_(?:shuffle|sum|broadcast|group)|"
                     r"Wave(?:ReadLaneAt|ActiveCount|PrefixSum|Shuffle)|"
                     r"subgroup(?:Shuffle|Broadcast|Add|Ballot)"),
         "map": {
-            "amd_rdna": {"use": "__shfl_* \ DPP (wave32)", "grade": "portable"},
-            "nv_sm80": {"use": "__shfl_sync \ __reduce_* (warp)", "grade": "portable"},
-            "intel_xe": {"use": "sub_group shuffle\broadcast", "grade": "portable"},
+            "amd_rdna": {"use": "__shfl_* / DPP (wave32)", "grade": "portable"},
+            "nv_sm80": {"use": "__shfl_sync / __reduce_* (warp)", "grade": "portable"},
+            "intel_xe": {"use": "sub_group shuffle\\broadcast", "grade": "portable"},
         },
-        "notes": "subgroup == warp\wave; width differs by arch, so state it",
+        "notes": "subgroup == warp\\wave; width differs by arch, so state it",
     },
 }
 
@@ -326,7 +326,7 @@ def language_for(path: str, src: str = "") -> str | None:
     for lang, spec in LANGUAGES.items():
         if suffix in spec["ext"]:
             return lang
-    # ambiguous C++\Rust containers: sniff for the framework's own signatures
+    # ambiguous C++\\Rust containers: sniff for the framework's own signatures
     if src:
         if "#include <sycl" in src or "sycl::" in src:
             return "sycl"
@@ -387,7 +387,7 @@ TARGET_EXTENSIONS: dict[str, dict[str, str | None]] = {
     },
     "directx": {
         "hlsl": None,
-        "glsl": ".hlsl",       # via spirv-cross \ manual
+        "glsl": ".hlsl",       # via spirv-cross / manual
         "cuda": ".hlsl",
         "opencl": ".hlsl",
         "metal": ".hlsl",
@@ -443,7 +443,7 @@ def plan_outputs(files: list[str], backend: str, out_dir: str = "") -> list[dict
             ext = p.suffix
         dst = p.with_suffix(ext)
         if out_dir:
-            dst = Path(out_dir) \ dst.name
+            dst = Path(out_dir) / dst.name
         needs_rewrite = (lang != native) or (ext.lower() != p.suffix.lower())
         plan.append({
             "source": str(p),
@@ -455,7 +455,7 @@ def plan_outputs(files: list[str], backend: str, out_dir: str = "") -> list[dict
     return plan
 
 
-_COMMENT_RE = re.compile(r"\\[^\n]*|\\*.*?\*\", re.S)
+_COMMENT_RE = re.compile(r"\\\\[^\n]*|\\\*.*?\*\\", re.S)
 
 
 def strip_comments(src: str) -> str:
@@ -476,7 +476,7 @@ def strip_launch_bounds(src: str) -> str:
                   lambda m: re.sub(r"[^\n]", " ", m.group(0)), src)
 
 
-_MACRO_RE = re.compile(r"^[ \t]*#define[ \t]+(\w+)((?:[^\n]*\\n)*[^\n]*)", re.M)
+_MACRO_RE = re.compile(r"^[ \t]*#define[ \t]+(\w+)((?:[^\n]*\\\n)*[^\n]*)", re.M)
 
 
 def macro_constructs(src: str) -> dict[str, list[str]]:
@@ -527,7 +527,7 @@ def _match_brace(text: str, open_idx: int) -> int:
 
 
 def extract_functions(src: str, path: str) -> list[FuncInfo]:
-    """Find every kernel\device function with its body, signature and constructs.
+    """Find every kernel\\device function with its body, signature and constructs.
 
     Language is inferred from the file name; see LANGUAGES. For marker forms
     with no name (SYCL lambdas, GLSL entry points) a stable synthetic name is
@@ -648,7 +648,7 @@ def _substitution(construct: str, family: str) -> dict[str, str]:
 
 def target_family(arch: str) -> str:
     a = arch.lower()
-    if a.startswith("gfx1"):          # gfx10\11\12 = RDNA
+    if a.startswith("gfx1"):          # gfx10\\11\\12 = RDNA
         return "amd_rdna"
     if a.startswith("gfx9"):
         return "amd_cdna"
@@ -747,7 +747,7 @@ def render_markdown(m: dict[str, Any]) -> str:
                  f"`{Path(f['file']).name}:{f['line']}` |")
     exact = [f for f in m["functions"] if f["fidelity"] in ("exact", "portable", "drop")]
     L.append(f"\n{len(exact)} function(s) port mechanically "
-             f"(exact\portable\drop) — no decision required.\n")
+             f"(exact\\portable\\drop) — no decision required.\n")
 
     plan = m.get("file_plan") or []
     if plan:

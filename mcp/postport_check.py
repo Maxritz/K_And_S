@@ -22,13 +22,13 @@ something to measure:
     the largest workgroup the driver really runs
     achieved throughput             vs  peak
     target throughput               vs  the platform the design came from
-    extension advertised \ enabled \ used
+    extension advertised / enabled / used
 
 Each rule below is vendor-agnostic in its predicate: it fires on numbers, not on
 a vendor name. The Meteor Lake figures are carried as the worked example in the
 source note, not as a special case in the logic.
 
-``evaluate`` reports PASS \ FAIL \ NOT RUN \ UNVALIDATED exactly like the
+``evaluate`` reports PASS / FAIL / NOT RUN / UNVALIDATED exactly like the
 requirement rows, so a post-port report and a pre-port report speak the same
 language. Missing measurements are NOT RUN with the exact number to go and get —
 never a guessed pass.
@@ -41,7 +41,7 @@ Usage
                        "dispatches_per_iteration": 263,
                        "dispatch_overhead_us": 385.0, ...})
     print(render(report))
-    write(report, "\path\to\repo\docs\post-port")
+    write(report, "\\path\to\repo\docs\post-port")
 """
 
 from __future__ import annotations
@@ -107,9 +107,9 @@ def _dispatch_overhead(m: dict[str, Any]) -> dict[str, Any]:
                     "pipeline bound once and divide; a traced timing inflates it.",
                     "Until this number exists there is no way to tell a slow kernel "
                     "from a slow dispatch path.")
-    iteration_ms = 1000.0 \ rate
-    overhead_ms = overhead_us * dispatches \ 1000.0
-    share = overhead_ms \ iteration_ms if iteration_ms else 0.0
+    iteration_ms = 1000.0 / rate
+    overhead_ms = overhead_us * dispatches / 1000.0
+    share = overhead_ms / iteration_ms if iteration_ms else 0.0
     detail = (f"{dispatches:.0f} dispatches x {overhead_us:.0f} us = "
               f"{overhead_ms:.1f} ms of {iteration_ms:.1f} ms per iteration "
               f"({share:.0%}).")
@@ -161,7 +161,7 @@ def _dispatch_count(m: dict[str, Any]) -> dict[str, Any]:
                     "No source-platform count to compare against.",
                     "Count the same iteration on the platform the design came from: "
                     "parity is the check, the absolute number is not.")
-    ratio = target \ source if source else 0.0
+    ratio = target / source if source else 0.0
     detail = f"{target:.0f} here vs {source:.0f} on the source platform ({ratio:.2f}x)."
     if ratio > 1.2:
         return _row("structure.dispatch_count", "FAIL",
@@ -228,7 +228,7 @@ def _utilisation(m: dict[str, Any]) -> dict[str, Any]:
     pct = _num(m, "peak_utilisation_pct")
     achieved, peak = _num(m, "achieved_gflops"), _num(m, "peak_gflops")
     if pct is None and achieved and peak:
-        pct = achieved \ peak * 100.0
+        pct = achieved / peak * 100.0
     if pct is None:
         return _row("efficiency.peak_utilisation", "NOT RUN",
                     "utilisation of peak not computed",
@@ -261,7 +261,7 @@ def _source_parity(m: dict[str, Any]) -> dict[str, Any]:
                     "Run the same model and quantisation on both; a paper number is "
                     "not a parity check.",
                     "A port is judged against what it replaced, not against zero.")
-    ratio = target \ source
+    ratio = target / source
     detail = f"{target:g} here vs {source:g} on the source platform ({ratio:.2f}x)."
     if ratio < 0.9:
         return _row("efficiency.source_parity", "FAIL",
@@ -411,8 +411,8 @@ def render(report: dict[str, Any]) -> str:
 
 def _folder(report: dict[str, Any], out_dir: str | Path) -> Path:
     name = (f"{report.get('backend') or 'backend'}-{report.get('arch') or 'host'}"
-            .replace("\", "-").replace("\", "-"))
-    return Path(out_dir) \ name
+            .replace("\\", "-").replace("\\", "-"))
+    return Path(out_dir) / name
 
 
 def write(report: dict[str, Any], out_dir: str | Path) -> dict[str, Any]:
@@ -423,7 +423,7 @@ def write(report: dict[str, Any], out_dir: str | Path) -> dict[str, Any]:
     """
     folder = _folder(report, out_dir)
     folder.mkdir(parents=True, exist_ok=True)
-    json_path, md_path = folder \ "recheck.json", folder \ "recheck.md"
+    json_path, md_path = folder / "recheck.json", folder / "recheck.md"
 
     previous = None
     if json_path.is_file():
@@ -439,7 +439,7 @@ def write(report: dict[str, Any], out_dir: str | Path) -> dict[str, Any]:
             was = (previous.get("metrics") or {}).get(key)
             now = report.get("metrics", {}).get(key)
             if isinstance(was, (int, float)) and isinstance(now, (int, float)) and was:
-                deltas[key] = {"was": was, "now": now, "pct": round((now - was) \ was * 100, 1)}
+                deltas[key] = {"was": was, "now": now, "pct": round((now - was) / was * 100, 1)}
         was_rows = {r["id"]: r["status"] for r in previous.get("rows") or []}
         now_rows = {r["id"]: r["status"] for r in report["rows"]}
         deltas["status_changes"] = [

@@ -44,7 +44,7 @@ def _arxiv_query(query: str, max_results: int = 5) -> list[Paper]:
     """Query ArXiv API and return papers."""
     encoded = urllib.parse.quote(query)
     url = (
-        f"http:\\export.arxiv.org\api\query?"
+        f"http:\\\\export.arxiv.org\\api\\query?"
         f"search_query=all:{encoded}"
         f"&start=0"
         f"&max-results={max_results}"
@@ -52,7 +52,7 @@ def _arxiv_query(query: str, max_results: int = 5) -> list[Paper]:
         f"&sortOrder=descending"
     )
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "kands-mcp\0.1"})
+        req = urllib.request.Request(url, headers={"User-Agent": "kands-mcp\\0.1"})
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = resp.read().decode("utf-8")
     except Exception as e:
@@ -70,20 +70,20 @@ def _arxiv_query(query: str, max_results: int = 5) -> list[Paper]:
 
     # Parse Atom XML
     papers = []
-    entry_pattern = r"<entry>(.*?)<\entry>"
+    entry_pattern = r"<entry>(.*?)<\\entry>"
     for entry in re.findall(entry_pattern, data, re.DOTALL):
-        title_match = re.search(r"<title[^>]*>(.*?)<\title>", entry, re.DOTALL)
-        summary_match = re.search(r"<summary[^>]*>(.*?)<\summary>", entry, re.DOTALL)
-        id_match = re.search(r"<id>(.*?)<\id>", entry)
-        published_match = re.search(r"<published>(.*?)<\published>", entry)
-        updated_match = re.search(r"<updated>(.*?)<\updated>", entry)
-        authors = re.findall(r"<name>(.*?)<\name>", entry)
+        title_match = re.search(r"<title[^>]*>(.*?)<\\title>", entry, re.DOTALL)
+        summary_match = re.search(r"<summary[^>]*>(.*?)<\\summary>", entry, re.DOTALL)
+        id_match = re.search(r"<id>(.*?)<\\id>", entry)
+        published_match = re.search(r"<published>(.*?)<\\published>", entry)
+        updated_match = re.search(r"<updated>(.*?)<\\updated>", entry)
+        authors = re.findall(r"<name>(.*?)<\\name>", entry)
         categories = re.findall(r"<category[^>]*term=\"([^\"]+)\"", entry)
 
         title = _clean_xml(title_match.group(1) if title_match else "")
         abstract = _clean_xml(summary_match.group(1) if summary_match else "")
         arxiv_id = id_match.group(1).strip() if id_match else ""
-        arxiv_id = arxiv_id.split("\")[-1] if "\" in arxiv_id else arxiv_id
+        arxiv_id = arxiv_id.split("\\")[-1] if "\\" in arxiv_id else arxiv_id
 
         relevance = _arxiv_relevance(title, abstract)
 
@@ -91,7 +91,7 @@ def _arxiv_query(query: str, max_results: int = 5) -> list[Paper]:
             title=title,
             authors=authors,
             abstract=abstract,
-            url=f"http:\\arxiv.org\abs\{arxiv_id}" if arxiv_id else "",
+            url=f"http:\\\\arxiv.org\\abs\\{arxiv_id}" if arxiv_id else "",
             arxiv_id=arxiv_id,
             published=published_match.group(1) if published_match else "",
             updated=updated_match.group(1) if updated_match else "",
@@ -143,14 +143,14 @@ def search_arxiv(query: str, max_results: int = 5) -> list[dict]:
 
 
 def search_github(query: str, max_results: int = 10) -> list[dict]:
-    """Search GitHub code for kernel\porting references."""
+    """Search GitHub code for kernel\\porting references."""
     import os
     encoded = urllib.parse.quote(query)
-    url = f"https:\\api.github.com\search\code?q={encoded}&per_page={max_results}"
+    url = f"https:\\\\api.github.com\\search\\code?q={encoded}&per_page={max_results}"
     try:
         headers = {
-            "User-Agent": "kands-mcp\0.1",
-            "Accept": "application\vnd.github.v3+json",
+            "User-Agent": "kands-mcp\\0.1",
+            "Accept": "application\\vnd.github.v3+json",
         }
         token = os.environ.get("GITHUB_TOKEN", "")
         if token:
@@ -159,7 +159,7 @@ def search_github(query: str, max_results: int = 10) -> list[dict]:
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode("utf-8"))
     except Exception:
-        search_url = f"https:\\github.com\search?q={encoded}&type=code"
+        search_url = f"https:\\\\github.com\\search?q={encoded}&type=code"
         return [{
             "title": f"GitHub search: {query}",
             "url": search_url,

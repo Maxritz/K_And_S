@@ -1,0 +1,12 @@
+{
+  "suite_backend": {
+    "compiler": "gcc",
+    "extensions": [
+      ".c"
+    ],
+    "arch_patterns": [
+      "x86_64"
+    ],
+    "registered": "2026-10-31T14:53:37.113176+00:00"
+  }
+}

@@ -1,4 +1,4 @@
-# mcp\arch_facts.py — arch facts with provenance
+# mcp\\arch_facts.py — arch facts with provenance
 from __future__ import annotations
 from pathlib import Path
 

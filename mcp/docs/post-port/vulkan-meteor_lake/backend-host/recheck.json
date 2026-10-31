@@ -1,0 +1,128 @@
+{
+  "generated_at": "2026-10-31 15:07 UTC",
+  "backend": "",
+  "arch": "",
+  "verdict": "fail",
+  "headline": "92% of iteration time is dispatch overhead",
+  "next_action": "Fix granularity before any inner-loop tuning: fuse or batch stages, or move to a runtime with a cheaper submit path. Micro-optimising a kernel that occupies a few percent of the iteration cannot pay off.",
+  "counts": {
+    "PASS": 3,
+    "FAIL": 4,
+    "NOT RUN": 1,
+    "UNVALIDATED": 0
+  },
+  "rows": [
+    {
+      "id": "gate.correctness",
+      "status": "PASS",
+      "headline": "output matches the reference",
+      "detail": "",
+      "fix": ""
+    },
+    {
+      "id": "efficiency.dispatch_overhead",
+      "status": "FAIL",
+      "headline": "92% of iteration time is dispatch overhead",
+      "detail": "116 dispatches x 385 us = 44.7 ms of 48.4 ms per iteration (92%).",
+      "fix": "Fix granularity before any inner-loop tuning: fuse or batch stages, or move to a runtime with a cheaper submit path. Micro-optimising a kernel that occupies a few percent of the iteration cannot pay off."
+    },
+    {
+      "id": "structure.dispatch_count",
+      "status": "PASS",
+      "headline": "dispatch count matches the source platform",
+      "detail": "116 here vs 116 on the source platform (1.00x).",
+      "fix": ""
+    },
+    {
+      "id": "structure.fusion_legality",
+      "status": "FAIL",
+      "headline": "1 proposed fusion(s) need a cross-workgroup barrier",
+      "detail": "gate->up: per-row; silu->down: cross-workgroup",
+      "fix": "silu->down: keep the dispatch boundary, or use a backend with a device-wide barrier. No workgroup size makes this legal, and a shader that reads the whole producer output without one reads garbage."
+    },
+    {
+      "id": "limits.workgroup_size",
+      "status": "PASS",
+      "headline": "workgroup size within the verified ceiling",
+      "detail": "dispatched at 256, ceiling verified at 256.",
+      "fix": ""
+    },
+    {
+      "id": "efficiency.peak_utilisation",
+      "status": "FAIL",
+      "headline": "0.03% of peak: the bottleneck is not arithmetic",
+      "detail": "0.03% of peak",
+      "fix": "This is a dispatch, synchronisation or copy-bound shape. Measure per-dispatch cost and dispatch count before touching the kernel."
+    },
+    {
+      "id": "efficiency.source_parity",
+      "status": "FAIL",
+      "headline": "37% below the source platform",
+      "detail": "20.65 here vs 33 on the source platform (0.63x).",
+      "fix": "Attribute the gap before changing kernels. A uniform slowdown across every kernel is a per-dispatch or per-copy cost; a single slow kernel is a kernel."
+    },
+    {
+      "id": "extensions.available_vs_used",
+      "status": "NOT RUN",
+      "headline": "1 extension(s) available but not enabled",
+      "detail": "VK_KHR_timeline_semaphore: advertised=True enabled=False used=False. Not enabled: VK_KHR_timeline_semaphore.",
+      "fix": "Enable it in the create-info first; an advertised feature is not a usable one."
+    }
+  ],
+  "metrics": {
+    "correctness_verified": true,
+    "iterations_per_s": 20.65,
+    "source_iterations_per_s": 33.0,
+    "dispatches_per_iteration": 116,
+    "source_dispatches_per_iteration": 116,
+    "dispatch_overhead_us": 385.0,
+    "workgroup_size": 256,
+    "max_verified_workgroup": 256,
+    "peak_utilisation_pct": 0.03,
+    "out_dir": "C:\\Users\\rr\\AppData\\Local\\Temp\\kands-all-wistzaso\\postport"
+  },
+  "fusions": [
+    {
+      "a": "gate",
+      "b": "up",
+      "dep": "per-row"
+    },
+    {
+      "a": "silu",
+      "b": "down",
+      "dep": "cross-workgroup"
+    }
+  ],
+  "extensions": [
+    {
+      "name": "VK_KHR_timeline_semaphore",
+      "advertised": true,
+      "enabled": false,
+      "used": false
+    }
+  ],
+  "previous_at": "2026-10-31 15:06 UTC",
+  "deltas": {
+    "iterations_per_s": {
+      "was": 20.65,
+      "now": 20.65,
+      "pct": 0.0
+    },
+    "dispatches_per_iteration": {
+      "was": 116,
+      "now": 116,
+      "pct": 0.0
+    },
+    "dispatch_overhead_us": {
+      "was": 385.0,
+      "now": 385.0,
+      "pct": 0.0
+    },
+    "peak_utilisation_pct": {
+      "was": 0.03,
+      "now": 0.03,
+      "pct": 0.0
+    },
+    "status_changes": []
+  }
+}
