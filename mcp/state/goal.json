@@ -1,1 +1,47 @@
-{"description": "Local goal + guardrail state. The user's ultimate goal is stored here so agents can check alignment before taking actions.", "created": "2026-10-23T00:00:00Z", "last_modified": "2026-10-23T00:00:00Z", "goal": "", "target_arch": "", "source_arch": "", "target_backend": "hip", "target_os": "auto", "target_tok_per_s": 0, "min_perf": 0, "tolerance": "1e-4", "max_iterations": 10, "cutoff_date": "2024-01-01", "files_in_scope": [], "files_out_of_scope": [], "guardrails": [], "status": {"clone": "pending", "discover": "pending", "analyze": "pending", "research": "pending", "plan": "pending", "implement": "pending", "verify": "pending", "optimize": "pending", "record": "pending", "export": "pending"}, "override_log": [], "notes": "Use set_goal() to initialize, update_goal() to override guardrails, check_guardrail() to verify actions."}
+{
+  "description": "Local goal + guardrail state. The user's ultimate goal is stored here so agents can check alignment before taking actions.",
+  "created": "2026-10-23T00:00:00Z",
+  "last_modified": "2026-10-31T12:31:57.184764+00:00",
+  "goal": "Raise ZenInfer decode throughput on Zen 3 (AVX2+FMA3, no AVX-512) while keeping generated token IDs byte-identical",
+  "target_arch": "znver3",
+  "source_arch": "znver3",
+  "target_backend": "cpu",
+  "target_os": "auto",
+  "target_tok_per_s": 30.0,
+  "min_perf": 0,
+  "tolerance": "1e-4",
+  "max_iterations": 8,
+  "cutoff_date": "2026-10-31",
+  "files_in_scope": [
+    "kernels/**",
+    "src/quant.cpp",
+    "include/zen/thread_pool.h",
+    "docs/**"
+  ],
+  "files_out_of_scope": [
+    "src/openai_server.cpp",
+    "server/**",
+    "third_party/**"
+  ],
+  "guardrails": [
+    "Generated token IDs must stay byte-identical for the 64-token reference prompt",
+    "ctest must pass 3/3 after every change",
+    "No AVX-512: the host is Zen 3",
+    "Public API must stay stable",
+    "clang-tidy gate must stay clean"
+  ],
+  "status": {
+    "clone": "pending",
+    "discover": "pending",
+    "analyze": "pending",
+    "research": "pending",
+    "plan": "pending",
+    "implement": "pending",
+    "verify": "pending",
+    "optimize": "pending",
+    "record": "pending",
+    "export": "pending"
+  },
+  "override_log": [],
+  "notes": "Use set_goal() to initialize, update_goal() to override guardrails, check_guardrail() to verify actions."
+}

@@ -25,6 +25,7 @@ Resources (URI: kands://...):
   kands://radical-experiments  RDNA-specific anti-patterns + radical kernel experiments
   kands://vulkan-sync        Vulkan barriers, sync hazards, TDR/hang prevention, occupancy
   kands://gpu-pipelines      Backend-agnostic pipeline dataflow methodology (verified, canonical)
+  kands://hip-docs           Distilled HIP/ROCm 6.1.5 documentation + programming guides
 
 Tools:
   discover_kernels()          Scan any repo for kernel/shader sources
@@ -89,6 +90,9 @@ _DOX_STYLE_PATH = _KANDS_ROOT / "docs" / "DOX_STYLE.md"
 _PORTING_STRATEGIES_PATH = _KANDS_ROOT / "docs" / "PORTING_STRATEGIES.md"
 _VULKAN_SYNC_TDR_PATH = _KANDS_ROOT / "learnings" / "VULKAN_SYNC_TDR_LEARNINGS.md"
 _GPU_PIPELINES_PATH = _KANDS_ROOT / "learnings" / "GPU_PIPELINE_DATAFLOW_METHODOLOGY.md"
+_HIP_DOCS_PATH = _KANDS_ROOT / "learned" / "rocm_docs_amd_com_hip_en_docs_6.1.5.md"
+_HIP_GUIDE_PATH = _KANDS_ROOT / "learned" / "hip_programming_guide_texts.md"
+_HIP_INTRO_PATH = _KANDS_ROOT / "learned" / "intro_hip_programming.md"
 _MY_SKILLS_DIR = Path.home() / ".config" / "opencode" / "command" / "MySkills"
 if not _MY_SKILLS_DIR.exists():
     # Fallback: look for it relative to known locations
@@ -440,6 +444,7 @@ RES_PERF_HISTORY = "kands://perf-history"
 RES_BENCHMARKS = "kands://perf-benchmarks"
 RES_SETUP_GUIDE = "kands://setup-guide"
 RES_RADICAL_EXPERIMENTS = "kands://radical-experiments"
+RES_HIP_DOCS = "kands://hip-docs"
 RES_MY_SKILLS = "kands://myskills"
 RES_MY_SKILLS_INDEX = "kands://myskills/index"
 RES_FINDINGS_PREFIX = "kands://findings/"
@@ -804,6 +809,12 @@ def _list_resources() -> list[mcp_types.Resource]:
             mimeType="text/markdown",
         ),
         mcp_types.Resource(
+            uri=RES_HIP_DOCS,
+            name="HIP / ROCm Documentation Bundle",
+            description="Distilled HIP/ROCm 6.1.5 documentation — language extensions, runtime API, kernel programming, memory management, and HIP-CUDA porting notes.",
+            mimeType="text/markdown",
+        ),
+        mcp_types.Resource(
             uri=RES_MY_SKILLS,
             name="MySkills Directory",
             description="Lists all available skills from the MySkills framework. Use 'select_skill' to load a specific skill's instructions.",
@@ -915,6 +926,13 @@ def _read_resource(uri: str) -> str:
         if _GPU_PIPELINES_PATH.exists():
             return _GPU_PIPELINES_PATH.read_text(encoding="utf-8")
         return "# GPU Pipeline Dataflow Methodology\n\n(Not found)"
+
+    if uri == RES_HIP_DOCS:
+        parts = []
+        for p in [_HIP_DOCS_PATH, _HIP_GUIDE_PATH, _HIP_INTRO_PATH]:
+            if p.exists():
+                parts.append(p.read_text(encoding="utf-8"))
+        return "\n\n---\n\n".join(parts) if parts else "# HIP / ROCm Documentation\n\n(Not found)"
 
     if str(uri) == RES_MY_SKILLS:
         skill_data = _load_myskills_index()
@@ -2436,8 +2454,17 @@ def _query_toolchain(gpu_vendor: str, os_target: str, host_compiler: str) -> str
         for k, v in os_info.items():
             if k == "sdk_paths":
                 report += f"**SDK paths:**\n"
-                for path_k, path_v in v.items():
-                    report += f"  - {path_k}: `{path_v}`\n"
+                if isinstance(v, dict):
+                    for path_k, path_v in v.items():
+                        report += f"  - {path_k}: `{path_v}`\n"
+                elif isinstance(v, list):
+                    for item in v:
+                        if isinstance(item, dict):
+                            path_k = item.get("env") or item.get("path") or "path"
+                            path_v = item.get("desc") or item.get("path") or str(item)
+                            report += f"  - {path_k}: `{path_v}`\n"
+                        else:
+                            report += f"  - {item}\n"
             elif k == "notes":
                 report += f"**Notes:** {v}\n"
             elif k == "msvc_compat":
@@ -4657,6 +4684,57 @@ def _tools() -> list[mcp_types.Tool]:
             },
         ),
         mcp_types.Tool(
+            name="enhanced_autonomous_port",
+            description="ENHANCED FACTORY-LIKE AUTONOMOUS PORTING: Multi-option evaluation, factory quality gates, enhanced edge case handling, continuous learning, and ECC ecosystem integration. This is the enhanced version of autonomous_port with factory-like systematic behavior and optimal solution finding.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "repo_path": {"type": "string", "description": "Path to the engine repo (must exist). Use github_url for remote repos"},
+                    "github_url": {"type": "string", "description": "GitHub URL to clone (e.g., https://github.com/ggerganov/llama.cpp). SECURITY: repo is read-only; no build scripts executed"},
+                    "source_arch": {"type": "string", "description": "Source arch ID (e.g., 'sm_80', 'gfx1100'). 'auto' = auto-detect from repo", "default": "auto"},
+                    "target_arch": {"type": "string", "description": "Target arch ID (e.g., 'gfx1201'). 'auto' = suggest based on installed hardware", "default": "auto"},
+                    "project_type": {"type": "string", "description": "Type of project: 'llm', 'game', 'sdk', 'compute', 'inference', or 'auto'", "default": "auto"},
+                    "target_language": {"type": "string", "description": "Target language: 'cxx', 'c', 'rust', 'zig', 'goose', 'python', 'csharp', or 'auto' = analyze repo for optimal choice", "default": "auto"},
+                    "target_backend": {"type": "string", "description": "Target backend: 'hip', 'cuda', 'vulkan', 'directx', 'sycl', or 'auto'", "default": "auto"},
+                    "target_os": {"type": "string", "description": "Target OS: 'linux', 'windows', 'auto'", "default": "auto"},
+                    "target_tok_per_s": {"type": "number", "description": "Performance target for LLM workloads (0 = no target)", "default": 0},
+                    "mode": {"type": "string", "description": "Porting mode: 'strict' or 'loose'", "default": "strict"},
+                    "max_files": {"type": "integer", "description": "Maximum number of files to scan", "default": 1000},
+                    "force_refresh": {"type": "boolean", "description": "Force re-analysis (bypass cache)", "default": False},
+                    "break_self_check": {"type": "boolean", "description": "Bypass Self-Check Gate violations", "default": False},
+                    "strip_debug": {"type": "integer", "description": "Strip debug tracing: 0=keep, 1=comment-out (compile-time), 2=remove from source", "default": 0},
+                    "strip_perf": {"type": "integer", "description": "Strip perf tracing: 0=keep, 1=comment-out (compile-time), 2=remove from source", "default": 0},
+                    "timeout_seconds": {"type": "integer", "description": "Timeout for clone + scan operations (seconds)", "default": 60},
+                    "enable_self_optimization": {"type": "boolean", "description": "Enable autonomous self-optimization", "default": True},
+                    "ecc_integration_level": {"type": "string", "description": "ECC integration level: 'basic', 'deep', 'full'", "default": "deep"},
+                    "factory_mode": {"type": "boolean", "description": "Enable factory-like systematic behavior", "default": True},
+                    "edge_case_mitigation": {"type": "boolean", "description": "Enable enhanced edge case detection and mitigation", "default": True},
+                    "multi_option_evaluation": {"type": "boolean", "description": "Enable multi-option evaluation and comparison", "default": True},
+                    "continuous_learning": {"type": "boolean", "description": "Enable continuous learning and adaptation", "default": True},
+                },
+                "required": [],
+            },
+        ),
+        mcp_types.Tool(
+            name="enhanced_porting_modes",
+            description="ENHANCED PORTING MODES: Specialized optimization modes for different use cases - auto, performance, safety, migration, benchmark, batch, interactive. Each mode provides tailored optimizations and configurations for specific porting scenarios.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "mode": {"type": "string", "description": "Porting mode: auto, performance, safety, migration, benchmark, batch, interactive", "default": "auto"},
+                    "repo_path": {"type": "string", "description": "Path to the engine repo"},
+                    "github_url": {"type": "string", "description": "GitHub URL to clone"},
+                    "source_arch": {"type": "string", "description": "Source arch ID", "default": "auto"},
+                    "target_arch": {"type": "string", "description": "Target arch ID", "default": "auto"},
+                    "target_backend": {"type": "string", "description": "Target backend", "default": "auto"},
+                    "target_os": {"type": "string", "description": "Target OS", "default": "auto"},
+                    "target_tok_per_s": {"type": "number", "description": "Performance target", "default": 0},
+                    "mode_params": {"type": "object", "description": "Mode-specific parameters", "default": {}},
+                },
+                "required": [],
+            },
+        ),
+        mcp_types.Tool(
             name="capability_report",
             description="Report what THIS host can actually build for a target (compiler, root, disassembler, supported backends). Use before planning any port: probes discovery instead of assuming a toolchain exists. Vendor-agnostic (hip/cuda/sycl).",
             inputSchema={
@@ -5367,6 +5445,126 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
 
         results.append(mcp_types.TextContent(type="text", text=report))
 
+    elif name == "enhanced_autonomous_port":
+        # Import enhanced server functions
+        try:
+            from mcp.enhanced_server import enhanced_autonomous_port as enhanced_port_func
+            from mcp.enhanced_server import AutonomousPortParams as EnhancedParams
+        except ImportError:
+            # Fallback for running from mcp directory
+            from enhanced_server import enhanced_autonomous_port as enhanced_port_func
+            from enhanced_server import AutonomousPortParams as EnhancedParams
+        
+        # Parse arguments
+        params = EnhancedParams(**arguments)
+        
+        # Run enhanced autonomous porting
+        result = await enhanced_port_func(params)
+        
+        # Format result as text
+        report = "# Enhanced Autonomous Porting Report\n\n"
+        report += f"**Status:** {result.get('status', 'unknown')}\n"
+        report += f"**Repository:** {result.get('port_request', {}).get('repo_path', 'N/A')}\n"
+        report += f"**Target Arch:** {result.get('port_request', {}).get('target_arch', 'N/A')}\n"
+        report += f"**Target Backend:** {result.get('port_request', {}).get('target_backend', 'N/A')}\n"
+        report += f"**Mode:** {result.get('port_request', {}).get('mode', 'N/A')}\n\n"
+        
+        if result.get('status') == 'success':
+            report += "## ✅ Enhanced Porting Completed Successfully\n\n"
+            report += f"**Optimal Strategy:** {result.get('optimal_strategy_selected', {}).get('approach', 'N/A')}\n"
+            report += f"**Estimated Performance:** {result.get('optimal_strategy_selected', {}).get('estimated_performance', 0)} tok/s\n"
+            report += f"**Confidence:** {result.get('optimal_strategy_selected', {}).get('confidence', 0):.2f}\n"
+            report += f"**Risk Level:** {result.get('optimal_strategy_selected', {}).get('risk_level', 0):.2f}\n\n"
+            
+            report += "## Factory Metrics\n\n"
+            factory_metrics = result.get('factory_metrics', {})
+            for key, value in factory_metrics.items():
+                report += f"- **{key.replace('_', ' ').title()}:** {value}\n"
+            report += "\n"
+            
+            report += "## Recommendations\n\n"
+            recommendations = result.get('recommendations', {})
+            for category, items in recommendations.items():
+                report += f"### {category.replace('_', ' ').title()}\n"
+                if isinstance(items, list):
+                    for item in items:
+                        report += f"- {item}\n"
+                report += "\n"
+        else:
+            report += "## ❌ Enhanced Porting Failed\n\n"
+            report += f"**Error:** {result.get('error', 'Unknown error')}\n"
+            report += f"**Error Type:** {result.get('error_type', 'Unknown')}\n"
+            report += f"**Phase:** {result.get('phase', 'Unknown')}\n"
+        
+        results.append(mcp_types.TextContent(type="text", text=report))
+
+    elif name == "enhanced_porting_modes":
+        # Import enhanced porting modes
+        try:
+            from mcp.enhanced_porting_modes import enhanced_porting_modes as enhanced_modes_func
+            from mcp.enhanced_porting_modes import PortingModeParams as ModeParams
+        except ImportError:
+            from enhanced_porting_modes import enhanced_porting_modes as enhanced_modes_func
+            from enhanced_porting_modes import PortingModeParams as ModeParams
+        
+        # Parse arguments
+        params = ModeParams(**arguments)
+        
+        # Run enhanced porting modes
+        result = await enhanced_modes_func(params)
+        
+        # Format result as text
+        report = "# Enhanced Porting Modes Report\n\n"
+        report += f"**Mode Requested:** {result.get('mode_requested', 'N/A')}\n"
+        report += f"**Mode Executed:** {result.get('mode_executed', 'N/A')}\n"
+        report += f"**Status:** {result.get('status', 'unknown')}\n\n"
+        
+        if result.get('status') == 'success':
+            report += "## ✅ Enhanced Porting Mode Completed Successfully\n\n"
+            
+            # Mode-specific results
+            mode_result = result.get('result', {})
+            if 'optimizations_applied' in mode_result:
+                report += "### Optimizations Applied\n"
+                for opt in mode_result['optimizations_applied']:
+                    report += f"- {opt}\n"
+                report += "\n"
+            
+            if 'safety_checks_applied' in mode_result:
+                report += "### Safety Checks Applied\n"
+                for check in mode_result['safety_checks_applied']:
+                    report += f"- {check}\n"
+                report += "\n"
+            
+            if 'config' in mode_result:
+                report += "### Configuration\n"
+                for key, value in mode_result['config'].items():
+                    report += f"- **{key.replace('_', ' ').title()}:** {value}\n"
+                report += "\n"
+            
+            report += f"**Estimated Performance Gain:** {result.get('estimated_performance_gain', 'N/A')}\n"
+            report += f"**Validation Level:** {result.get('validation_level', 'standard')}\n\n"
+            
+            # Recommendations
+            recommendations = result.get('recommendations', {})
+            if 'next_steps' in recommendations:
+                report += "### Next Steps\n"
+                for step in recommendations['next_steps']:
+                    report += f"- {step}\n"
+                report += "\n"
+            
+            if 'mode_specific_tips' in recommendations:
+                report += "### Mode-Specific Tips\n"
+                for tip in recommendations['mode_specific_tips']:
+                    report += f"- {tip}\n"
+                report += "\n"
+        else:
+            report += "## ❌ Enhanced Porting Mode Failed\n\n"
+            report += f"**Error:** {result.get('error', 'Unknown error')}\n"
+            report += f"**Error Type:** {result.get('error_type', 'Unknown')}\n"
+        
+        results.append(mcp_types.TextContent(type="text", text=report))
+
     elif name == "set_goal":
         params = SetGoalParams(**arguments)
         state = _load_goal_state()
@@ -5559,6 +5757,7 @@ gh pr view --web
         report = "# Numerical Equivalence Verification (CPU-as-Oracle)\n\n"
         report += f"**Arch:** `{arch}` ({arch_info.get('name', 'unknown')})\n"
         report += f"**Workload:** `{workload}`\n"
+        now = datetime.now(timezone.utc)
         report += f"**Date:** {now.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
 
         # Check array lengths

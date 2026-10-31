@@ -1,7 +1,7 @@
 {
-  "description": "Local performance history — records measurements as the user runs optimizations. The MCP learns from what the user does.",
+  "description": "Local performance history \u2014 records measurements as the user runs optimizations. The MCP learns from what the user does.",
   "created": "2026-10-23T00:00:00Z",
-  "last_modified": "2026-10-23T20:22:07.931702+00:00",
+  "last_modified": "2026-10-31T12:50:53.805083+00:00",
   "entries": [
     {
       "timestamp": "2026-10-23T19:14:17.635160+00:00",
@@ -20,6 +20,78 @@
       "config_hash": "",
       "git_hash": "",
       "notes": "CORRECTION of the 35 tok/s entry above, same engine and card. Re-measured with burst replay + host subtraction (paired events report the host submission span when the host is the bottleneck; sync-per-launch reports the driver round trip): device 1.94 ms, host 3.30 ms, wall 3.55 ms/token, 282 tok/s decode, 1726 tok/s read. Launch count 346 -> 130 by capturing 18 layers as replayable command graphs (no numerical change). Device now runs at 242 GB/s = 39% of the 616 GB/s MEASURED streaming rate (not the 1152 GB/s datasheet figure), i.e. 2.54x off roofline; the earlier '25 ms device' was a measurement artefact inflated ~13x and it hid this. Hot kernel is an LDS table decoder: 41 472 B scratch per block pins one block per CU and it spends 64 shared-loads + 64 bit-ops per 96 bytes decoded. Retracted claim: it was NOT purely launch-bound - the wall is host-shaped, but the device is also 2.54x off its own roofline."
+    },
+    {
+      "timestamp": "2026-10-31T12:33:27.087672+00:00",
+      "arch": "znver3",
+      "workload": "decode_q4_k_m",
+      "tok_per_s": 23.9,
+      "config_hash": "zeninfer-0.4.1-avx2-fused-kquant",
+      "git_hash": "",
+      "notes": "Q4_K_M smolcode-coder-cpp-1.5b, 64 tokens, 16 workers, tokens byte-identical"
+    },
+    {
+      "timestamp": "2026-10-31T12:34:46.048976+00:00",
+      "arch": "znver3",
+      "workload": "decode_q8_0",
+      "tok_per_s": 21.5,
+      "config_hash": "zeninfer-0.4.1-avx2-fused-kquant",
+      "git_hash": "",
+      "notes": "Llama-3.2-1B Q8_0, 32 tokens, 16 workers"
+    },
+    {
+      "timestamp": "2026-10-31T12:34:46.055107+00:00",
+      "arch": "znver3",
+      "workload": "gemv_q4_k_single_thread",
+      "tok_per_s": 6.47,
+      "config_hash": "zeninfer-0.4.1-avx2-fused-kquant",
+      "git_hash": "",
+      "notes": "GB[path] not tok[path] fused Q4_K r=256, 4096 cols"
+    },
+    {
+      "timestamp": "2026-10-31T12:34:46.061125+00:00",
+      "arch": "znver3",
+      "workload": "decode_q4_k_m_generic_path",
+      "tok_per_s": 6.34,
+      "config_hash": "zeninfer-0.4.1-block-streaming",
+      "git_hash": "",
+      "notes": "Fused dispatch disabled; same binary, same tokens"
+    },
+    {
+      "timestamp": "2026-10-31T12:50:53.782990+00:00",
+      "arch": "znver3",
+      "workload": "decode_q4_k_m_best",
+      "tok_per_s": 24.04,
+      "config_hash": "zeninfer-0.4.1-avx2-fused-kquant",
+      "git_hash": "",
+      "notes": "Q4_K_M smolcode-coder-cpp-1.5b, 64 tokens, 16 workers, byte-identical IDs; best of 8 runs (range 20.60-24.04, spread is all-core clock state)"
+    },
+    {
+      "timestamp": "2026-10-31T12:50:53.789898+00:00",
+      "arch": "znver3",
+      "workload": "decode_q4_k_m_throttled",
+      "tok_per_s": 20.6,
+      "config_hash": "zeninfer-0.4.1-avx2-fused-kquant",
+      "git_hash": "",
+      "notes": "Same binary, last run after a long benchmark session; demonstrates the 15% clock-state drift that makes absolute tok[path] unusable"
+    },
+    {
+      "timestamp": "2026-10-31T12:50:53.797881+00:00",
+      "arch": "znver3",
+      "workload": "gemv_q6_k_dram_151936x1536",
+      "tok_per_s": 33.8,
+      "config_hash": "zeninfer-0.4.1-avx2-fused-kquant",
+      "git_hash": "",
+      "notes": "GB[path] not tok[path] 191.4 MB output-projection shape, 16 workers, six runs 32.4-34.8 GB[path] nanobench err 1-3%"
+    },
+    {
+      "timestamp": "2026-10-31T12:50:53.805050+00:00",
+      "arch": "znver3",
+      "workload": "gemv_q4_k_dram_151936x1536",
+      "tok_per_s": 36.9,
+      "config_hash": "zeninfer-0.4.1-avx2-fused-kquant",
+      "git_hash": "",
+      "notes": "GB[path] not tok[path] 131.3 MB output-projection shape, six runs 33.5-40.1 GB[path]"
     }
   ],
   "targets": [],
