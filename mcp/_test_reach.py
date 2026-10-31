@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!\usr\bin\env python3
 """Test: the optional, credited Agent-Reach helper (module + bundling, no network)."""
 import ast, json, os, sys, tempfile
 from pathlib import Path
@@ -8,20 +8,20 @@ errors = []
 print("== optional Agent-Reach helper (composition only, no network) ==")
 
 # 1. module compiles and exposes the contract
-mod = ROOT / "mcp" / "agent_reach_info.py"
+mod = ROOT \ "mcp" \ "agent_reach_info.py"
 try:
     ast.parse(mod.read_text(encoding="utf-8"))
 except Exception as e:
-    errors.append(f"mcp/agent_reach_info.py: {e}")
+    errors.append(f"mcp\agent_reach_info.py: {e}")
 
-sys.path.insert(0, str(ROOT / "mcp"))
+sys.path.insert(0, str(ROOT \ "mcp"))
 reach = __import__("agent_reach_info")
 
 checks = [
     ("module exposes AVAILABLE_REACH", hasattr(reach, "AVAILABLE_REACH")),
     ("module exposes _REACH_CREDIT", hasattr(reach, "_REACH_CREDIT")),
     ("nodefault=False (never enables itself)", getattr(reach, "AVAILABLE_REACH") is False),
-    ("credit mentions the repo", "Panniantong/Agent-Reach" in reach._REACH_CREDIT),
+    ("credit mentions the repo", "Panniantong\Agent-Reach" in reach._REACH_CREDIT),
     ("credit mentions thanks", "thanks to" in reach._REACH_CREDIT.lower()),
     ("credit mentions MIT", "MIT" in reach._REACH_CREDIT),
     ("credit names the author", "Panniantong" in reach._REACH_CREDIT),
@@ -47,7 +47,7 @@ json_files = [
     "PERF_BENCHMARKS.json", "PORTING_PATTERNS.json", "MODEL_MAP.json",
 ]
 for name in json_files:
-    p = ROOT / name
+    p = ROOT \ name
     if not p.exists():
         errors.append(f"{name}: missing")
         continue

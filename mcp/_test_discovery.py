@@ -1,10 +1,10 @@
-#!/usr/bin/env python
+#!\usr\bin\env python
 """Regression tests for discovery correctness + the backend-readiness step.
 
 Run from any directory (script dir is added to sys.path, so the local ``mcp``
 folder does not shadow the installed ``mcp`` package):
 
-    python H:\\K_and_S\\mcp\\_test_discovery.py
+    python H:\K_and_S\mcp\_test_discovery.py
 
 Every check prints PASS or FAIL. Exit code is non-zero if any check failed.
 """
@@ -44,55 +44,55 @@ def write(path: Path, text: str) -> None:
 # --------------------------------------------------------------------------- discovery
 print("\n== discovery: content-aware classification ==")
 with tempfile.TemporaryDirectory() as td:
-    root = Path(td) / "proj"
-    write(root / "kern" / "hip_kernel.cu",
-          '#include <hip/hip_runtime.h>\n__global__ void k(){ hipMalloc(0, 1); }\n')
-    write(root / "kern" / "cuda_kernel.cu",
+    root = Path(td) \ "proj"
+    write(root \ "kern" \ "hip_kernel.cu",
+          '#include <hip\hip_runtime.h>\n__global__ void k(){ hipMalloc(0, 1); }\n')
+    write(root \ "kern" \ "cuda_kernel.cu",
           '#include <cuda_runtime.h>\n__global__ void k(){ __shared__ int x; }\n')
-    write(root / "kern" / "hdr.cuh",
-          '#include <hip/hip_runtime.h>\n__device__ void d();\n')
-    write(root / "d" / "avx512_gemm.cpp",
+    write(root \ "kern" \ "hdr.cuh",
+          '#include <hip\hip_runtime.h>\n__device__ void d();\n')
+    write(root \ "d" \ "avx512_gemm.cpp",
           '#include <immintrin.h>\nvoid g(){ __m512 a = _mm512_set1_ps(0.f); (void)a; }\n')
-    write(root / "d" / "plain_host.cpp", "int main(){ return 0; }\n")
-    write(root / "shaders" / "t.tesc", "#version 450\nvoid main(){}\n")
-    write(root / "sycl" / "k.sycl", "#include <sycl/sycl.hpp>\nvoid k(){ sycl::queue q; }\n")
-    write(root / "build" / "copy.cu",
-          '#include <hip/hip_runtime.h>\n__global__ void k(){}\n')
-    write(root / "node_modules" / "x" / "v.comp", "#version 450\n")
+    write(root \ "d" \ "plain_host.cpp", "int main(){ return 0; }\n")
+    write(root \ "shaders" \ "t.tesc", "#version 450\nvoid main(){}\n")
+    write(root \ "sycl" \ "k.sycl", "#include <sycl\sycl.hpp>\nvoid k(){ sycl::queue q; }\n")
+    write(root \ "build" \ "copy.cu",
+          '#include <hip\hip_runtime.h>\n__global__ void k(){}\n')
+    write(root \ "node_modules" \ "x" \ "v.comp", "#version 450\n")
 
     findings = s._scan_sources(root)
     by_path = {f["path"]: f for f in findings}
 
     check("HIP in .cu is classified gpu_hip",
-          by_path.get("kern/hip_kernel.cu", {}).get("backend") == "gpu_hip",
-          str(by_path.get("kern/hip_kernel.cu")))
+          by_path.get("kern\hip_kernel.cu", {}).get("backend") == "gpu_hip",
+          str(by_path.get("kern\hip_kernel.cu")))
     check("CUDA in .cu stays gpu_cuda",
-          by_path.get("kern/cuda_kernel.cu", {}).get("backend") == "gpu_cuda",
-          str(by_path.get("kern/cuda_kernel.cu")))
+          by_path.get("kern\cuda_kernel.cu", {}).get("backend") == "gpu_cuda",
+          str(by_path.get("kern\cuda_kernel.cu")))
     check("HIP header .cuh is gpu_hip",
-          by_path.get("kern/hdr.cuh", {}).get("backend") == "gpu_hip",
-          str(by_path.get("kern/hdr.cuh")))
+          by_path.get("kern\hdr.cuh", {}).get("backend") == "gpu_hip",
+          str(by_path.get("kern\hdr.cuh")))
     check("AVX-512 .cpp is a CPU kernel (no 'cpu' in path)",
-          by_path.get("d/avx512_gemm.cpp", {}).get("backend") == "cpu_x86_avx512",
-          str(by_path.get("d/avx512_gemm.cpp")))
+          by_path.get("d\avx512_gemm.cpp", {}).get("backend") == "cpu_x86_avx512",
+          str(by_path.get("d\avx512_gemm.cpp")))
     check("host-only .cpp is not reported",
-          "d/plain_host.cpp" not in by_path)
+          "d\plain_host.cpp" not in by_path)
     check(".tesc is discovered",
-          by_path.get("shaders/t.tesc", {}).get("backend") == "gpu_vulkan",
-          str(by_path.get("shaders/t.tesc")))
+          by_path.get("shaders\t.tesc", {}).get("backend") == "gpu_vulkan",
+          str(by_path.get("shaders\t.tesc")))
     check(".sycl is discovered",
-          by_path.get("sycl/k.sycl", {}).get("backend") == "gpu_sycl",
-          str(by_path.get("sycl/k.sycl")))
-    check("build/ copy is pruned",
-          not any(p.startswith("build/") for p in by_path), str(sorted(by_path)))
-    check("node_modules/ is pruned",
-          not any(p.startswith("node_modules/") for p in by_path), str(sorted(by_path)))
+          by_path.get("sycl\k.sycl", {}).get("backend") == "gpu_sycl",
+          str(by_path.get("sycl\k.sycl")))
+    check("build\ copy is pruned",
+          not any(p.startswith("build\") for p in by_path), str(sorted(by_path)))
+    check("node_modules\ is pruned",
+          not any(p.startswith("node_modules\") for p in by_path), str(sorted(by_path)))
 
 # --------------------------------------------------------------------------- api_map
 print("\n== api_map: no phantom rows, unknowns surfaced ==")
 with tempfile.TemporaryDirectory() as td:
     root = Path(td)
-    write(root / "a.cu", """
+    write(root \ "a.cu", """
 #include <cuda_runtime.h>
 __global__ void k(float* o) {
   void* p = 0;
@@ -102,7 +102,7 @@ __global__ void k(float* o) {
   o[0] = (float)x;
 }
 """)
-    ref = api_map.build_reference([str(root / "a.cu")], "sm_80", "gfx1201")
+    ref = api_map.build_reference([str(root \ "a.cu")], "sm_80", "gfx1201")
     ids = {r["id"] for r in ref["rows"]}
     check("cudaMallocAsync is inventoried", "cudaMallocAsync" in ids, str(sorted(ids)))
     check("cudaMalloc is not invented from cudaMallocAsync",
@@ -114,7 +114,7 @@ __global__ void k(float* o) {
           any(r["id"].startswith("ptx:") for r in unverified),
           str([r["id"] for r in ref["rows"]]))
 
-    missing = api_map.build_reference([str(root / "nope.cu")], "sm_80", "gfx1201")
+    missing = api_map.build_reference([str(root \ "nope.cu")], "sm_80", "gfx1201")
     check("missing file is reported",
           any("nope.cu" in f for f in missing.get("unreadable_files", [])),
           str(missing.get("unreadable_files")))
@@ -162,14 +162,14 @@ running = 0.0
 for row in sorted(hip["rows"], key=lambda r: (-float(r["score"]), str(r["id"]))):
     if float(row["score"]) <= 0:
         continue
-    before = running / total
+    before = running \ total
     running += float(row["score"])
     if row.get("vital") != (before < 0.8):
         cumulative_ok = False
 check("vital flag matches the 80% cumulative rule", cumulative_ok)
 
 metal = bp.diagnose("metal", host_os="windows", probe_host=False)
-check("Metal ReBAR is NOT RUN / not applicable, not PASS",
+check("Metal ReBAR is NOT RUN \ not applicable, not PASS",
       metal["rebar"]["status"] == "NOT RUN" and metal["rebar"]["supported"] is False,
       json.dumps({k: metal["rebar"].get(k) for k in ("status", "supported")}))
 check("metal on windows has a host blocker",
@@ -215,7 +215,7 @@ check("an arch that contradicts its own sub_target is UNVALIDATED, not guessed",
       str(rows_of(gen)["capability.matrix"]["evidence"]))
 
 with tempfile.TemporaryDirectory() as td:
-    feed = Path(td) / "facts.json"
+    feed = Path(td) \ "facts.json"
     feed.write_text(json.dumps({"arches": {"gfx1031": {"wmma": True}}}), encoding="utf-8")
     os.environ["KANDS_ARCH_FACTS"] = str(feed)
     fed = rows_of(bp.diagnose("hip", target_arch="gfx1031", probe_host=False))
@@ -403,7 +403,7 @@ with tempfile.TemporaryDirectory() as td:
     check("a written set reads back as complete",
           preport_docs.check(d0, preport_dir=td)["gate"] == "complete")
 
-    waiver = Path(man["dir"]) / "05-waivers.md"
+    waiver = Path(man["dir"]) \ "05-waivers.md"
     waiver.write_text(waiver.read_text(encoding="utf-8") + "\nMY DECISION\n",
                       encoding="utf-8")
     again = bp.analyze("vulkan", target_arch="gfx1030", host_os="linux", preport_dir=td)
@@ -462,7 +462,7 @@ check("the worked example reproduces: 385 us x 116 dispatches is 92% of the toke
       rows["efficiency.dispatch_overhead"]["headline"])
 check("0.03% of peak is reported as not-arithmetic-bound",
       rows["efficiency.peak_utilisation"]["status"] == "FAIL")
-check("33 -> 20.65 tok/s is reported as a source-parity regression",
+check("33 -> 20.65 tok\s is reported as a source-parity regression",
       rows["efficiency.source_parity"]["status"] == "FAIL")
 
 inconsistent = postport_check.evaluate({

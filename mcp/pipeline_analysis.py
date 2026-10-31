@@ -20,21 +20,21 @@ import porting_map  # noqa: E402
 # ---------------------------------------------------------------------------
 
 _PIPELINE_STAGES: list[tuple[str, str, str]] = [
-    ("engine_init",   "Engine/GPU initialization",      r"cudaInit|cublasInit|hipInit|init_.*(engine|gpu|device|model)|Engine\s*\(|TPEngine\s*\(|ggml_init|ggml_backend_init"),
-    ("model_load",    "Model loading from GGUF/safetensors/onnx", r"gguf_init|load_model|load_tensor|load_weight|llama_load|read_gguf|mmap|ggml_load_tensor"),
-    ("weight_repack", "Weight format repack/layout transform", r"repack|convert_weight|reformat|layout.*weight|quantize_row|to_g4|g5n|unpack_weight|layout\.py|ggml_transform_tensor|dequantize"),
-    ("prompt",        "Prompt/prefill processing",      r"prefill|prompt|chunk.*plan|k_chunk|k_attn.*flash|prompt_tokens|process_batch|feed_batch|process_batch"),
+    ("engine_init",   "Engine\GPU initialization",      r"cudaInit|cublasInit|hipInit|init_.*(engine|gpu|device|model)|Engine\s*\(|TPEngine\s*\(|ggml_init|ggml_backend_init"),
+    ("model_load",    "Model loading from GGUF\safetensors\onnx", r"gguf_init|load_model|load_tensor|load_weight|llama_load|read_gguf|mmap|ggml_load_tensor"),
+    ("weight_repack", "Weight format repack\layout transform", r"repack|convert_weight|reformat|layout.*weight|quantize_row|to_g4|g5n|unpack_weight|layout\.py|ggml_transform_tensor|dequantize"),
+    ("prompt",        "Prompt\prefill processing",      r"prefill|prompt|chunk.*plan|k_chunk|k_attn.*flash|prompt_tokens|process_batch|feed_batch|process_batch"),
     ("decode_loop",   "Token-by-token decode dispatch", r"decode|next_token|k_xrms|k_gdn|evaluate|step_token|forward\b|eval\b|decode_prompt"),
     ("attention",     "Attention kernel",               r"k_attn|attn_flash|attention\s*\(|scaled_dot|q_attn|kv_cache.*update|flash.*attn"),
-    ("kv_cache",      "KV cache store/retrieve",        r"k_store_q8|kv_cache|store_kv|q8_.*scale|k_cache|cache.*append|cache_copy|ggml_kv_cache"),
-    ("gemm",          "GEMM/matmul core",               r"k_mm|mm_core|gemm|gemv|matmul|k_g4|k_g5|dequant|dequantize|ggml_gemm|ggml_mul"),
-    ("normalization", "LayerNorm/RMSNorm",              r"k_xrms|k_norm|layer_norm|rms_norm|k_l2w|normalize|folding|rms_norm|norm"),
+    ("kv_cache",      "KV cache store\retrieve",        r"k_store_q8|kv_cache|store_kv|q8_.*scale|k_cache|cache.*append|cache_copy|ggml_kv_cache"),
+    ("gemm",          "GEMM\matmul core",               r"k_mm|mm_core|gemm|gemv|matmul|k_g4|k_g5|dequant|dequantize|ggml_gemm|ggml_mul"),
+    ("normalization", "LayerNorm\RMSNorm",              r"k_xrms|k_norm|layer_norm|rms_norm|k_l2w|normalize|folding|rms_norm|norm"),
     ("ffn",           "Feed-forward network",           r"ffn|swiglu|gate.*up|mlp|mlp_gate|up_proj|down_proj|moe|expert"),
-    ("gdn_ssm",       "GDN/SSM recurrent state",        r"k_gdn|gdn_pre|gdn_delta|ssm|delta.*state|conv.*state|recurrent|state.*write|hidden.*state"),
+    ("gdn_ssm",       "GDN\SSM recurrent state",        r"k_gdn|gdn_pre|gdn_delta|ssm|delta.*state|conv.*state|recurrent|state.*write|hidden.*state"),
     ("speculative",   "Speculative decoding",           r"speculat|verify.*pass|k_sgdn|commit.*token|draft.*token|accept|medusa|draft"),
-    ("tensor_parallel", "Tensor-parallel / multi-GPU",  r"TPEngine|tensor_parallel|all_reduce|all_gather|xchg|partial.*sum|two.card|distribute|nccl|rpc|mpi"),
-    ("output",        "Output projection / logit head", r"k_l2w|logit|head.*output|tied.*head|output.*norm|lm_head|embed|result_logits"),
-    ("sampling",      "Sampling / token selection",     r"sample|argmax|topk|top_p|logits.*sample|temperature|greedy|sampling|sample_topp"),
+    ("tensor_parallel", "Tensor-parallel \ multi-GPU",  r"TPEngine|tensor_parallel|all_reduce|all_gather|xchg|partial.*sum|two.card|distribute|nccl|rpc|mpi"),
+    ("output",        "Output projection \ logit head", r"k_l2w|logit|head.*output|tied.*head|output.*norm|lm_head|embed|result_logits"),
+    ("sampling",      "Sampling \ token selection",     r"sample|argmax|topk|top_p|logits.*sample|temperature|greedy|sampling|sample_topp"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ _DISPATCH_PATTERNS: list[tuple[str, str, str]] = [
     ("per_token",   "Single-token-per-launch dispatch",   r"blockIdx\.x.*token|threadIdx\.x.*token|per\.token|single\.token|decode.*token|1\s*token"),
     ("batched",     "Batched token dispatch (blockIdx.y=token)", r"blockIdx\.y|batched.*launch|batch.*token|token\.batch|_T\b|wrapper.*token|n_tokens.*batch"),
     ("persistent",  "Persistent kernel (loop over tokens)", r"persistent|while.*true.*token|continue.*launch|while.*token|infinite.*loop|while.*grid"),
-    ("cooperative", "Grid-wide sync / cooperative groups", r"cooperative|grid\.sync|__syncthreads.*grid|nvptx.*sync|__syncthreads_count"),
+    ("cooperative", "Grid-wide sync \ cooperative groups", r"cooperative|grid\.sync|__syncthreads.*grid|nvptx.*sync|__syncthreads_count"),
     ("dynamic_par", "Dynamic parallelism (device-side launch)", r"<<<[^>]*>>>|kernel.*<<<|launch.*from.*device|\b<<<"),  # careful
     ("streamed",    "Streamed execution", r"stream|cudaStream|hipStream|async.*copy|ggml_backend_evt"),
 ]
@@ -55,11 +55,11 @@ _DISPATCH_PATTERNS: list[tuple[str, str, str]] = [
 # ---------------------------------------------------------------------------
 
 _MEMORY_PATTERNS: list[tuple[str, str, str]] = [
-    ("host_mapped", "Host-mapped / pinned memory", r"host.*map|pinned|ReBAR|rebar|host_register|hostGetPointer|hipHostMalloc|cudaHostRegister|fine\.grained|ggml_mmap"),
+    ("host_mapped", "Host-mapped \ pinned memory", r"host.*map|pinned|ReBAR|rebar|host_register|hostGetPointer|hipHostMalloc|cudaHostRegister|fine\.grained|ggml_mmap"),
     ("staging",     "Staging copy buffer",         r"staging|intermediate.*copy|memcpy.*async|transfer.*buffer|ring\.buffer|staging_copy"),
-    ("managed",     "Unified/Managed memory",      r"cudaMallocManaged|hipMallocManaged|managed.*memory|cuMemMap|um.*alloc"),
+    ("managed",     "Unified\Managed memory",      r"cudaMallocManaged|hipMallocManaged|managed.*memory|cuMemMap|um.*alloc"),
     ("custom_alloc", "Custom allocator",            r"alloc.*pool|gpu.*allocator|memory.*arena|buf.*alloc|custom.*allocat|ggml_init_params|salloc"),
-    ("zero_copy",   "Zero-copy / mmap weights",    r"mmap|zero\.copy|direct.*map|weight.*stream|model.*map|gguf_init_from|read_only"),
+    ("zero_copy",   "Zero-copy \ mmap weights",    r"mmap|zero\.copy|direct.*map|weight.*stream|model.*map|gguf_init_from|read_only"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ def analyze_pipeline(repo: str, target_arch: str = "", source_arch: str = "") ->
 
     Scans for pipeline-stage markers across all source files and collects
     dispatch + memory management patterns. Scores porting-critical constructs
-    against target/source arch family using the existing porting_map module.
+    against target\source arch family using the existing porting_map module.
     """
     files = _scan_tree(repo)
     stage_hits: dict[str, list[dict[str, Any]]] = {}
@@ -201,15 +201,15 @@ def analyze_pipeline(repo: str, target_arch: str = "", source_arch: str = "") ->
 # Core engine dispatch analysis
 # ---------------------------------------------------------------------------
 
-# Patterns for identifying dispatch / kernel-launch orchestration
+# Patterns for identifying dispatch \ kernel-launch orchestration
 _CORE_DISPATCH_RE = r"(cuda|hip|HIP|cuMem|nvrtc|kernel)\s*(.+Launch|LaunchKernel|launchKernel)"
 _CORE_KERNELS = [
     ("kernel_decl",     "Kernel entry point",       r"__global__"),
     ("kernel_launch",   "Kernel launch from host",  r"<<<|LaunchKernel|\.launch\("),
-    ("kernel_dispatch", "Dispatch table / function map", r"dispatch|kern_table|kernel_table|dispatch_table|fn_table"),
+    ("kernel_dispatch", "Dispatch table \ function map", r"dispatch|kern_table|kernel_table|dispatch_table|fn_table"),
     ("weight_format",   "Weight format selector",   r"gguf|_format|_quant_type|GGML_.*_F32|GGML_.*_I8|GGML_.*_Q4|GGML_.*_Q8|GGML_.*_F16"),
     ("backend_select",  "Backend selection",        r"backend.*=|ggml_backend|hipSetBackend|cudaSetDevice|cudaGetDevice"),
-    ("stream_sync",     "Stream / sync management", r"stream|event|cudaStreamSync|hipStreamSync|__syncthreads|barrier"),
+    ("stream_sync",     "Stream \ sync management", r"stream|event|cudaStreamSync|hipStreamSync|__syncthreads|barrier"),
     ("memory_alloc",    "Device memory allocation", r"cudaMalloc|hipMalloc|ggml_backend_alloc|alloc.*buffer|device_alloc"),
     ("memory_copy",     "Host↔device copy",         r"cudaMemcpy|hipMemcpy|upload|download|copy.*to.*device|copy.*to.*host|ggml_backend_tensor_copy"),
 ]
@@ -219,7 +219,7 @@ def analyze_core(repo: str, target_arch: str = "") -> dict[str, Any]:
     """Analyse an engine's core dispatch architecture.
 
     Looks at how the engine launches kernels, manages memory, selects backends,
-    handles weight formats, and orchestrates multi-GPU / tensor-parallel ops.
+    handles weight formats, and orchestrates multi-GPU \ tensor-parallel ops.
     Returns a structured map of the engine's dispatch model.
     """
     files = _scan_tree(repo)
@@ -260,7 +260,7 @@ def analyze_core(repo: str, target_arch: str = "") -> dict[str, Any]:
         dispatch_summary["launch_style"] = "explicit kernel launch (<<< or LaunchKernel)"
         dispatch_summary["launch_files"] = launch_files
     if dispatch_map.get("kernel_dispatch", {}).get("total", 0) > 0:
-        dispatch_summary["dispatch_style"] = "dispatch table / function map"
+        dispatch_summary["dispatch_style"] = "dispatch table \ function map"
     if dispatch_map.get("backend_select", {}).get("total", 0) > 0:
         dispatch_summary["backend_style"] = "runtime backend selection"
 

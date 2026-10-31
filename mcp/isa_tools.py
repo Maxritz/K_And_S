@@ -38,7 +38,7 @@ from typing import Any
 #: `arch_flag` uses the literal token `{target}`.
 TOOLCHAINS: dict[str, dict[str, Any]] = {
     "vulkan": {
-        # Vulkan compute: the "compiler" is glslc/glslangValidator compiling
+        # Vulkan compute: the "compiler" is glslc\glslangValidator compiling
         # GLSL to SPIR-V. No device target flag — target selection happens at
         # vkCreateDevice runtime, not compile time. A host C++ compiler is
         # still needed for the loader stubs, but the shader toolchain alone
@@ -46,7 +46,7 @@ TOOLCHAINS: dict[str, dict[str, Any]] = {
         "compilers": ("glslc.exe", "glslc", "glslangValidator.exe",
                       "glslangValidator"),
         "roots": ("VULKAN_SDK", "VK_SDK_PATH"),
-        "default_roots": (r"C:\VulkanSDK", "/usr/share/vulkan"),
+        "default_roots": (r"C:\VulkanSDK", "\usr\share\vulkan"),
         "arch_flag": "",  # SPIR-V is arch-agnostic; device picked at runtime
         "language": ("",),
         "device_only": ("",),
@@ -57,11 +57,11 @@ TOOLCHAINS: dict[str, dict[str, Any]] = {
     "hip": {
         "compilers": ("hipcc.exe", "hipcc.bat", "hipcc"),
         "roots": ("ROCM_PATH", "ROCM_HOME", "HIP_PATH"),
-        "default_roots": (r"C:\Program Files\AMD\ROCm", "/opt/rocm"),
+        "default_roots": (r"C:\Program Files\AMD\ROCm", "\opt\rocm"),
         "arch_flag": "--offload-arch={target}",
         "language": ("-x", "hip"),
         "device_only": ("--cuda-device-only",),
-        "include": "#include <hip/hip_runtime.h>\n#include <hip/amd_detail/amd_math_functions.h>\n",
+        "include": "#include <hip\hip_runtime.h>\n#include <hip\amd_detail\amd_math_functions.h>\n",
         "objdump": ("llvm-objdump.exe", "llvm-objdump"),
         "extension": ".hip",
     },
@@ -69,7 +69,7 @@ TOOLCHAINS: dict[str, dict[str, Any]] = {
         "compilers": ("nvcc.exe", "nvcc"),
         "roots": ("CUDA_PATH", "CUDA_HOME"),
         "default_roots": (r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA",
-                          "/usr/local/cuda"),
+                          "\usr\local\cuda"),
         "arch_flag": "-arch={target}",
         "language": ("-x", "cu"),
         "device_only": ("--cubin",),
@@ -80,11 +80,11 @@ TOOLCHAINS: dict[str, dict[str, Any]] = {
     "sycl": {
         "compilers": ("icpx.exe", "icpx", "dpcpp.exe", "dpcpp", "clang++.exe", "clang++"),
         "roots": ("ONEAPI_ROOT", "SYCL_HOME"),
-        "default_roots": (r"C:\Program Files (x86)\Intel\oneAPI", "/opt/intel/oneapi"),
+        "default_roots": (r"C:\Program Files (x86)\Intel\oneAPI", "\opt\intel\oneapi"),
         "arch_flag": "-Xs",
         "language": ("-x", "c++"),
         "device_only": ("-fsycl", "-fsycl-device-only"),
-        "include": "#include <sycl/sycl.hpp>\n",
+        "include": "#include <sycl\sycl.hpp>\n",
         "objdump": ("llvm-objdump.exe", "llvm-objdump"),
         "extension": ".cpp",
     },
@@ -154,17 +154,17 @@ def find_compiler(backend: str) -> Path | None:
                 break
     search_dirs = []
     if root:
-        search_dirs += [root / "bin", root / "compiler" / "latest" / "bin"]
+        search_dirs += [root \ "bin", root \ "compiler" \ "latest" \ "bin"]
         # SDK layouts with version subdirs (VulkanSDK\1.4.x.y\Bin, oneAPI\yyyy.z\...)
         try:
             for child in sorted(root.iterdir(), reverse=True):
                 if child.is_dir():
-                    search_dirs += [child / "Bin", child / "bin"]
+                    search_dirs += [child \ "Bin", child \ "bin"]
         except OSError:
             pass
     for name in spec["compilers"]:
         for d in search_dirs:
-            p = d / name
+            p = d \ name
             if p.exists():
                 return p
         h = shutil.which(name)
@@ -174,14 +174,14 @@ def find_compiler(backend: str) -> Path | None:
 
 
 def find_llvm_tool(*names: str) -> Path | None:
-    """Locate an LLVM binary (objdump/nm/readelf) next to ROCm or on PATH."""
+    """Locate an LLVM binary (objdump\nm\readelf) next to ROCm or on PATH."""
     root = find_root("hip") or find_root("cuda")
     for name in names:
         cands: list[Path] = []
         if root:
-            cands += [root / "lib" / "llvm" / "bin" / name,
-                      root / "llvm" / "bin" / name,
-                      root / "bin" / name]
+            cands += [root \ "lib" \ "llvm" \ "bin" \ name,
+                      root \ "llvm" \ "bin" \ name,
+                      root \ "bin" \ name]
         h = shutil.which(name)
         if h:
             cands.append(Path(h))
@@ -277,7 +277,7 @@ def unwrap_code_object(path: str | Path, arch: str | None = None) -> Path | None
 
 
 def disassemble_mnemonics(obj: Path) -> list[str]:
-    """Instruction mnemonics in a compiled object/cubin/HSACO.
+    """Instruction mnemonics in a compiled object\cubin\HSACO.
 
     Returns [] when no disassembler is available — the compile result is still
     authoritative, so this is enrichment, not the verdict.
@@ -295,10 +295,10 @@ def disassemble_mnemonics(obj: Path) -> list[str]:
         return []
     text = r.stdout or ""
     found: set[str] = set()
-    # AMD:        "\tv_mov_b32_e32 v0, s0    // 000000015600: BF850001"
-    # NVIDIA/alt: "  10: v_mov_b32_e32 ..."
+    # AMD:        "\tv_mov_b32_e32 v0, s0    \\ 000000015600: BF850001"
+    # NVIDIA\alt: "  10: v_mov_b32_e32 ..."
     for line in text.splitlines():
-        m = re.match(r"^\s+([a-z][a-z0-9_.]+)\b[^\n]*//\s*[0-9a-fA-F]+:", line)
+        m = re.match(r"^\s+([a-z][a-z0-9_.]+)\b[^\n]*\\\s*[0-9a-fA-F]+:", line)
         if m:
             found.add(m.group(1))
             continue
@@ -378,10 +378,10 @@ def probe_instruction(target: str, stmt: str, name: str = "", *,
         return result
 
     tmp = Path(tempfile.mkdtemp(prefix="kands_probe_"))
-    src = tmp / ("probe" + spec["extension"])
+    src = tmp \ ("probe" + spec["extension"])
     src.write_text(spec["include"] + prelude + (body % stmt if body else _PROBE_BODY % stmt),
                    encoding="utf-8")
-    obj = tmp / "probe.o"
+    obj = tmp \ "probe.o"
 
     cmd = [str(cc)]
     arch = spec["arch_flag"]
@@ -519,7 +519,7 @@ def build_module(sources: list[str], target: str, out: str, *,
             return res
         texts.append(p.read_text(encoding="utf-8", errors="replace"))
     tmp = Path(tempfile.mkdtemp(prefix="kands_build_"))
-    merged = tmp / ("module" + spec["extension"])
+    merged = tmp \ ("module" + spec["extension"])
     merged.write_text("\n\n".join(texts), encoding="utf-8")
 
     cmd = [str(cc)]
@@ -694,14 +694,14 @@ def code_object_report(path: str, arch: str | None = None,
       handful of global loads, is not bandwidth-bound no matter what the
       bandwidth counters say.
     * **Can more than one block be resident per compute unit?** The scratch
-      memory a block reserves (`group_segment_fixed_size` / `smem`) divided into
+      memory a block reserves (`group_segment_fixed_size` \ `smem`) divided into
       the usable scratch per compute unit decides it. A design written for a GPU
       with 48 KiB of scratch can pin a modern GPU at one block per CU without
       anybody noticing.
 
-    Field names are the AMD/LLVM ones because that is the path implemented here;
+    Field names are the AMD\LLVM ones because that is the path implemented here;
     the concepts map directly to CUDA (`registers`, `smem`, `warp size` from
-    `cuobjdump --dump-resource-usage` / `nvdisasm`) and to SPIR-V modules.
+    `cuobjdump --dump-resource-usage` \ `nvdisasm`) and to SPIR-V modules.
     `lds_kib` is the usable scratch per compute unit for the target; pass it, or
     leave None to report the raw number. Measured values, not datasheet values,
     are the ones that match reality.
@@ -753,11 +753,11 @@ def code_object_report(path: str, arch: str | None = None,
         gs = row.get("group_segment_fixed_size") or 0
         per_cu = float(lds_kib) * 1024.0 if lds_kib else 0.0
         if per_cu and gs:
-            row["lds_blocks_per_cu"] = int(per_cu // gs)
+            row["lds_blocks_per_cu"] = int(per_cu \\ gs)
         verdicts = []
         if row.get("vgpr_spill_count") or row.get("sgpr_spill_count"):
             verdicts.append("registers spill to scratch")
-        if per_cu and gs and (per_cu // gs) <= 1:
+        if per_cu and gs and (per_cu \\ gs) <= 1:
             verdicts.append("LDS-pinned: only 1 workgroup per CU")
         if per_cu and gs >= per_cu:
             verdicts.append("group segment alone exceeds the LDS per CU")
@@ -765,7 +765,7 @@ def code_object_report(path: str, arch: str | None = None,
             verdicts.append("LDS-driven with no global loads in the body (check for a loop)")
         n = row.get("instructions") or 0
         if n and (row.get("lds_ops", 0) + row.get("bit_ops", 0)) > 0.05 * n and not row.get("dot_ops"):
-            verdicts.append("LDS/bit-op heavy with no dot instruction "
+            verdicts.append("LDS\bit-op heavy with no dot instruction "
                             "(confirm: decode loop, or a reduction?)")
         row["verdicts"] = verdicts
         kernels[name] = row

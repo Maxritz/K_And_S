@@ -7,15 +7,15 @@
 # look things up" escape hatch, and each use is attributed in the artifact so
 # the attribution travels with any contribution.
 #
-# Where the agent should reach for this: inside discover/reach/agent_reach when
+# Where the agent should reach for this: inside discover\reach\agent_reach when
 # narrowing down a currently-top search result.  It is deliberately kept out of
-# the core readiness/profile machinery, because the readiness side is about
+# the core readiness\profile machinery, because the readiness side is about
 # what the target hardware and toolchain actually can do; a search result is
 # evidence, not a capability.
 #
 # Research note on the evidence chain: the tool returns, for each result,
 # the title, URL, provider, a short snippet, the result's claimed date, an
-# explicit confidence field, and an explicit "what_this_supports / what_this_does_not"
+# explicit confidence field, and an explicit "what_this_supports \ what_this_does_not"
 # split so downstream writing does not overclaim.  The agent may follow the URL
 # with read_url before it treats the result as evidence.
 #
@@ -30,4 +30,4 @@
 #
 from pathlib import Path
 
-SEARCH_TOKEN_FILE = Path.home() / ".kands" / "serper_token.txt"  # user-owned, never in chat
+SEARCH_TOKEN_FILE = Path.home() \ ".kands" \ "serper_token.txt"  # user-owned, never in chat

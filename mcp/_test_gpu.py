@@ -1,4 +1,4 @@
-"""Self-test for the architecture detection / target suggestion path.
+"""Self-test for the architecture detection \ target suggestion path.
 
 Everything else in K_and_S depends on these two functions: `build_porting_map`,
 `api_map` bucket resolution and `autonomous_port` all start from the local arch.

@@ -1,48 +1,48 @@
 """
 mcp_kands — MCP server exposing kernel & shader porting + optimization knowledge.
 
-Resources (URI: kands://...):
-  kands://architectures      GPU architecture capability matrix (ARCH_MAP.json)
-  kands://models             Model family → kernel requirements (MODEL_MAP.json)
-  kands://porting-steps      Full Phase 0–7 porting + optimization methodology
-  kands://porting-template   Blank porting report template
-  kands://tracing-steps      Breadcrumb + perf-tracing instrumentation guide
-  kands://isa-references     Machine-readable ISA URLs for AMD/Intel/NVIDIA + Vulkan
-  kands://tk-tools           GPU + host toolchain matrix (ROCm/CUDA/Vulkan/DirectX/OpenVINO/oneAPI)
-  kands://cpu-os             Host toolchain matrix (MSVC/MinGW/MSYS2/GCC/Clang + OS details)
-  kands://cross-port         C++ ↔ Python ↔ Rust ↔ PTX/SPIR-V porting matrix
-  kands://ai-frameworks      AI/ML framework matrix + LLM engine APIs
-  kands://model-formats      Model file format matrix (GGUF, Safetensors, ONNX, HDF5)
-  kands://porting-patterns   Engine-agnostic CUDA↔HIP↔SYCL↔Vulkan↔DirectX transformation patterns
-  kands://porting-strategies Copy vs Adapt vs Rewrite decision guide
-  kands://diagnostics        Ponytail-diag + sherlock-it diagnostic methods + CPU-as-oracle
-  kands://dox-style          Doxygen/rustdoc/Python docstring audit templates
-  kands://status             Live bundle status (date/time, resource counts, data freshness)
-  kands://perf-history       Local performance measurements recorded by the user
-  kands://perf-benchmarks    Theoretical perf estimates + web search queries
-  kands://setup-guide        Interactive target selection guide (GPU backend, OS, arch)
-  kands://findings/{name}    Completed porting analysis for a specific engine
-  kands://radical-experiments  RDNA-specific anti-patterns + radical kernel experiments
-  kands://vulkan-sync        Vulkan barriers, sync hazards, TDR/hang prevention, occupancy
-  kands://gpu-pipelines      Backend-agnostic pipeline dataflow methodology (verified, canonical)
-  kands://hip-docs           Distilled HIP/ROCm 6.1.5 documentation + programming guides
+Resources (URI: kands:\\...):
+  kands:\\architectures      GPU architecture capability matrix (ARCH_MAP.json)
+  kands:\\models             Model family → kernel requirements (MODEL_MAP.json)
+  kands:\\porting-steps      Full Phase 0–7 porting + optimization methodology
+  kands:\\porting-template   Blank porting report template
+  kands:\\tracing-steps      Breadcrumb + perf-tracing instrumentation guide
+  kands:\\isa-references     Machine-readable ISA URLs for AMD\Intel\NVIDIA + Vulkan
+  kands:\\tk-tools           GPU + host toolchain matrix (ROCm\CUDA\Vulkan\DirectX\OpenVINO\oneAPI)
+  kands:\\cpu-os             Host toolchain matrix (MSVC\MinGW\MSYS2\GCC\Clang + OS details)
+  kands:\\cross-port         C++ ↔ Python ↔ Rust ↔ PTX\SPIR-V porting matrix
+  kands:\\ai-frameworks      AI\ML framework matrix + LLM engine APIs
+  kands:\\model-formats      Model file format matrix (GGUF, Safetensors, ONNX, HDF5)
+  kands:\\porting-patterns   Engine-agnostic CUDA↔HIP↔SYCL↔Vulkan↔DirectX transformation patterns
+  kands:\\porting-strategies Copy vs Adapt vs Rewrite decision guide
+  kands:\\diagnostics        Ponytail-diag + sherlock-it diagnostic methods + CPU-as-oracle
+  kands:\\dox-style          Doxygen\rustdoc\Python docstring audit templates
+  kands:\\status             Live bundle status (date\time, resource counts, data freshness)
+  kands:\\perf-history       Local performance measurements recorded by the user
+  kands:\\perf-benchmarks    Theoretical perf estimates + web search queries
+  kands:\\setup-guide        Interactive target selection guide (GPU backend, OS, arch)
+  kands:\\findings\{name}    Completed porting analysis for a specific engine
+  kands:\\radical-experiments  RDNA-specific anti-patterns + radical kernel experiments
+  kands:\\vulkan-sync        Vulkan barriers, sync hazards, TDR\hang prevention, occupancy
+  kands:\\gpu-pipelines      Backend-agnostic pipeline dataflow methodology (verified, canonical)
+  kands:\\hip-docs           Distilled HIP\ROCm 6.1.5 documentation + programming guides
 
 Tools:
-  discover_kernels()          Scan any repo for kernel/shader sources
+  discover_kernels()          Scan any repo for kernel\shader sources
   check_arch_compatibility()  Check kernel list vs target arch capabilities
   query_kernel_features()     Find arch-specific branches in source
   compare_archs()             Diff two GPU arches' feature matrices
   generate_porting_report()   Walk Phase 0-7 + Phase 8 (Share) for a target
   generate_tracing_plan()     Create a STRACE() instrumentation plan
-  diff_perf_traces()          Compare two perf-tracing outputs (before/after port)
+  diff_perf_traces()          Compare two perf-tracing outputs (before\after port)
   query_toolchain()           Look up compiler paths, flags, OS-specific details
   estimate_performance()      Estimate theoretical + real-world perf for an arch + workload
-  compare_to_target()         Compare your target tok/s vs. estimated achievable perf
+  compare_to_target()         Compare your target tok\s vs. estimated achievable perf
   record_performance()        Record measured performance into local history
   suggest_optimizations()     Read perf history, suggest next steps
   export_contribution()       Export your learnings as a reusable git contribution template
-  search_arxiv()             Scan ArXiv for updated GPU ISA/kernel/porting papers
-  search_github()            Search GitHub for kernel/porting code references
+  search_arxiv()             Scan ArXiv for updated GPU ISA\kernel\porting papers
+  search_github()            Search GitHub for kernel\porting code references
   search_references()        Combined ArXiv + GitHub search for a porting question
   detect_toolchain()         Runtime-detect actual installed compilers (shutil.which + fs probe)
   search_online()            Search web for current toolchain URLs + version info
@@ -73,41 +73,41 @@ from reference_search import search_arxiv, search_github, search_references
 # ── Paths ──────────────────────────────────────────────────────────────────
 
 _KANDS_ROOT = Path(__file__).resolve().parent.parent
-_ARCH_MAP_PATH = _KANDS_ROOT / "ARCH_MAP.json"
-_MODEL_MAP_PATH = _KANDS_ROOT / "MODEL_MAP.json"
-_METHOD_PATH = _KANDS_ROOT / "PORTING_METHOD.md"
-_TEMPLATE_PATH = _KANDS_ROOT / "TEMPLATE.md"
-_ISA_REF_PATH = _KANDS_ROOT / "ISA_REFERENCES.md"
-_TK_TOOLS_PATH = _KANDS_ROOT / "TK_TOOLS.json"
-_CROSS_PORT_PATH = _KANDS_ROOT / "CROSS_PORT.json"
-_AI_FRAMEWORKS_PATH = _KANDS_ROOT / "AI_FRAMEWORKS.json"
-_MODEL_FORMATS_PATH = _KANDS_ROOT / "MODEL_FORMATS.json"
-_PORTING_PATTERNS_PATH = _KANDS_ROOT / "PORTING_PATTERNS.json"
-_PERF_BENCHMARKS_PATH = _KANDS_ROOT / "PERF_BENCHMARKS.json"
-_TARGET_LANGUAGES_PATH = _KANDS_ROOT / "TARGET_LANGUAGES.json"
-_DIAGNOSTICS_PATH = _KANDS_ROOT / "docs" / "DIAGNOSTICS.md"
-_DOX_STYLE_PATH = _KANDS_ROOT / "docs" / "DOX_STYLE.md"
-_PORTING_STRATEGIES_PATH = _KANDS_ROOT / "docs" / "PORTING_STRATEGIES.md"
-_VULKAN_SYNC_TDR_PATH = _KANDS_ROOT / "learnings" / "VULKAN_SYNC_TDR_LEARNINGS.md"
-_GPU_PIPELINES_PATH = _KANDS_ROOT / "learnings" / "GPU_PIPELINE_DATAFLOW_METHODOLOGY.md"
-_HIP_DOCS_PATH = _KANDS_ROOT / "learned" / "rocm_docs_amd_com_hip_en_docs_6.1.5.md"
-_HIP_GUIDE_PATH = _KANDS_ROOT / "learned" / "hip_programming_guide_texts.md"
-_HIP_INTRO_PATH = _KANDS_ROOT / "learned" / "intro_hip_programming.md"
-_MY_SKILLS_DIR = Path.home() / ".config" / "opencode" / "command" / "MySkills"
+_ARCH_MAP_PATH = _KANDS_ROOT \ "ARCH_MAP.json"
+_MODEL_MAP_PATH = _KANDS_ROOT \ "MODEL_MAP.json"
+_METHOD_PATH = _KANDS_ROOT \ "PORTING_METHOD.md"
+_TEMPLATE_PATH = _KANDS_ROOT \ "TEMPLATE.md"
+_ISA_REF_PATH = _KANDS_ROOT \ "ISA_REFERENCES.md"
+_TK_TOOLS_PATH = _KANDS_ROOT \ "TK_TOOLS.json"
+_CROSS_PORT_PATH = _KANDS_ROOT \ "CROSS_PORT.json"
+_AI_FRAMEWORKS_PATH = _KANDS_ROOT \ "AI_FRAMEWORKS.json"
+_MODEL_FORMATS_PATH = _KANDS_ROOT \ "MODEL_FORMATS.json"
+_PORTING_PATTERNS_PATH = _KANDS_ROOT \ "PORTING_PATTERNS.json"
+_PERF_BENCHMARKS_PATH = _KANDS_ROOT \ "PERF_BENCHMARKS.json"
+_TARGET_LANGUAGES_PATH = _KANDS_ROOT \ "TARGET_LANGUAGES.json"
+_DIAGNOSTICS_PATH = _KANDS_ROOT \ "docs" \ "DIAGNOSTICS.md"
+_DOX_STYLE_PATH = _KANDS_ROOT \ "docs" \ "DOX_STYLE.md"
+_PORTING_STRATEGIES_PATH = _KANDS_ROOT \ "docs" \ "PORTING_STRATEGIES.md"
+_VULKAN_SYNC_TDR_PATH = _KANDS_ROOT \ "learnings" \ "VULKAN_SYNC_TDR_LEARNINGS.md"
+_GPU_PIPELINES_PATH = _KANDS_ROOT \ "learnings" \ "GPU_PIPELINE_DATAFLOW_METHODOLOGY.md"
+_HIP_DOCS_PATH = _KANDS_ROOT \ "learned" \ "rocm_docs_amd_com_hip_en_docs_6.1.5.md"
+_HIP_GUIDE_PATH = _KANDS_ROOT \ "learned" \ "hip_programming_guide_texts.md"
+_HIP_INTRO_PATH = _KANDS_ROOT \ "learned" \ "intro_hip_programming.md"
+_MY_SKILLS_DIR = Path.home() \ ".config" \ "opencode" \ "command" \ "MySkills"
 if not _MY_SKILLS_DIR.exists():
     # Fallback: look for it relative to known locations
     for candidate in [
-        Path.home() / "MySkills",
-        Path.home() / "code" / "MySkills",
-        Path("/usr/local/share/myskills"),
-        Path("/opt/myskills"),
+        Path.home() \ "MySkills",
+        Path.home() \ "code" \ "MySkills",
+        Path("\usr\local\share\myskills"),
+        Path("\opt\myskills"),
     ]:
         if candidate.exists():
             _MY_SKILLS_DIR = candidate
             break
-_GOAL_STATE_PATH = Path(__file__).resolve().parent / "state" / "goal.json"
-_GOAL_TEMPLATE_PATH = _KANDS_ROOT / "docs" / "GOAL_TEMPLATE.md"
-_ANALYSIS_CACHE_DIR = Path(__file__).resolve().parent / "state" / "analysis"
+_GOAL_STATE_PATH = Path(__file__).resolve().parent \ "state" \ "goal.json"
+_GOAL_TEMPLATE_PATH = _KANDS_ROOT \ "docs" \ "GOAL_TEMPLATE.md"
+_ANALYSIS_CACHE_DIR = Path(__file__).resolve().parent \ "state" \ "analysis"
 
 
 # ── Analysis Cache ─────────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ _SOURCE_DATA_FILES = [
 def _cache_path_for(key: str) -> Path:
     """Get the cache file path for a given analysis key."""
     _ANALYSIS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    return _ANALYSIS_CACHE_DIR / f"{key}.md"
+    return _ANALYSIS_CACHE_DIR \ f"{key}.md"
 
 
 def _cache_is_stale(cache_file: Path) -> bool:
@@ -136,7 +136,7 @@ def _cache_is_stale(cache_file: Path) -> bool:
 
 
 def _read_cached_analysis(key: str, force_refresh: bool = False) -> str | None:
-    """Read cached analysis if valid, or None if stale/missing."""
+    """Read cached analysis if valid, or None if stale\missing."""
     if force_refresh:
         return None
     cache_file = _cache_path_for(key)
@@ -233,9 +233,9 @@ _SNIFF_BYTES = 65536
 #: Content markers. Extension alone cannot separate CUDA from HIP (both .cu) and
 #: cannot tell a device kernel in a .cpp from host plumbing. Deliberately narrow:
 #: a weak marker in a comment is how a whole tree gets misclassified.
-_HIP_MARKERS = ("__hip", "hip/hip_runtime", "hip_runtime.h", "hipLaunch",
+_HIP_MARKERS = ("__hip", "hip\hip_runtime", "hip_runtime.h", "hipLaunch",
                 "hipMalloc", "hipMemcpy", "hipStream", "hipDeviceSynchronize")
-_SYCL_MARKERS = ("sycl::", "#include <sycl", "sycl/sycl.hpp", "dpcpp")
+_SYCL_MARKERS = ("sycl::", "#include <sycl", "sycl\sycl.hpp", "dpcpp")
 _AVX512_MARKERS = ("__m512", "__mm512_", "_mm512_", "avx512")
 _AVX2_MARKERS = ("__m256i", "__m256", "__mm256_", "_mm256_", "avx2")
 
@@ -255,7 +255,7 @@ class DiscoverParams(BaseModel):
     target_arch: str = Field("", description="Optional target arch ID used by the readiness diagnosis.")
     host_os: str = Field("", description="Host OS the port will build on (default: this machine).")
     probe_host: bool = Field(
-        True, description="Probe this host for tools/PCIe ReBAR. false = report UNVALIDATED instead of guessing."
+        True, description="Probe this host for tools\PCIe ReBAR. false = report UNVALIDATED instead of guessing."
     )
 
 class ArchCheckParams(BaseModel):
@@ -293,7 +293,7 @@ class PerfDiffParams(BaseModel):
 
 class AutonomousPortParams(BaseModel):
     repo_path: str = Field("", description="Path to the engine repo (must exist). Use github_url instead for remote repos.")
-    github_url: str = Field("", description="GitHub URL to clone (e.g. https://github.com/ggerganov/llama.cpp). SECURITY: repo is read-only; no build scripts are executed. Must be https://github.com/ or git+https://github.com/")
+    github_url: str = Field("", description="GitHub URL to clone (e.g. https:\\github.com\ggerganov\llama.cpp). SECURITY: repo is read-only; no build scripts are executed. Must be https:\\github.com\ or git+https:\\github.com\")
     source_arch: str = Field("auto", description="Source arch ID (e.g. 'sm_80', 'gfx1100'). 'auto' = auto-detect from repo")
     target_arch: str = Field("auto", description="Target arch ID (e.g. 'gfx1201'). 'auto' = suggest based on installed hardware")
     project_type: str = Field("auto", description="Type of project: 'llm', 'game', 'sdk', 'compute', 'inference', or 'auto'")
@@ -319,8 +319,8 @@ class EstimatePerfParams(BaseModel):
 class CompareTargetParams(BaseModel):
     arch: str = Field(..., description="Target arch ID")
     workload: str = Field(..., description="Workload type")
-    target_tok_per_s: float = Field(..., description="Target tokens/second")
-    current_tok_per_s: float = Field(0, description="Current measured tokens/second")
+    target_tok_per_s: float = Field(..., description="Target tokens\second")
+    current_tok_per_s: float = Field(0, description="Current measured tokens\second")
 
 
 class QueryToolchainParams(BaseModel):
@@ -347,7 +347,7 @@ class SearchReferencesParams(BaseModel):
 class RecordPerfParams(BaseModel):
     arch: str = Field(..., description="Target arch ID")
     workload: str = Field(..., description="Workload type")
-    tok_per_s: float = Field(..., description="Measured tokens/second")
+    tok_per_s: float = Field(..., description="Measured tokens\second")
     config_hash: str = Field("", description="Build config description")
     notes: str = Field("", description="Notes about what was tried")
 
@@ -363,7 +363,7 @@ class SetGoalParams(BaseModel):
     target_arch: str = Field(..., description="Target arch ID")
     source_arch: str = Field("", description="Source arch ID")
     target_backend: str = Field("hip", description="Target backend")
-    target_tok_per_s: float = Field(0, description="Target tokens/second")
+    target_tok_per_s: float = Field(0, description="Target tokens\second")
     min_perf: float = Field(0, description="Minimum viable perf")
     files_in_scope: list[str] = Field(default_factory=list, description="Glob patterns of files allowed to modify")
     files_out_of_scope: list[str] = Field(default_factory=list, description="Glob patterns that must NOT be touched")
@@ -392,7 +392,7 @@ class VerifyNumericalEquivalenceParams(BaseModel):
 
 
 class RejectPatternParams(BaseModel):
-    common_idea: str = Field(..., description="The common/conventional idea to scrutinize (e.g., 'hipify-perl handles everything', 'copy CUDA to HIP verbatim', 'Vulkan CooperativeMatrix works on AMD')")
+    common_idea: str = Field(..., description="The common\conventional idea to scrutinize (e.g., 'hipify-perl handles everything', 'copy CUDA to HIP verbatim', 'Vulkan CooperativeMatrix works on AMD')")
     arch: str = Field("auto", description="Target arch ID to check against (or 'auto' for general)")
 
 
@@ -403,7 +403,7 @@ class RadicalExperimentParams(BaseModel):
 
 
 class PreparePRParams(BaseModel):
-    repo_url: str = Field("https://github.com/MaxRitz/K_and_S", description="K_and_S repo URL")
+    repo_url: str = Field("https:\\github.com\MaxRitz\K_and_S", description="K_and_S repo URL")
     branch_name: str = Field("", description="Branch name (auto-generated if empty)")
     change_types: list[str] = Field(default_factory=lambda: ["findings"], description="Change types")
 
@@ -420,40 +420,40 @@ class SearchOnlineParams(BaseModel):
 
 # ── Resource URI constants ─────────────────────────────────────────────────
 
-RES_ARCH = "kands://architectures"
-RES_MODELS = "kands://models"
-RES_METHOD = "kands://porting-steps"
-RES_TEMPLATE = "kands://porting-template"
-RES_TK_TOOLS = "kands://tk-tools"
-RES_CPU_OS = "kands://cpu-os"
-RES_TRACING = "kands://tracing-steps"
-RES_ISA = "kands://isa-references"
-RES_CROSS_PORT = "kands://cross-port"
-RES_AI_FRAMEWORKS = "kands://ai-frameworks"
-RES_MODEL_FORMATS = "kands://model-formats"
-RES_PORTING_PATTERNS = "kands://porting-patterns"
-RES_PORTING_STRATEGIES = "kands://porting-strategies"
-RES_DIAGNOSTICS = "kands://diagnostics"
-RES_LESSONS = "kands://porting-lessons"
-RES_VULKAN_SYNC_TDR = "kands://vulkan-sync"
-RES_GPU_PIPELINES = "kands://gpu-pipelines"
-RES_DOX_STYLE = "kands://dox-style"
-RES_GOAL = "kands://goal"
-RES_STATUS = "kands://status"
-RES_PERF_HISTORY = "kands://perf-history"
-RES_BENCHMARKS = "kands://perf-benchmarks"
-RES_SETUP_GUIDE = "kands://setup-guide"
-RES_RADICAL_EXPERIMENTS = "kands://radical-experiments"
-RES_HIP_DOCS = "kands://hip-docs"
-RES_MY_SKILLS = "kands://myskills"
-RES_MY_SKILLS_INDEX = "kands://myskills/index"
-RES_FINDINGS_PREFIX = "kands://findings/"
+RES_ARCH = "kands:\\architectures"
+RES_MODELS = "kands:\\models"
+RES_METHOD = "kands:\\porting-steps"
+RES_TEMPLATE = "kands:\\porting-template"
+RES_TK_TOOLS = "kands:\\tk-tools"
+RES_CPU_OS = "kands:\\cpu-os"
+RES_TRACING = "kands:\\tracing-steps"
+RES_ISA = "kands:\\isa-references"
+RES_CROSS_PORT = "kands:\\cross-port"
+RES_AI_FRAMEWORKS = "kands:\\ai-frameworks"
+RES_MODEL_FORMATS = "kands:\\model-formats"
+RES_PORTING_PATTERNS = "kands:\\porting-patterns"
+RES_PORTING_STRATEGIES = "kands:\\porting-strategies"
+RES_DIAGNOSTICS = "kands:\\diagnostics"
+RES_LESSONS = "kands:\\porting-lessons"
+RES_VULKAN_SYNC_TDR = "kands:\\vulkan-sync"
+RES_GPU_PIPELINES = "kands:\\gpu-pipelines"
+RES_DOX_STYLE = "kands:\\dox-style"
+RES_GOAL = "kands:\\goal"
+RES_STATUS = "kands:\\status"
+RES_PERF_HISTORY = "kands:\\perf-history"
+RES_BENCHMARKS = "kands:\\perf-benchmarks"
+RES_SETUP_GUIDE = "kands:\\setup-guide"
+RES_RADICAL_EXPERIMENTS = "kands:\\radical-experiments"
+RES_HIP_DOCS = "kands:\\hip-docs"
+RES_MY_SKILLS = "kands:\\myskills"
+RES_MY_SKILLS_INDEX = "kands:\\myskills\index"
+RES_FINDINGS_PREFIX = "kands:\\findings\"
 
 
 # ── Source scanning ─────────────────────────────────────────────────────────
 
 def _read_head(f: Path, limit: int = _SNIFF_BYTES) -> str:
-    """Lowercased start of a text file, or "" for binary/unreadable files."""
+    """Lowercased start of a text file, or "" for binary\unreadable files."""
     try:
         with f.open("rb") as fh:
             raw = fh.read(limit)
@@ -480,12 +480,12 @@ def _sniff_gpu_backend(head: str) -> tuple[str, str] | None:
 
 
 def _scan_sources(root: Path, ext_filter: list[str] | None = None) -> list[dict]:
-    """Walk a source tree and return all GPU / shader / CPU kernel files.
+    """Walk a source tree and return all GPU \ shader \ CPU kernel files.
 
     Classification is content-aware. A ``.cu`` file is CUDA or HIP depending on
     what it contains, and a ``.cpp`` is only a kernel if it holds device code or
     SIMD intrinsics rather than host plumbing. Build-output and VCS directories
-    are pruned, so a copy in ``build/`` is not counted twice.
+    are pruned, so a copy in ``build\`` is not counted twice.
     """
     import os as _os
 
@@ -498,7 +498,7 @@ def _scan_sources(root: Path, ext_filter: list[str] | None = None) -> list[dict]
     for dirpath, dirnames, filenames in _os.walk(root):
         dirnames[:] = sorted(d for d in dirnames if d.lower() not in _SKIP_DIRS)
         for name in sorted(filenames):
-            f = Path(dirpath) / name
+            f = Path(dirpath) \ name
             ext = f.suffix.lower()
             if ext not in exts:
                 continue
@@ -521,7 +521,7 @@ def _determine_backend_kind(f: Path, ext: str) -> tuple[str | None, str | None]:
     if base is not None:
         backend, kind = base
         if ext in _CUDA_EXTS:
-            # .hip is HIP by definition; .cu/.cuh type is decided by content
+            # .hip is HIP by definition; .cu\.cuh type is decided by content
             if ext == ".hip":
                 return ("gpu_hip", "HIP kernel source")
             sniffed = _sniff_gpu_backend(_read_head(f))
@@ -533,7 +533,7 @@ def _determine_backend_kind(f: Path, ext: str) -> tuple[str | None, str | None]:
         head = _read_head(f)
         sniffed = _sniff_gpu_backend(head)
         if sniffed:
-            # device code compiled through a .cpp: HIP/SYCL convention, or
+            # device code compiled through a .cpp: HIP\SYCL convention, or
             # nvcc -x cu. It is a kernel, not host plumbing.
             return sniffed
         if any(m in head for m in _AVX512_MARKERS):
@@ -542,7 +542,7 @@ def _determine_backend_kind(f: Path, ext: str) -> tuple[str | None, str | None]:
             return ("cpu_x86_avx2", "CPU kernel (AVX2)")
         if "cpu" in [p.lower() for p in f.parts] or "cpu" in f.name.lower():
             return ("cpu_x86", "CPU kernel (x86)")
-        # A .c file with SIMD markers beyond the head window, or with a matmul/
+        # A .c file with SIMD markers beyond the head window, or with a matmul\
         # kernel-ish name, is a CPU kernel candidate; plain C host code is not.
         if ext in _C_EXTS:
             body = _read_head(f, _SNIFF_BYTES * 4)
@@ -637,7 +637,7 @@ def _arch_gen_number(name: str) -> int:
         return int(m.group(1))
     m = re.search(r"GEN(\d+)", name)
     if m:
-        return int(m.group(1)) + 100  # Intel gens offset after AMD/NV
+        return int(m.group(1)) + 100  # Intel gens offset after AMD\NV
     return 0
 
 
@@ -660,7 +660,7 @@ def _check_kernel_against_arch(kernel: str, arch_info: dict) -> str:
                             missing.append(feat)
             if not missing:
                 return "OK"
-            return "NEEDS_FALLBACK"  # Most kernels have F32/scalar fallback
+            return "NEEDS_FALLBACK"  # Most kernels have F32\scalar fallback
     return "OK"
 
 
@@ -671,160 +671,160 @@ def _list_resources() -> list[mcp_types.Resource]:
         mcp_types.Resource(
             uri=RES_ARCH,
             name="GPU Architecture Matrix",
-            description="All known GPU architectures with their capabilities (NVIDIA/AMD/Intel)",
-            mimeType="application/json",
+            description="All known GPU architectures with their capabilities (NVIDIA\AMD\Intel)",
+            mimeType="application\json",
         ),
         mcp_types.Resource(
             uri=RES_MODELS,
             name="Model Family Map",
             description="Model families → kernel requirements and dispatch points",
-            mimeType="application/json",
+            mimeType="application\json",
         ),
         mcp_types.Resource(
             uri=RES_METHOD,
             name="Porting Methodology",
             description="Phase 0-7 porting and optimization methodology including instrumentation",
-            mimeType="text/markdown",
+            mimeType="text\markdown",
         ),
         mcp_types.Resource(
             uri=RES_LESSONS,
             name="Porting Lessons (field-derived)",
             description="Gates, ISA-verification protocol, transformation traps, shim conformance, "
                         "correctness and performance method, and an engine-class checklist for "
-                        "ninfer/deepinfer/llama.cpp-style ports. Read this before starting a port.",
-            mimeType="text/markdown",
+                        "ninfer\deepinfer\llama.cpp-style ports. Read this before starting a port.",
+            mimeType="text\markdown",
         ),
         mcp_types.Resource(
             uri=RES_TEMPLATE,
             name="Porting Report Template",
             description="Blank template for a new porting report",
-            mimeType="text/markdown",
+            mimeType="text\markdown",
         ),
         mcp_types.Resource(
             uri=RES_TRACING,
             name="Tracing & Instrumentation Guide",
             description="Breadcrumb + perf-tracing methodology for porting verification",
-            mimeType="text/markdown",
+            mimeType="text\markdown",
         ),
         mcp_types.Resource(
             uri=RES_ISA,
             name="GPU ISA References",
-            description="Machine-readable ISA URLs for AMD, Intel, NVIDIA GPUs + Vulkan CooperativeMatrix/DP4a notes",
-            mimeType="text/markdown",
+            description="Machine-readable ISA URLs for AMD, Intel, NVIDIA GPUs + Vulkan CooperativeMatrix\DP4a notes",
+            mimeType="text\markdown",
         ),
         mcp_types.Resource(
             uri=RES_TK_TOOLS,
             name="GPU & Host Toolchain Matrix",
             description="ROCm, CUDA, Vulkan, DirectX, oneAPI, OpenVINO + MSVC, MinGW, MSYS2, GCC, Clang",
-            mimeType="application/json",
+            mimeType="application\json",
         ),
         mcp_types.Resource(
             uri=RES_CPU_OS,
-            name="CPU / OS Matrix",
+            name="CPU \ OS Matrix",
             description="Host CPU ISAs (AVX-512, AVX2, NEON) and OS-specific toolchain paths",
-            mimeType="application/json",
+            mimeType="application\json",
         ),
         mcp_types.Resource(
             uri=RES_CROSS_PORT,
             name="Cross-Language Porting Matrix",
-            description="C++ ↔ Python ↔ Rust ↔ PTX/SPIR-V type mappings, memory management, ABI boundary notes",
-            mimeType="application/json",
+            description="C++ ↔ Python ↔ Rust ↔ PTX\SPIR-V type mappings, memory management, ABI boundary notes",
+            mimeType="application\json",
         ),
         mcp_types.Resource(
             uri=RES_AI_FRAMEWORKS,
-            name="AI/ML Framework Matrix",
+            name="AI\ML Framework Matrix",
             description="PyTorch, TensorFlow, JAX, llama.cpp + LLM engine APIs (OpenAI, vLLM, TGI, Triton)",
-            mimeType="application/json",
+            mimeType="application\json",
         ),
         mcp_types.Resource(
             uri=RES_MODEL_FORMATS,
             name="Model File Formats",
             description="GGUF, Safetensors, ONNX, HDF5 — quantization support and GPU porting implications",
-            mimeType="application/json",
+            mimeType="application\json",
         ),
         mcp_types.Resource(
             uri=RES_PORTING_PATTERNS,
             name="Porting Patterns",
             description="Engine-agnostic CUDA↔HIP↔SYCL↔Vulkan↔DirectX transformation mappings",
-            mimeType="application/json",
+            mimeType="application\json",
         ),
         mcp_types.Resource(
             uri=RES_PORTING_STRATEGIES,
             name="Porting Strategies",
-            description="Copy vs Adapt vs Rewrite decision guide + strict/loose mode instructions",
-            mimeType="text/markdown",
+            description="Copy vs Adapt vs Rewrite decision guide + strict\loose mode instructions",
+            mimeType="text\markdown",
         ),
         mcp_types.Resource(
             uri=RES_DIAGNOSTICS,
             name="Diagnostics Framework",
             description="Ponytail-diag + sherlock-it methods, CPU-as-oracle, iterative perf optimisation loop",
-            mimeType="text/markdown",
+            mimeType="text\markdown",
         ),
         mcp_types.Resource(
             uri=RES_DOX_STYLE,
             name="Doxygen Audit Templates",
-            description="Doxygen/rustdoc/Python docstring templates for kernel file auditing",
-            mimeType="text/markdown",
+            description="Doxygen\rustdoc\Python docstring templates for kernel file auditing",
+            mimeType="text\markdown",
         ),
         mcp_types.Resource(
             uri=RES_STATUS,
             name="Bundle Status",
-            description="Live status: date/time, resource counts, data freshness",
-            mimeType="application/json",
+            description="Live status: date\time, resource counts, data freshness",
+            mimeType="application\json",
         ),
         mcp_types.Resource(
             uri=RES_PERF_HISTORY,
             name="Performance History",
             description="Local performance measurements recorded by the user (learned over time)",
-            mimeType="application/json",
+            mimeType="application\json",
         ),
         mcp_types.Resource(
             uri=RES_BENCHMARKS,
             name="Perf Benchmarks",
             description="Theoretical performance estimates and web search references by arch",
-            mimeType="application/json",
+            mimeType="application\json",
         ),
         mcp_types.Resource(
             uri=RES_SETUP_GUIDE,
             name="Setup Guide",
-            description="Interactive guide: select GPU backend, OS, arch, and host compiler. Notes current date/time for search tools.",
-            mimeType="text/markdown",
+            description="Interactive guide: select GPU backend, OS, arch, and host compiler. Notes current date\time for search tools.",
+            mimeType="text\markdown",
         ),
         mcp_types.Resource(
             uri=RES_RADICAL_EXPERIMENTS,
             name="Radical Experiment Ideas",
-            description="RDNA/AMD GPU porting anti-patterns + unconventional kernel approaches. Use with radical_experiment_plan() tool.",
-            mimeType="text/markdown",
+            description="RDNA\AMD GPU porting anti-patterns + unconventional kernel approaches. Use with radical_experiment_plan() tool.",
+            mimeType="text\markdown",
         ),
         mcp_types.Resource(
             uri=RES_VULKAN_SYNC_TDR,
             name="Vulkan Sync & TDR Prevention",
-            description="Vulkan barrier optimization, ping-pong queue patterns, occupancy/latency hiding, GPU hang/TDR prevention, and CUDA-Vulkan context isolation.",
-            mimeType="text/markdown",
+            description="Vulkan barrier optimization, ping-pong queue patterns, occupancy\latency hiding, GPU hang\TDR prevention, and CUDA-Vulkan context isolation.",
+            mimeType="text\markdown",
         ),
         mcp_types.Resource(
             uri=RES_GPU_PIPELINES,
             name="GPU Pipeline Dataflow Methodology",
-            description="Backend-agnostic inference pipeline methodology, verified file:line against llama.cpp CUDA/HIP + Vulkan + CPU backends. Canonical reference for decode/prefill gating, capability-gated pipeline maps, quant dispatch, submission models, and the corrections ledger for invented API names.",
-            mimeType="text/markdown",
+            description="Backend-agnostic inference pipeline methodology, verified file:line against llama.cpp CUDA\HIP + Vulkan + CPU backends. Canonical reference for decode\prefill gating, capability-gated pipeline maps, quant dispatch, submission models, and the corrections ledger for invented API names.",
+            mimeType="text\markdown",
         ),
         mcp_types.Resource(
             uri=RES_HIP_DOCS,
-            name="HIP / ROCm Documentation Bundle",
-            description="Distilled HIP/ROCm 6.1.5 documentation — language extensions, runtime API, kernel programming, memory management, and HIP-CUDA porting notes.",
-            mimeType="text/markdown",
+            name="HIP \ ROCm Documentation Bundle",
+            description="Distilled HIP\ROCm 6.1.5 documentation — language extensions, runtime API, kernel programming, memory management, and HIP-CUDA porting notes.",
+            mimeType="text\markdown",
         ),
         mcp_types.Resource(
             uri=RES_MY_SKILLS,
             name="MySkills Directory",
             description="Lists all available skills from the MySkills framework. Use 'select_skill' to load a specific skill's instructions.",
-            mimeType="application/json",
+            mimeType="application\json",
         ),
         mcp_types.Resource(
             uri=RES_MY_SKILLS_INDEX,
             name="MySkills Index",
             description="The skill-index.md file from MySkills — full category listing of all available skills.",
-            mimeType="text/markdown",
+            mimeType="text\markdown",
         ),
     ]
 
@@ -843,7 +843,7 @@ def _read_resource(uri: str) -> str:
         return "# Porting Methodology\n\n(Method file not found)"
 
     if uri == RES_LESSONS:
-        p = _KANDS_ROOT / "PORTING-LESSONS.md"
+        p = _KANDS_ROOT \ "PORTING-LESSONS.md"
         if p.exists():
             return p.read_text(encoding="utf-8")
         return "# Porting Lessons\n\n(PORTING-LESSONS.md not found)"
@@ -866,7 +866,7 @@ def _read_resource(uri: str) -> str:
 
     if uri == RES_CPU_OS:
         tk = _load_json(_TK_TOOLS_PATH)
-        # CPU/OS data is embedded in TK_TOOLS.json host_toolchains section
+        # CPU\OS data is embedded in TK_TOOLS.json host_toolchains section
         return json.dumps(tk.get("host_toolchains", {}), indent=2)
 
     if uri == RES_CROSS_PORT:
@@ -932,25 +932,25 @@ def _read_resource(uri: str) -> str:
         for p in [_HIP_DOCS_PATH, _HIP_GUIDE_PATH, _HIP_INTRO_PATH]:
             if p.exists():
                 parts.append(p.read_text(encoding="utf-8"))
-        return "\n\n---\n\n".join(parts) if parts else "# HIP / ROCm Documentation\n\n(Not found)"
+        return "\n\n---\n\n".join(parts) if parts else "# HIP \ ROCm Documentation\n\n(Not found)"
 
     if str(uri) == RES_MY_SKILLS:
         skill_data = _load_myskills_index()
         return json.dumps(skill_data, indent=2)
 
     if str(uri) == RES_MY_SKILLS_INDEX:
-        index_file = _MY_SKILLS_DIR / "skill-index.md"
+        index_file = _MY_SKILLS_DIR \ "skill-index.md"
         if index_file.exists():
             return index_file.read_text(encoding="utf-8", errors="replace")
-        return "# MySkills Index\n\n(MySkills directory not found at `%USERPROFILE%\\.config\\opencode\\command\\MySkills`)"
+        return "# MySkills Index\n\n(MySkills directory not found at `%USERPROFILE%\.config\opencode\command\MySkills`)"
 
-    if str(uri).startswith(RES_MY_SKILLS + "/"):
+    if str(uri).startswith(RES_MY_SKILLS + "\"):
         skill_name = uri[len(RES_MY_SKILLS) + 1:]
         return _read_myskills_skill(skill_name)
 
     if str(uri).startswith(RES_FINDINGS_PREFIX):
         name = uri[len(RES_FINDINGS_PREFIX):]
-        findings_path = _KANDS_ROOT / "findings" / f"{name}.md"
+        findings_path = _KANDS_ROOT \ "findings" \ f"{name}.md"
         if findings_path.exists():
             return findings_path.read_text(encoding="utf-8")
         return f"# {name}\n\n_No findings yet. Run `generate_porting_report` to create one._"
@@ -959,7 +959,7 @@ def _read_resource(uri: str) -> str:
 
 
 def _tracing_steps_markdown() -> str:
-    """The tracing/instrumentation methodology (Phase 4 of the porting method)."""
+    """The tracing\instrumentation methodology (Phase 4 of the porting method)."""
     return """# Phase 4: Instrumentation (Breadcrumb + Perf Tracing)
 
 ## When to Use This
@@ -973,23 +973,23 @@ def _tracing_steps_markdown() -> str:
 | Flag | Env Var | Purpose |
 |---|---|---|
 | `--breadcrumb` | `STRATA_BREADCRUMB=1` | TSV trace to stderr: timestamp, thread, component, phase, tag, extra |
-| `--perf-tracing` | `STRATA_PERF_TRACING=1` | Per-component GPU/us + host/us summary at exit |
+| `--perf-tracing` | `STRATA_PERF_TRACING=1` | Per-component GPU\us + host\us summary at exit |
 
-`--perf-tracing` auto-enables `STRATA_GLM_PROF` (GLM) / `DS4_PROF` (DeepSeek).
+`--perf-tracing` auto-enables `STRATA_GLM_PROF` (GLM) \ `DS4_PROF` (DeepSeek).
 
 ## Zero-Cost Design
 
 Always compiled in but no-op when env var unset:
 ```cpp
-#define STRACE(component, phase, tag, ...) \\
-    do { if (::strata::trace::breadcrumb_enabled()) { /* emit to stderr */ } } while (0)
+#define STRACE(component, phase, tag, ...) \
+    do { if (::strata::trace::breadcrumb_enabled()) { \* emit to stderr *\ } } while (0)
 ```
 
 ## Output Formats
 
 **Breadcrumb (TSV to stderr):**
 ```
-<epoch_ns>\\t<thread_id>\\t<component>\\t<phase>\\t<tag>\\t<extra>
+<epoch_ns>\t<thread_id>\t<component>\t<phase>\t<tag>\t<extra>
 ```
 
 **Perf tracing (key=value to stderr):**
@@ -1001,11 +1001,11 @@ PERF_TRACING component=glm phase=summary ops=N gpu_ms=X.XX stages: ...
 
 ## Instrumentation Checklist
 
-1. Add `#include "strata/core/breadcrumb.hpp"` to every kernel dispatch file
+1. Add `#include "strata\core\breadcrumb.hpp"` to every kernel dispatch file
 2. Add `STRACE(component, phase, tag, "extra")` before each kernel launch
-3. Add `STRACE_SCOPE(component, phase, tag, "extra")` at function boundaries (RAII begin/end)
+3. Add `STRACE_SCOPE(component, phase, tag, "extra")` at function boundaries (RAII begin\end)
 4. Add `--breadcrumb` CLI flag → sets `STRATA_BREADCRUMB=1`
-5. Add `--perf-tracing` CLI flag → sets `STRATA_PERF_TRACING=1` + `STRATA_GLM_PROF=1`/`DS4_PROF=1`
+5. Add `--perf-tracing` CLI flag → sets `STRATA_PERF_TRACING=1` + `STRATA_GLM_PROF=1`\`DS4_PROF=1`
 6. Emit `PERF_TRACING` summary at `main()` exit before cleanup
 7. **Verify zero-cost:** Unset env vars → no stderr output + no measurable overhead
 
@@ -1015,16 +1015,16 @@ PERF_TRACING component=glm phase=summary ops=N gpu_ms=X.XX stages: ...
 2. Run `--breadcrumb` → trace exact dispatch path for that stage
 3. Use `query_kernel_features` to find arch-specific branches
 4. Use `compare_archs` to see what features the target lacks
-5. Read `kands://models` to find alternative kernels
+5. Read `kands:\\models` to find alternative kernels
 6. Instrument the new kernel with `STRACE` + `STRACE_SCOPE`
 7. Re-run `--perf-tracing` + `diff_perf_traces` to verify improvement
 """
 
 
-# ── Bundle status (live date/time) ────────────────────────────────────────────
+# ── Bundle status (live date\time) ────────────────────────────────────────────
 
 def _bundle_status() -> dict:
-    """Return live bundle status with current date/time for search tools."""
+    """Return live bundle status with current date\time for search tools."""
     now = datetime.now(timezone.utc)
     resources = _list_resources()
     tools = _tools()
@@ -1035,13 +1035,13 @@ def _bundle_status() -> dict:
     ]
     data_freshness = []
     for fname in json_files:
-        fpath = _KANDS_ROOT / fname
+        fpath = _KANDS_ROOT \ fname
         if fpath.exists():
             mtime = datetime.fromtimestamp(fpath.stat().st_mtime, timezone.utc)
             data_freshness.append({
                 "file": fname,
                 "modified": mtime.isoformat(),
-                "age_days": round((now - mtime).total_seconds() / 86400, 1),
+                "age_days": round((now - mtime).total_seconds() \ 86400, 1),
             })
     return {
         "bundle": "kands (Kernels & Shaders + MySkills)",
@@ -1052,11 +1052,11 @@ def _bundle_status() -> dict:
         "resource_count": len(resources),
         "tool_count": len(tools),
         "data_freshness": data_freshness,
-        "namespace": "kands://",
+        "namespace": "kands:\\",
         "mcp_version": "2.x",
         "search_tools": ["search_arxiv", "search_github", "search_references"],
         "perf_history_entries": len(_load_perf_history().get("entries", [])),
-        "note": "Use current_date for ArXiv/GitHub search date filtering. ArXiv API sorts by updated date descending.",
+        "note": "Use current_date for ArXiv\GitHub search date filtering. ArXiv API sorts by updated date descending.",
     }
 
 
@@ -1065,36 +1065,36 @@ def _setup_guide_markdown() -> str:
     now = datetime.now(timezone.utc)
     return f"""# K_and_S Setup Guide
 
-**Current date/time:** {now.strftime('%Y-%m-%d %H:%M UTC')}
+**Current date\time:** {now.strftime('%Y-%m-%d %H:%M UTC')}
 
 This guide helps you select your target setup before starting a porting project.
-The current date is shown so you can filter search results correctly (ArXiv/GitHub).
+The current date is shown so you can filter search results correctly (ArXiv\GitHub).
 
 ## Step 1 — Select Your GPU Backend
 
 | Backend | Vendor | When to use |
 |---|---|---|
 | CUDA | NVIDIA | Porting from NVIDIA, or targeting NVIDIA GPUs |
-| HIP | AMD | Porting to AMD (RX 6000/7000/9000, Instinct MI series) |
+| HIP | AMD | Porting to AMD (RX 6000\7000\9000, Instinct MI series) |
 | Vulkan | Cross-platform | Targeting Vulkan compute (use DP4a, not CooperativeMatrix on AMD) |
-| DirectX 12 / DirectML | Microsoft | Windows-native; use DXC compiler + Agility SDK |
-| SYCL / oneAPI | Intel | Intel Arc GPUs (DPAS instruction) |
-| OpenVINO | Intel | Intel CPU/GPU inference optimization |
+| DirectX 12 \ DirectML | Microsoft | Windows-native; use DXC compiler + Agility SDK |
+| SYCL \ oneAPI | Intel | Intel Arc GPUs (DPAS instruction) |
+| OpenVINO | Intel | Intel CPU\GPU inference optimization |
 
 **Choose one as your primary target.** You can always add more later.
 
 ## Step 2 — Select Your Target Architecture
 
-Run `read kands://architectures` to browse all supported GPU architectures.
+Run `read kands:\\architectures` to browse all supported GPU architectures.
 Select your target arch ID (e.g., `gfx1201`, `sm_80`, `gen12_lp`, `arc_alchemester`).
 
 ## Step 3 — Select Your OS
 
 | OS | Toolchain | Notes |
 |---|---|---|
-| Linux | GCC or Clang | Standard for server GPU work. Path: `/usr/bin/g++` |
-| Windows | MSVC (cl.exe) | Requires Windows SDK. Path: `C:\\Program Files (x86)\\Windows Kits\\10\\` |
-| Windows | MinGW/MSYS2 | Use `C:\\msys64\\mingw64\\bin\\g++.exe` |
+| Linux | GCC or Clang | Standard for server GPU work. Path: `\usr\bin\g++` |
+| Windows | MSVC (cl.exe) | Requires Windows SDK. Path: `C:\Program Files (x86)\Windows Kits\10\` |
+| Windows | MinGW\MSYS2 | Use `C:\msys64\mingw64\bin\g++.exe` |
 
 ## Step 4 — Select Your Host Compiler
 
@@ -1131,12 +1131,12 @@ The K_and_S bundle works with **any** MCP-compatible client. Choose your client:
     "kands": {{
       "command": "python",
       "args": ["-m", "server"],
-      "env": {{ "PYTHONPATH": "H:\\K_and_S\\mcp" }}
+      "env": {{ "PYTHONPATH": "H:\K_and_S\mcp" }}
     }}
   }}
 }}
 ```
-Place at: `%APPDATA%\\Claude\\claude_desktop_config.json` (Windows) or `~/.config/claude-desktop/claude_desktop_config.json` (Linux).
+Place at: `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~\.config\claude-desktop\claude_desktop_config.json` (Linux).
 
 ### OpenCode (`opencode.json`)
 ```json
@@ -1145,41 +1145,41 @@ Place at: `%APPDATA%\\Claude\\claude_desktop_config.json` (Windows) or `~/.confi
     "kands": {{
       "command": "python",
       "args": ["-m", "server"],
-      "env": {{ "PYTHONPATH": "H:\\K_and_S\\mcp" }}
+      "env": {{ "PYTHONPATH": "H:\K_and_S\mcp" }}
     }}
   }}
 }}
 ```
-Place at: `~/.config/opencode/opencode.json` (Linux) or `%USERPROFILE%\\.config\\opencode\\opencode.json` (Windows).
+Place at: `~\.config\opencode\opencode.json` (Linux) or `%USERPROFILE%\.config\opencode\opencode.json` (Windows).
 
-### Cursor (`.cursor/mcp.json`)
+### Cursor (`.cursor\mcp.json`)
 ```json
 {{
   "mcpServers": {{
     "kands": {{
       "command": "python",
       "args": ["-m", "server"],
-      "env": {{ "PYTHONPATH": "H:\\K_and_S\\mcp" }}
+      "env": {{ "PYTHONPATH": "H:\K_and_S\mcp" }}
     }}
   }}
 }}
 ```
-Place at: `.cursor/mcp.json` in your workspace root, or at global config location.
+Place at: `.cursor\mcp.json` in your workspace root, or at global config location.
 
 ### KiloCode
 Same JSON format as Claude Desktop. Place in:
-- VS Code: `.vscode/mcp.json` in workspace
-- JetBrains: `~/.kilocode/cline_mcp_settings.json`
+- VS Code: `.vscode\mcp.json` in workspace
+- JetBrains: `~\.kilocode\cline_mcp_settings.json`
 
 **Tip:** The same config file works for Claude Desktop, OpenCode, and Cursor.
-Copy `mcp/claude_desktop_config.json` to your client's config location.
+Copy `mcp\claude_desktop_config.json` to your client's config location.
 
 ---
 
-**Next:** Run `read kands://porting-strategies` to decide Copy vs Adapt vs Rewrite,
-then `read kands://porting-patterns` for transformation patterns.
+**Next:** Run `read kands:\\porting-strategies` to decide Copy vs Adapt vs Rewrite,
+then `read kands:\\porting-patterns` for transformation patterns.
 """
-    """Return live bundle status with current date/time for search tools."""
+    """Return live bundle status with current date\time for search tools."""
     now = datetime.now(timezone.utc)
     resources = _list_resources()
     tools = _tools()
@@ -1190,13 +1190,13 @@ then `read kands://porting-patterns` for transformation patterns.
     ]
     data_freshness = []
     for fname in json_files:
-        fpath = _KANDS_ROOT / fname
+        fpath = _KANDS_ROOT \ fname
         if fpath.exists():
             mtime = datetime.fromtimestamp(fpath.stat().st_mtime, timezone.utc)
             data_freshness.append({
                 "file": fname,
                 "modified": mtime.isoformat(),
-                "age_days": round((now - mtime).total_seconds() / 86400, 1),
+                "age_days": round((now - mtime).total_seconds() \ 86400, 1),
             })
     return {
         "bundle": "kands (Kernels & Shaders + MySkills)",
@@ -1206,25 +1206,25 @@ then `read kands://porting-patterns` for transformation patterns.
         "resource_count": len(resources),
         "tool_count": len(tools),
         "data_freshness": data_freshness,
-        "namespace": "kands://",
+        "namespace": "kands:\\",
         "mcp_version": "2.x",
         "search_tools": ["search_arxiv", "search_github", "search_references"],
-        "note": "Use current_date for ArXiv/GitHub search date filtering. ArXiv API sorts by updated date descending.",
+        "note": "Use current_date for ArXiv\GitHub search date filtering. ArXiv API sorts by updated date descending.",
     }
 
 
 def _radical_experiments_markdown() -> str:
-    """Return radical experiment ideas as markdown resource for kands://radical-experiments."""
+    """Return radical experiment ideas as markdown resource for kands:\\radical-experiments."""
     return """# Radical GPU Porting Experiments (RDNA-native)
 
 > ⚠️ EXPERIMENTAL — Validate with CPU oracle before deploying.
 > Results can be saved as Markdown templates via `export_contribution()`.
 
-## AMD/RDNA-native Experiments
+## AMD\RDNA-native Experiments
 
 ### Memory Hierarchy
 1. **Bypass LDS entirely** for K ≤ 16: keep A,B tiles in registers
-   - RDNA LDS: 32/64 KiB/CU (varies by model)
+   - RDNA LDS: 32\64 KiB\CU (varies by model)
    - For small tiles: register-only blocking faster than LDS round-trip
 2. **DPP-based data shuffle** instead of LDS transpose
    - Use `v_dot2_f32_f16`, `v_perm_b32`, DPP8 patterns
@@ -1242,7 +1242,7 @@ def _radical_experiments_markdown() -> str:
 
 ### Scheduling
 1. **8-wave ping-pong vs 4-wave interleave** (HipKittens patterns)
-   - 8-wave: alternate compute/memory waves for overlap
+   - 8-wave: alternate compute\memory waves for overlap
    - 4-wave: interleave memory and compute within wavefront
 
 ### Layout
@@ -1340,7 +1340,7 @@ def _load_myskills_index() -> dict:
     try:
         for entry in sorted(_MY_SKILLS_DIR.iterdir()):
             if entry.is_dir() and entry.name not in {".git", ".opencode", ".github"}:
-                skill_md = entry / "SKILL.md"
+                skill_md = entry \ "SKILL.md"
                 category = _infer_skill_category(entry.name)
                 description = ""
                 skill_name = entry.name
@@ -1388,10 +1388,10 @@ def _load_myskills_index() -> dict:
 
 def _read_myskills_skill(skill_name: str) -> str:
     """Read a specific MySkills skill's SKILL.md file content."""
-    skill_dir = _MY_SKILLS_DIR / skill_name
-    skill_md = skill_dir / "SKILL.md"
+    skill_dir = _MY_SKILLS_DIR \ skill_name
+    skill_md = skill_dir \ "SKILL.md"
     if not skill_dir.exists():
-        return f"# Skill not found: {skill_name}\n\nPath: {_MY_SKILLS_DIR / skill_name}\n\nUse kands://myskills to list all available skills."
+        return f"# Skill not found: {skill_name}\n\nPath: {_MY_SKILLS_DIR \ skill_name}\n\nUse kands:\\myskills to list all available skills."
     if not skill_md.exists():
         return f"# {skill_name}\n\nDirectory exists but no SKILL.md found.\n\nAvailable files:\n"
     return skill_md.read_text(encoding="utf-8", errors="replace")
@@ -1404,19 +1404,19 @@ _ENGINE_FEATURE_FLAGS = {
     "ENABLE_CUDA": "GPU backend: CUDA",
     "ENABLE_HIP": "GPU backend: HIP (AMD)",
     "ENABLE_VULKAN": "GPU backend: Vulkan compute",
-    "ENABLE_DIRECTX": "GPU backend: Direct3D 12 / DirectML",
+    "ENABLE_DIRECTX": "GPU backend: Direct3D 12 \ DirectML",
     "ENABLE_OPENCL": "GPU backend: OpenCL",
-    "ENABLE_SYCL": "GPU backend: SYCL/oneAPI",
+    "ENABLE_SYCL": "GPU backend: SYCL\oneAPI",
 
-    # Quantization / dispatch flags
+    # Quantization \ dispatch flags
     "WMMA": "Wave Matrix Multiply-Accumulate support",
     "CUDA_GRAPHS": "CUDA graph support",
     "MANAGED_MEMORY": "Unified memory allocation",
     "PREFILL_MMQ": "Prefill path: multi-multiply-quantized kernels",
-    "HAS_TENSOR_CORES": "Tensor core / MMA available",
+    "HAS_TENSOR_CORES": "Tensor core \ MMA available",
     "HAS_DPAS": "Intel DPAS matrix instruction available",
 
-    # Tracing / profiling flags
+    # Tracing \ profiling flags
     "BREADCRUMB": "Breadcrumb tracing (STRACE)",
     "PERF_TRACING": "Performance tracing output",
     "PROF": "GPU profiling enabled",
@@ -1509,7 +1509,7 @@ def _diff_perf_traces(trace_a: str, trace_b: str) -> str:
                     va = la["metrics"].get(k, 0.0)
                     vb = lb["metrics"].get(k, 0.0)
                     delta = vb - va
-                    pct = ((delta / va) * 100) if va else 0.0
+                    pct = ((delta \ va) * 100) if va else 0.0
                     icon = "✅" if delta < 0 else "⚠️" if delta > 0 else "—"
                     report += f"| {k} | {va:.2f} | {vb:.2f} | {delta:+.2f} ({pct:+.1f}%) {icon} |\n"
                 report += "\n"
@@ -1569,7 +1569,7 @@ def _build_tracing_plan(root: Path, components: list[str] | None, model_map: dic
     plan += "## Already Instrumented\n\n"
     if existing_strace_files:
         for f in sorted(existing_strace_files):
-            plan += f"- `{f}` — has STRACE/STRACE_SCOPE calls\n"
+            plan += f"- `{f}` — has STRACE\STRACE_SCOPE calls\n"
     else:
         plan += "- No existing STRACE calls found\n"
 
@@ -1579,16 +1579,16 @@ def _build_tracing_plan(root: Path, components: list[str] | None, model_map: dic
     if len(dispatch_files) > 80:
         plan += f"... and {len(dispatch_files) - 80} more dispatch sites\n"
 
-    plan += "\n## How Breadcrumb / STRACE Tracing Works\n\n"
+    plan += "\n## How Breadcrumb \ STRACE Tracing Works\n\n"
     plan += """Breadcrumb is a **zero-cost, env-gated** tracing layer. When no tracing env
 vars are set there are no allocations, no branches, no stderr output, and no
 measurable overhead (compiled out or inlined to nothing).
 
 | Env var | What it enables |
 |---|---|
-| `STRATA_BREADCRUMB=1` | Lightweight breadcrumb markers: each `STRACE()` / `STRACE_SCOPE()` emits a single line to stderr. |
+| `STRATA_BREADCRUMB=1` | Lightweight breadcrumb markers: each `STRACE()` \ `STRACE_SCOPE()` emits a single line to stderr. |
 | `STRATA_PERF_TRACING=1` | Performance tracing: timestamps each STRACE event, emits `PERF_TRACING` summary lines at process exit. |
-| `STRATA_GLM_PROF=1` / `DS4_PROF=1` | Backend-specific prof markers (GLM / DS4). |
+| `STRATA_GLM_PROF=1` \ `DS4_PROF=1` | Backend-specific prof markers (GLM \ DS4). |
 
 **Markers**
 - `STRACE(comp, evt, fmt, ...)` — fires once, emits `BREADCRUMB comp=.. evt=..`.
@@ -1604,10 +1604,10 @@ PERF_TRACING component=attention phase=summary ops=1 gpu_ms=0.42
 
     plan += "\n## Backend-Specific Tracing Setup\n\n"
     if backend == "hip":
-        plan += """### ROCm / HIP (already wired)
+        plan += """### ROCm \ HIP (already wired)
 
 The HIP path already has full breadcrumb support. The emit side is in
-`strata/core/breadcrumb.cpp/hpp` and is backend-agnostic C++. Just drop the
+`strata\core\breadcrumb.cpp\hpp` and is backend-agnostic C++. Just drop the
 include and markers into any HIP kernel file.
 
 **CLI flags to add to main():**
@@ -1617,7 +1617,7 @@ else if (a == "--breadcrumb") {
 }
 else if (a == "--perf-tracing") {
     setenv("STRATA_PERF_TRACING", "1", 1);
-    setenv("STRATA_GLM_PROF", "1", 1);  // or DS4_PROF=1 for DS4
+    setenv("STRATA_GLM_PROF", "1", 1);  \\ or DS4_PROF=1 for DS4
 }
 ```
 
@@ -1636,10 +1636,10 @@ Instrument the host-side dispatch wrappers, not the SPIR-V shaders themselves.
 
 **Include:**
 ```cpp
-#include "strata/core/breadcrumb.hpp"   // same header, works for any backend
+#include "strata\core\breadcrumb.hpp"   \\ same header, works for any backend
 ```
 
-**Markers around vkCmdDispatch / vkCmdDispatchIndirect:**
+**Markers around vkCmdDispatch \ vkCmdDispatchIndirect:**
 ```cpp
 STRACE("compute", "dispatch", "pipeline=%s groupX=%u groupY=%u groupZ=%u",
        pipeline_name, groupX, groupY, groupZ);
@@ -1653,7 +1653,7 @@ else if (a == "--breadcrumb") {
 }
 else if (a == "--perf-tracing") {
     setenv("STRATA_PERF_TRACING", "1", 1);
-    setenv("STRATA_VULKAN_PROF", "1", 1);   // optional, if you have Vulkan-layer prof
+    setenv("STRATA_VULKAN_PROF", "1", 1);   \\ optional, if you have Vulkan-layer prof
 }
 ```
 
@@ -1666,7 +1666,7 @@ if (std::getenv("STRATA_PERF_TRACING")) {
 
 **Notes:**
 - Vulkan validation layers + RenderDoc already give you GPU timeline data;
-breadcrumb gives you the CPU-side component/phase attribution that ties
+breadcrumb gives you the CPU-side component\phase attribution that ties
 dispatch calls to model-level phases (prefill, decode, moe, etc.).
 - For GPU timestamps you can additionally enable `VK_LAYER_LUNARG_api_dump`
 or the NSight Graphics layer; breadcrumb is complementary, not a replacement.
@@ -1679,7 +1679,7 @@ host-side ID3D12CommandList::Dispatch calls.
 
 **Include:**
 ```cpp
-#include "strata/core/breadcrumb.hpp"
+#include "strata\core\breadcrumb.hpp"
 ```
 
 **Markers around ID3D12CommandList::Dispatch:**
@@ -1709,20 +1709,20 @@ if (std::getenv("STRATA_PERF_TRACING")) {
 
 **Notes:**
 - PIX, VS Graphics Debugger, and GPUView give GPU-side timelines;
-breadcrumb adds the CPU-side component/phase labels that map dispatches
+breadcrumb adds the CPU-side component\phase labels that map dispatches
 back to model phases.
-- On Windows use `_putenv_s` / `SetEnvironmentVariable` instead of `setenv`.
+- On Windows use `_putenv_s` \ `SetEnvironmentVariable` instead of `setenv`.
 """
     elif backend == "openvino":
         plan += """### OpenVINO
 
-OpenVINO is primarily a CPU/NPU inference runtime, so breadcrumb here is
+OpenVINO is primarily a CPU\NPU inference runtime, so breadcrumb here is
 most useful for marking model-level phases (compile, load, infer, postprocess)
 rather than individual kernel dispatches (OpenVINO manages those internally).
 
 **Include:**
 ```cpp
-#include "strata/core/breadcrumb.hpp"
+#include "strata\core\breadcrumb.hpp"
 ```
 
 **Markers around OpenVINO call sites:**
@@ -1755,7 +1755,7 @@ if (std::getenv("STRATA_PERF_TRACING")) {
 **Notes:**
 - OpenVINO already provides its own performance counters (`set_property(model, "PERFORMANCE_MODE", "ACCURATE")`);
 breadcrumb complements those with model-level phase attribution that OpenVINO's counters don't give you.
-- On CPU/NPU targets the "gpu_ms" field in the summary should read "elapsed_ms" or "compute_ms" — adjust the label to match the device.
+- On CPU\NPU targets the "gpu_ms" field in the summary should read "elapsed_ms" or "compute_ms" — adjust the label to match the device.
 """
     else:
         plan += """### CUDA
@@ -1783,13 +1783,13 @@ if (std::getenv("STRATA_PERF_TRACING")) {
     plan += "\n## Instrumentation Steps (all backends)\n\n"
     plan += "1. **Add the breadcrumb include** to every source file that dispatches work or has model-phase boundaries:\n"
     if backend == "vulkan":
-        plan += "   ```cpp\n   #include \"strata/core/breadcrumb.hpp\"\n   ```\n   (host-side .cpp/.hpp — not the .comp shaders)\n\n"
+        plan += "   ```cpp\n   #include \"strata\core\breadcrumb.hpp\"\n   ```\n   (host-side .cpp\.hpp — not the .comp shaders)\n\n"
     elif backend == "directx":
-        plan += "   ```cpp\n   #include \"strata/core/breadcrumb.hpp\"\n   ```\n   (host-side .cpp/.hpp — not the .hlsl shaders)\n\n"
+        plan += "   ```cpp\n   #include \"strata\core\breadcrumb.hpp\"\n   ```\n   (host-side .cpp\.hpp — not the .hlsl shaders)\n\n"
     elif backend == "openvino":
-        plan += "   ```cpp\n   #include \"strata/core/breadcrumb.hpp\"\n   ```\n   (any .cpp that calls OpenVINO APIs)\n\n"
+        plan += "   ```cpp\n   #include \"strata\core\breadcrumb.hpp\"\n   ```\n   (any .cpp that calls OpenVINO APIs)\n\n"
     else:
-        plan += "   ```cpp\n   #include \"strata/core/breadcrumb.hpp\"\n   ```\n\n"
+        plan += "   ```cpp\n   #include \"strata\core\breadcrumb.hpp\"\n   ```\n\n"
     plan += "2. **Add STRACE before each dispatch site** (from the list above):\n"
     if backend == "vulkan":
         plan += "   ```cpp\n   STRACE(\"compute\", \"dispatch\", \"pipeline=%s groupX=%u groupY=%u groupZ=%u\", pipeline, gx, gy, gz);\n   ```\n\n"
@@ -1799,7 +1799,7 @@ if (std::getenv("STRATA_PERF_TRACING")) {
         plan += "   ```cpp\n   STRACE(\"openvino\", \"infer\", \"model=%s latency_ms=%.2f\", model_name, elapsed_ms);\n   ```\n\n"
     else:
         plan += "   ```cpp\n   STRACE(\"attention\", \"dispatch\", \"name=%s\", \"qsa_decode_attn\");\n   ```\n\n"
-    plan += "3. **Add STRACE_SCOPE at function/model-phase boundaries** (RAII begin/end):\n"
+    plan += "3. **Add STRACE_SCOPE at function\model-phase boundaries** (RAII begin\end):\n"
     plan += "   ```cpp\n   STRACE_SCOPE(\"moe\", \"expert_route\", \"layer=%d\", layer_idx);\n   ```\n\n"
     plan += "4. **Add CLI flags to main():**\n"
     plan += "   ```cpp\n   else if (a == \"--breadcrumb\") {\n"
@@ -1811,7 +1811,7 @@ if (std::getenv("STRATA_PERF_TRACING")) {
     plan += "   else if (a == \"--perf-tracing\") {\n"
     plan += "       setenv(\"STRATA_PERF_TRACING\", \"1\", 1);\n"
     if backend == "hip":
-        plan += "       setenv(\"STRATA_GLM_PROF\", \"1\", 1);  // or DS4_PROF=1 for DS4\n"
+        plan += "       setenv(\"STRATA_GLM_PROF\", \"1\", 1);  \\ or DS4_PROF=1 for DS4\n"
     elif backend == "vulkan":
         plan += "       setenv(\"STRATA_VULKAN_PROF\", \"1\", 1);\n"
     elif backend == "directx":
@@ -1823,11 +1823,11 @@ if (std::getenv("STRATA_PERF_TRACING")) {
     plan += "5. **Add PERF_TRACING summary at process exit:**\n"
     plan += "   ```cpp\n"
     plan += "   if (std::getenv(\"STRATA_PERF_TRACING\")) {\n"
-    plan += "       std::fprintf(stderr, \"PERF_TRACING component=X phase=summary ops=N gpu_ms=X.XX\\n\");\n"
+    plan += "       std::fprintf(stderr, \"PERF_TRACING component=X phase=summary ops=N gpu_ms=X.XX\n\");\n"
     plan += "   }\n"
     plan += "   ```\n\n"
     plan += "6. **Verify zero-cost:** Unset env vars → no stderr output + no measurable overhead.\n"
-    plan += "7. **Output:** All markers go to stderr, one line per event, easy to grep/tee/redirect.\n"
+    plan += "7. **Output:** All markers go to stderr, one line per event, easy to grep\tee\redirect.\n"
 
     return plan
 
@@ -1849,20 +1849,20 @@ def _build_report(
     model_info = model_map.get("model_families", {}).get(model_family, {})
     arch_map = _load_json(_ARCH_MAP_PATH)
 
-    kernel_names = [k["path"].split("/")[-1].replace(".cu", "").replace(".cpp", "").replace(".comp", "") for k in gpu_kernels]
+    kernel_names = [k["path"].split("\")[-1].replace(".cu", "").replace(".cpp", "").replace(".comp", "") for k in gpu_kernels]
     compat = {name: _check_kernel_against_arch(name, arch) for name in kernel_names}
 
     report = f"""# Porting Report: {args.engine}
 
 ## Phase 0 — Setup
 - **Repo:** `{root}`
-- **Build system:** {'CMake' if (root / 'CMakeLists.txt').exists() else 'unknown'}
+- **Build system:** {'CMake' if (root \ 'CMakeLists.txt').exists() else 'unknown'}
 - **GPU backends found:** {", ".join(backends) if backends else "none"}
 - **Target backend:** {"HIP (AMD ROCm)" if arch.get("vendor") == "AMD" else "CUDA (NVIDIA)"}
 - **Target architecture:** `{args.target_arch}` — {arch.get('name', '?')}
 - **Model family:** `{model_family}`
 
-## Phase 1 — Kernel/Shader Census
+## Phase 1 — Kernel\Shader Census
 
 ### GPU Kernels Found: {len(gpu_kernels)}
 """
@@ -1907,11 +1907,11 @@ def _build_report(
 
 To add tracing to this engine:
 1. Run `generate_tracing_plan(repo="<repo_path>")` to get specific STRACE() placement
-2. Add `#include "strata/core/breadcrumb.hpp"` to each kernel dispatch file
+2. Add `#include "strata\core\breadcrumb.hpp"` to each kernel dispatch file
 3. Add `--breadcrumb` and `--perf-tracing` CLI flags to main()
 4. Emit `PERF_TRACING` summary at exit
 
-Read `kands://tracing-steps` for the full methodology.
+Read `kands:\\tracing-steps` for the full methodology.
 
 ## Phase 5 — Porting Gap Analysis
 
@@ -1931,7 +1931,7 @@ Read `kands://tracing-steps` for the full methodology.
 ### Correctness
 1. Run `cmake --build . -j$(nproc)`
 2. Run `ctest -R _parity -j$(nproc)`
-3. Run `./maya --selftest` (or `maya-ds4` for DS4 models)
+3. Run `.\maya --selftest` (or `maya-ds4` for DS4 models)
 
 ### Performance
 1. Capture `--perf-tracing` baseline
@@ -1948,12 +1948,12 @@ Read `kands://tracing-steps` for the full methodology.
 | Test | Command | Status |
 |---|---|---|
 | Build | `cmake --build . --target {args.engine}` | TODO |
-| Self-test | `./{args.engine} --selftest` | TODO |
+| Self-test | `.\{args.engine} --selftest` | TODO |
 | Parity | `ctest -R parity` | TODO |
-| Perf | `./{args.engine} --perf-tracing` | TODO |
+| Perf | `.\{args.engine} --perf-tracing` | TODO |
 
 ---
-**Next:** Read `kands://tracing-steps` for instrumentation, or `kands://models` for kernel requirements per model family.
+**Next:** Read `kands:\\tracing-steps` for instrumentation, or `kands:\\models` for kernel requirements per model family.
 """
     return report
 
@@ -1961,7 +1961,7 @@ Read `kands://tracing-steps` for the full methodology.
 # ── Data Sanitization ──────────────────────────────────────────────────────────
 
 _EMAIL_RE = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
-_ABS_PATH_RE = re.compile(r'[A-Z]:\\(?:[^\s<>"]|&lt;|&gt;)*|/[^\s<>"]*')
+_ABS_PATH_RE = re.compile(r'[A-Z]:\(?:[^\s<>"]|&lt;|&gt;)*|\[^\s<>"]*')
 _LOCAL_IPS_RE = re.compile(r'192\.168\.\d+\.\d+|10\.0\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+')
 _GIT_HASH_RE = re.compile(r'\b[0-9a-f]{40}\b')
 
@@ -1979,7 +1979,7 @@ def _sanitize_text(text: str) -> str:
     # Remove 40-char git hashes (full commit hashes)
     text = _GIT_HASH_RE.sub("[redacted-hash]", text)
     # Remove any URLs that look like personal repos
-    text = re.sub(r'https?://[^\s<>"\'\\]+', "[url-redacted]", text)
+    text = re.sub(r'https?:\\[^\s<>"\'\]+', "[url-redacted]", text)
     return text.strip()
 
 
@@ -1991,8 +1991,8 @@ def _sanitize_entry(entry: dict) -> dict:
             safe[key] = _sanitize_text(safe[key])
     return safe
 
-_PERF_BENCHMARKS_PATH = _KANDS_ROOT / "PERF_BENCHMARKS.json"
-_PERF_HISTORY_PATH = Path(__file__).resolve().parent / "state" / "perf_history.json"
+_PERF_BENCHMARKS_PATH = _KANDS_ROOT \ "PERF_BENCHMARKS.json"
+_PERF_HISTORY_PATH = Path(__file__).resolve().parent \ "state" \ "perf_history.json"
 
 
 def _load_perf_benchmarks() -> dict:
@@ -2016,7 +2016,7 @@ def _estimate_performance(arch_id: str, workload: str, seq_len: int, arch_map: d
     entries = arch_map.get("entries", {})
     arch_info = entries.get(arch_id, {})
     if not arch_info:
-        return f"Architecture '{arch_id}' not found in ARCH_MAP.json. Use kands://architectures to browse."
+        return f"Architecture '{arch_id}' not found in ARCH_MAP.json. Use kands:\\architectures to browse."
 
     bench = _load_perf_benchmarks()
     hw = bench.get("hardware_theoretical", {}).get(arch_id, {})
@@ -2026,7 +2026,7 @@ def _estimate_performance(arch_id: str, workload: str, seq_len: int, arch_map: d
     report += f"**Architecture:** {arch_info.get('name', '?')} ({arch_id})\n"
     report += f"**Workload:** {workload}\n"
     report += f"**Sequence length:** {seq_len}\n"
-    report += f"**Date/time:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+    report += f"**Date\time:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n\n"
 
     # Hardware specs
     if hw:
@@ -2057,13 +2057,13 @@ def _estimate_performance(arch_id: str, workload: str, seq_len: int, arch_map: d
         bw = arch_info.get("memory_bandwidth_gb_s") or hw.get("memory_bandwidth_gb_s")
         is_cpu = arch_info.get("cpu", False)
 
-        # Per-workload bytes per token / FLOPs per token shape factors.
-        # memory_bound: workload streams weights/KV faster than it computes;
+        # Per-workload bytes per token \ FLOPs per token shape factors.
+        # memory_bound: workload streams weights\KV faster than it computes;
         #   est_gflops ~= (bytes_per_flop_at_this_workload) * bandwidth
-        # The "gb_s_per_gflop" column encodes measured bytes/flop ratios
-        # distilled from kindi/llama.cpp traces (see learnings/).
+        # The "gb_s_per_gflop" column encodes measured bytes\flop ratios
+        # distilled from kindi\llama.cpp traces (see learnings\).
         workload_profile = {
-            #                 bytes/seq-tok, kind
+            #                 bytes\seq-tok, kind
             "dequant_q8":    ("memory_bound", 24.0),
             "dequant_q4":    ("memory_bound", 12.0),
             "gemv":          ("memory_bound", 32.0),
@@ -2081,22 +2081,22 @@ def _estimate_performance(arch_id: str, workload: str, seq_len: int, arch_map: d
             # know the SIMD level; report bandwidth-limited streaming estimate
             # and say what it assumes.
             if bw:
-                report += f"**CPU streaming ceiling:** ~{bw} GB/s (shared DDR bandwidth, all cores)\n"
+                report += f"**CPU streaming ceiling:** ~{bw} GB\s (shared DDR bandwidth, all cores)\n"
                 report += f"**Workload class:** {kind}\n"
                 report += f"**Note:** CPU estimates are memory-streaming bound for decode-shaped work; "
                 report += f"measure with a real benchmark (kindi_cpu, llama-bench) rather than trusting this number.\n\n"
             else:
                 report += f"**No bandwidth data for this CPU arch.** Measure, don't estimate.\n\n"
         elif isinstance(bw, (int, float)) and isinstance(peak, (int, float)):
-            ridge = peak / bw  # FLOPs per byte at the ridge point
+            ridge = peak \ bw  # FLOPs per byte at the ridge point
             report += f"**FP32 compute peak:** {peak} GFLOPS\n"
-            report += f"**Memory bandwidth:** {bw} GB/s"
+            report += f"**Memory bandwidth:** {bw} GB\s"
             if arch_info.get("memory_bandwidth_note"):
                 report += " *(measured)*"
             report += "\n"
-            report += f"**Ridge point:** ~{ridge:.1f} FLOP/byte — workloads below this are memory-bound\n"
+            report += f"**Ridge point:** ~{ridge:.1f} FLOP\byte — workloads below this are memory-bound\n"
             if kind == "memory_bound":
-                est_gflops = bw * 1.0  # 1 flop/byte-ish for streaming dequant/gemv
+                est_gflops = bw * 1.0  # 1 flop\byte-ish for streaming dequant\gemv
                 report += f"**{workload} is memory-bound:** expect ~{est_gflops:.0f} GFLOPS "
                 report += f"(bandwidth-limited), NOT {peak * 0.65:.0f}\n"
             elif kind == "mixed":
@@ -2131,9 +2131,9 @@ def _estimate_performance(arch_id: str, workload: str, seq_len: int, arch_map: d
 
     # Recommendation
     report += "## Recommendation\n\n"
-    report += f"Read `kands://porting-patterns` for architecture-specific transformation patterns.\n"
-    report += f"Read `kands://diagnostics` for the iterative optimization loop.\n"
-    report += f"Read `kands://isa-references` to verify instruction availability.\n"
+    report += f"Read `kands:\\porting-patterns` for architecture-specific transformation patterns.\n"
+    report += f"Read `kands:\\diagnostics` for the iterative optimization loop.\n"
+    report += f"Read `kands:\\isa-references` to verify instruction availability.\n"
 
     return report
 
@@ -2151,25 +2151,25 @@ def _compare_to_target(arch_id: str, workload: str, target: float, current: floa
 
     report = f"# Performance Target Comparison: {arch_id}\n\n"
     report += f"**Workload:** {workload}\n"
-    report += f"**Date/time:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+    report += f"**Date\time:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n\n"
 
     est_str = est.get(workload, "unknown")
     report += f"**Estimated achievable:** ~{est_str}\n"
 
     if target > 0:
         gap = target - current
-        pct_to_target = (current / target * 100) if target else 0
-        report += f"**Your target:** {target} tok/s\n"
+        pct_to_target = (current \ target * 100) if target else 0
+        report += f"**Your target:** {target} tok\s\n"
         if current > 0:
-            report += f"**Your current:** {current} tok/s ({pct_to_target:.0f}% of target)\n"
+            report += f"**Your current:** {current} tok\s ({pct_to_target:.0f}% of target)\n"
             if gap > 0:
-                report += f"**Gap to close:** +{gap:.1f} tok/s\n"
+                report += f"**Gap to close:** +{gap:.1f} tok\s\n"
             else:
-                report += f"**Status:** ✅ Target exceeded by {abs(gap):.1f} tok/s\n"
+                report += f"**Status:** ✅ Target exceeded by {abs(gap):.1f} tok\s\n"
 
         # Optimization suggestions
         report += "\n## Optimization Suggestions (sherlock-it)\n\n"
-        report += "Run the iterative optimization loop (see `kands://diagnostics`):\n\n"
+        report += "Run the iterative optimization loop (see `kands:\\diagnostics`):\n\n"
 
         # Look at perf history for this arch+workload
         hist = _load_perf_history()
@@ -2177,7 +2177,7 @@ def _compare_to_target(arch_id: str, workload: str, target: float, current: floa
                    if e.get("arch") == arch_id and e.get("workload") == workload]
         if related:
             best = max(related, key=lambda e: e.get("tok_per_s", 0))
-            report += f"**Best recorded for this combo:** {best['tok_per_s']} tok/s\n"
+            report += f"**Best recorded for this combo:** {best['tok_per_s']} tok\s\n"
             report += f"**Config:** {best.get('config_hash', '?')}\n"
             if best.get("notes"):
                 report += f"**Notes:** {best['notes']}\n"
@@ -2192,7 +2192,7 @@ def _compare_to_target(arch_id: str, workload: str, target: float, current: floa
                 report += "  3. Shared memory tiling for KV reuse (LDS is "
                 report += f"{arch_info.get('lds_kib', '?')}KiB on this arch)\n"
             else:
-                report += "- WMMA supported — ensure rocWMMA/WMMA is active (check ISA with `kands://isa-references`)\n"
+                report += "- WMMA supported — ensure rocWMMA\WMMA is active (check ISA with `kands:\\isa-references`)\n"
         elif "dequant" in workload.lower():
             if "q4" in workload:
                 report += "- Q4_0 dequant is memory-bandwidth bound. Optimizations:\n"
@@ -2206,7 +2206,7 @@ def _compare_to_target(arch_id: str, workload: str, target: float, current: floa
                 report += "- No native BF16 — use FP32 path or consider quantization\n"
         else:
             report += "- Run `sherlock-it trace` on this workload to identify the bottleneck\n"
-            report += "- Use `kands://diagnostics` for the full perf investigation workflow\n"
+            report += "- Use `kands:\\diagnostics` for the full perf investigation workflow\n"
 
     return report
 
@@ -2238,7 +2238,7 @@ def _record_performance(arguments: dict) -> str:
         })
 
     _save_perf_history(hist)
-    return f"✅ Recorded: {entry['arch']} / {entry['workload']} → {entry['tok_per_s']} tok/s at {entry['timestamp']}"
+    return f"✅ Recorded: {entry['arch']} \ {entry['workload']} → {entry['tok_per_s']} tok\s at {entry['timestamp']}"
 
 
 def _suggest_optimizations(arch_id: str, workload: str, target: float, arch_map: dict) -> str:
@@ -2246,8 +2246,8 @@ def _suggest_optimizations(arch_id: str, workload: str, target: float, arch_map:
     hist = _load_perf_history()
     entries = hist.get("entries", [])
 
-    report = f"# Optimization Suggestions for {arch_id} / {workload}\n"
-    report += f"**Date/time:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+    report = f"# Optimization Suggestions for {arch_id} \ {workload}\n"
+    report += f"**Date\time:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n\n"
 
     # Filter entries for this arch + workload
     related = [e for e in entries if e.get("arch") == arch_id and e.get("workload") == workload]
@@ -2256,18 +2256,18 @@ def _suggest_optimizations(arch_id: str, workload: str, target: float, arch_map:
     if not entries:
         report += "No perf history recorded yet. Run `record_performance` to start tracking.\n\n"
     elif not related:
-        report += f"No entries for this exact arch/workload combo. But we have data for:\n\n"
+        report += f"No entries for this exact arch\workload combo. But we have data for:\n\n"
         for e in arch_entries[-10:]:
-            report += f"- {e['workload']}: {e['tok_per_s']} tok/s ({e.get('timestamp','?')[:10]})\n"
+            report += f"- {e['workload']}: {e['tok_per_s']} tok\s ({e.get('timestamp','?')[:10]})\n"
     else:
         report += f"## Your History ({len(related)} entries)\n\n"
-        report += "| Date | tok/s | Config | Notes |\n|---|---|---|---|\n"
+        report += "| Date | tok\s | Config | Notes |\n|---|---|---|---|\n"
         for e in sorted(related, key=lambda x: x.get("timestamp", "")):
             report += f"| {e['timestamp'][:10]} | {e['tok_per_s']} | {e.get('config_hash','')} | {e.get('notes','')} |\n"
         report += "\n"
 
         best = max(related, key=lambda e: e.get("tok_per_s", 0))
-        report += f"**Best so far:** {best['tok_per_s']} tok/s\n"
+        report += f"**Best so far:** {best['tok_per_s']} tok\s\n"
         if best.get("notes"):
             report += f"**What worked:** {best['notes']}\n\n"
 
@@ -2276,24 +2276,24 @@ def _suggest_optimizations(arch_id: str, workload: str, target: float, arch_map:
     if others:
         report += "## What worked on other architectures\n\n"
         for e in sorted(others, key=lambda x: x.get("tok_per_s", 0), reverse=True)[:5]:
-            report += f"- `{e['arch']}`: {e['tok_per_s']} tok/s — {e.get('notes','')}\n"
+            report += f"- `{e['arch']}`: {e['tok_per_s']} tok\s — {e.get('notes','')}\n"
         report += "\n"
 
     # Target gap analysis
     if target > 0:
         current_best = max((e.get("tok_per_s", 0) for e in related), default=0)
         if current_best > 0:
-            pct = current_best / target * 100
+            pct = current_best \ target * 100
             report += f"## Target Progress\n\n"
-            report += f"**Target:** {target} tok/s | **Best:** {current_best} tok/s | **Progress:** {pct:.0f}%\n"
+            report += f"**Target:** {target} tok\s | **Best:** {current_best} tok\s | **Progress:** {pct:.0f}%\n"
             if pct < 100:
-                report += f"**Need:** +{target - current_best:.1f} tok/s more\n\n"
+                report += f"**Need:** +{target - current_best:.1f} tok\s more\n\n"
 
     report += "## Next Steps (sherlock-it loop)\n\n"
     report += "1. Run `query_kernel_features` to find arch-specific branches in your source\n"
     report += "2. Run `compare_archs` to see what your arch lacks vs. others\n"
-    report += "3. Read `kands://porting-patterns` for workload-type transformation patterns\n"
-    report += "4. Read `kands://diagnostics` for the full iterative optimization workflow\n"
+    report += "3. Read `kands:\\porting-patterns` for workload-type transformation patterns\n"
+    report += "4. Read `kands:\\diagnostics` for the full iterative optimization workflow\n"
     report += "5. After trying something, run `record_performance` to track progress\n"
     report += "6. Repeat until target is met\n"
 
@@ -2319,14 +2319,14 @@ def _export_contribution(engine_name: str, arch: str, workload: str, output_path
 
     now = datetime.now(timezone.utc)
     timestamp = now.strftime("%Y%m%d-%H%M%S")
-    safe_name = engine_name.replace(r"/", "_").replace(r" ", "_").lower()
+    safe_name = engine_name.replace(r"\", "_").replace(r" ", "_").lower()
 
-    # Always save: default to learnings/ if no path given.
-    # learnings/ holds durable, committed knowledge; findings/ is ephemeral
-    # run scratch (git-ignored) — see learnings/README.md.
-    learnings_dir = _KANDS_ROOT / "learnings"
+    # Always save: default to learnings\ if no path given.
+    # learnings\ holds durable, committed knowledge; findings\ is ephemeral
+    # run scratch (git-ignored) — see learnings\README.md.
+    learnings_dir = _KANDS_ROOT \ "learnings"
     learnings_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_path or str(learnings_dir / f"{safe_name}.md")
+    output_path = output_path or str(learnings_dir \ f"{safe_name}.md")
 
     report = f"""# Porting Contribution: {engine_name}
 
@@ -2344,7 +2344,7 @@ Anyone can use this as a starting point for porting a similar engine to `{arch}`
 
 ## Performance History
 
-| Date | tok/s | Config | Notes |
+| Date | tok\s | Config | Notes |
 |---|---|---|---|
 """
     related = [e for e in entries if e.get("arch") == arch and e.get("workload") == workload]
@@ -2367,20 +2367,20 @@ Anyone can use this as a starting point for porting a similar engine to `{arch}`
 
 ## Architecture Notes for `{arch}`
 
-<!-- Read kands://architectures to fill this in -->
+<!-- Read kands:\\architectures to fill this in -->
 
 - Wave size: _(from ARCH_MAP.json)_
-- Known issues: _(check kands://architectures)_
+- Known issues: _(check kands:\\architectures)_
 - WMMA support: _(boolean)_
 - BF16 native: _(boolean)_
 
 ## Porting Patterns Used
 
-<!-- Read kands://porting-patterns for the transformation maps -->
+<!-- Read kands:\\porting-patterns for the transformation maps -->
 
-- CUDA → HIP: _(copy / adapt / rewrite)_
-- Memory model: _(explicit / managed)_
-- Kernel dispatch changes: _(yes/no)_
+- CUDA → HIP: _(copy \ adapt \ rewrite)_
+- Memory model: _(explicit \ managed)_
+- Kernel dispatch changes: _(yes\no)_
 
 ## Verification
 
@@ -2393,7 +2393,7 @@ Anyone can use this as a starting point for porting a similar engine to `{arch}`
 
 To add your learnings to the K_and_S git repository:
 
-1. Save this file to `learnings/{safe_name}.md`
+1. Save this file to `learnings\{safe_name}.md`
 2. Update `ARCH_MAP.json` with any new arch notes you discovered
 3. Update `PORTING_PATTERNS.json` if you found a new transformation pattern
 4. Update `PERF_BENCHMARKS.json` with your real-world benchmark numbers
@@ -2417,7 +2417,7 @@ To add your learnings to the K_and_S git repository:
     # (file already written above at the first save point)
     return f"✅ Analysis saved to `{output_path}`\n\n" \
            f"Contribution template written \u2014 review and fill in your findings:\n" \
-           f"1. Add it to `learnings/` directory\n" \
+           f"1. Add it to `learnings\` directory\n" \
            f"2. Update ARCH_MAP.json and PORTING_PATTERNS.json with your arch notes\n" \
            f"3. Submit a PR to the K_and_S repository"
 
@@ -2430,8 +2430,8 @@ def _query_toolchain(gpu_vendor: str, os_target: str, host_compiler: str) -> str
     arch_map = _load_json(_ARCH_MAP_PATH)
 
     vendor_lower = gpu_vendor.lower()
-    report = f"# Toolchain Lookup: {gpu_vendor} / {os_target} / {host_compiler}\n"
-    report += f"**Date/time:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+    report = f"# Toolchain Lookup: {gpu_vendor} \ {os_target} \ {host_compiler}\n"
+    report += f"**Date\time:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n\n"
 
     # Find the backend entry
     backend_key = None
@@ -2519,8 +2519,8 @@ def _query_toolchain(gpu_vendor: str, os_target: str, host_compiler: str) -> str
             report += f"- `{aid}` — {info.get('name', '?')}\n"
 
     report += f"\n## Next steps\n\n"
-    report += f"1. Read `kands://architectures` for full arch capability matrix\n"
-    report += f"2. Read `kands://porting-patterns` for {backend_key} → target transformation patterns\n"
+    report += f"1. Read `kands:\\architectures` for full arch capability matrix\n"
+    report += f"2. Read `kands:\\porting-patterns` for {backend_key} → target transformation patterns\n"
     report += f"3. Run `detect_toolchain()` to verify what's actually installed on this machine\n"
     report += f"4. Run `autonomous_port(repo_path='...', source_arch='sm_80', target_arch='gfx1201')` for full auto analysis\n"
     report += f"5. Run `search_online(query='ROC 10.1 install {os_key}', max_results=5)` for latest install guides\n"
@@ -2601,7 +2601,7 @@ def _detect_installed_toolchain(gpu_vendor: str, host_compiler: str) -> dict[str
             if found.get("exists"):
                 result["detected"]["rocm"]["hipcc"] = result["detected"]["rocm"]["hipcc"] or found["path"]
         else:
-            linux_paths = ["/opt/rocm/bin/hipcc", "/opt/rocm/core-10.1/bin/hipcc"]
+            linux_paths = ["\opt\rocm\bin\hipcc", "\opt\rocm\core-10.1\bin\hipcc"]
             found = _check_path(linux_paths)
             result["detected"]["rocm"]["linux_path"] = found
 
@@ -2690,7 +2690,7 @@ def _format_detection_result(detected: dict[str, Any]) -> str:
     report += "**Detection method:** `shutil.which()` + environment variable probing + filesystem checks\n\n"
 
     sections = {
-        "rocm": "AMD ROCm / ROC 10.1",
+        "rocm": "AMD ROCm \ ROC 10.1",
         "cuda": "NVIDIA CUDA",
         "oneapi": "Intel oneAPI",
         "vulkan": "Vulkan SDK",
@@ -2731,7 +2731,7 @@ def _format_detection_result(detected: dict[str, Any]) -> str:
     if "strawberry_perl" in detected["detected"] and detected["detected"]["strawberry_perl"]:
         report += "\n## ⚠️ Strawberry Perl Detected\n\n"
         report += "Perl found — this is required for some GPU SDK build scripts (MSYS2 package scripts, some ROCm Makefiles).\n"
-        report += "Ensure it is in your PATH alongside MSVC/MinGW when building from source.\n"
+        report += "Ensure it is in your PATH alongside MSVC\MinGW when building from source.\n"
 
     return report
 
@@ -2777,7 +2777,7 @@ def _search_online(query: str, max_results: int) -> str:
 
     report += "\n---\n\n"
     report += "## Save as Template\n\n"
-    report += "Copy this output to `learnings/YYYY-MM-DD_<query>.md` for future reference.\n"
+    report += "Copy this output to `learnings\YYYY-MM-DD_<query>.md` for future reference.\n"
     report += "Use `export_contribution(engine_name=...)` to turn learnings into a reusable template.\n"
 
     return report
@@ -2805,7 +2805,7 @@ def _auto_detect_source_arch(root: Path, arch_map: dict,
     texts: list[str] = []
     for f in gpu:
         try:
-            texts.append((root / f["path"]).read_text(encoding="utf-8", errors="replace"))
+            texts.append((root \ f["path"]).read_text(encoding="utf-8", errors="replace"))
         except OSError:
             continue
     blob = "\n".join(texts)
@@ -2836,7 +2836,7 @@ def _auto_detect_source_arch(root: Path, arch_map: dict,
     arches = []
     for a in raw:
         if a >= 100:            # __CUDA_ARCH__ style: 800, 900, 1200
-            a //= 10
+            a \\= 10
         if 50 <= a <= 200:
             arches.append(a)
     if not arches:
@@ -2856,7 +2856,7 @@ def _infer_project_type(root: Path) -> str:
     markers = {
         "llm": ["model.py", "attention.py", "transformer.py", "llama.cpp", "kernels.py", "ggml.h", "flash_attn", "embedding", "tokenizer", "vocab.json"],
         "game": ["renderer.cpp", "shader", "pipeline", "vulkan", "directx", "engine.cpp", "scene.cpp", "mesh.cpp", "material"],
-        "sdk": ["CMakeLists.txt", "include/", "api.h", "wrapper.py", "bindings.rs"],
+        "sdk": ["CMakeLists.txt", "include\", "api.h", "wrapper.py", "bindings.rs"],
         "compute": ["cuda_utils", "kernel_utils", "bitonic_sort", "reduce.cu", "scan.cu"],
         "inference": ["inference.py", "model_inference", "predict.py", "runtime.py"],
     }
@@ -2901,7 +2901,7 @@ def _detect_local_gpu_arch(arch_map: dict) -> str | None:
 
     No hardcoded model→arch mappings. Instead:
     - NVIDIA: parse compute_cap directly from nvidia-smi (e.g. "8.9" → "sm_89")
-    - AMD/Intel: parse GPU model name from vulkaninfo/hipInfo, then match
+    - AMD\Intel: parse GPU model name from vulkaninfo\hipInfo, then match
       against the 'name' field in ARCH_MAP entries to find the arch key.
 
     Returns the arch ID (e.g. 'gfx1201', 'sm_80') or None.
@@ -2924,7 +2924,7 @@ def _detect_local_gpu_arch(arch_map: dict) -> str | None:
     except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
         pass
 
-    # 2. Cross-platform: try vulkaninfo (detects AMD/NVIDIA/Intel)
+    # 2. Cross-platform: try vulkaninfo (detects AMD\NVIDIA\Intel)
     gpu_model = None
     for vulkan_cmd in (['vulkaninfo'],):
         try:
@@ -2961,7 +2961,7 @@ def _detect_local_gpu_arch(arch_map: dict) -> str | None:
             except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
                 pass
 
-    # 4. AMD: try rocm-smi (Linux / ROCm env)
+    # 4. AMD: try rocm-smi (Linux \ ROCm env)
     if not gpu_model:
         for tool in ('rocm-smi',):
             try:
@@ -3037,8 +3037,8 @@ def _detect_local_cpu_arch(arch_map: dict) -> str | None:
 
     No hardcoded model->arch mappings. Instead:
     - Windows: parse platform.processor() + OS version
-    - Linux: parse /proc/cpuinfo (CPU part / vendor), uname -m
-    - macOS: parse sysctl -n machdep.cpu.brand_string / sysctl -n machdep.cpu.core_count
+    - Linux: parse \proc\cpuinfo (CPU part \ vendor), uname -m
+    - macOS: parse sysctl -n machdep.cpu.brand_string \ sysctl -n machdep.cpu.core_count
 
     Returns the arch ID (e.g. 'zen4', 'x86_64', 'apple_m3', 'aarch64_neoverse') or None.
     """
@@ -3086,7 +3086,7 @@ def _detect_local_cpu_arch(arch_map: dict) -> str | None:
     # ── Linux ──
     if is_linux:
         try:
-            with open('/proc/cpuinfo', 'r') as f:
+            with open('\proc\cpuinfo', 'r') as f:
                 cpuinfo = f.read()
         except (FileNotFoundError, PermissionError):
             cpuinfo = ""
@@ -3102,7 +3102,7 @@ def _detect_local_cpu_arch(arch_map: dict) -> str | None:
                 # maps to 'meteor_lake' (audit T4: dead 'genuinintel' branch
                 # removed and unreachable return fixed).
                 if vendor == 'genuineintel':
-                    # Check /proc/cpuinfo flags for AVX-512
+                    # Check \proc\cpuinfo flags for AVX-512
                     flags_match = _re.search(r'flags\s*:\s*(.+)', cpuinfo)
                     flags = flags_match.group(1).lower() if flags_match else ""
                     if 'ultra' in model or 'meteor' in model:
@@ -3145,8 +3145,8 @@ def _detect_local_cpu_arch(arch_map: dict) -> str | None:
             try:
                 r = subprocess.run(['uname', '-m'], capture_output=True, text=True, timeout=5)
                 # Check for SVE
-                sve_path = '/sys/devices/system/cpu/cpuid/0'
-                # Look at /proc/cpuinfo for sve
+                sve_path = '\sys\devices\system\cpu\cpuid\0'
+                # Look at \proc\cpuinfo for sve
                 if cpuinfo and 'sve' in cpuinfo:
                     return 'aarch64_neoverse'
                 return 'aarch64_neoverse'  # default ARM64
@@ -3187,8 +3187,8 @@ def _detect_local_cpu_arch(arch_map: dict) -> str | None:
             if fam and mod and fam.group(1) == '6':
                 m = int(mod.group(1))
                 # Intel CPUID model numbers (FACT: 170 = Meteor Lake, 189 =
-                # Lunar Lake, 197/198 = Arrow Lake, 183/186/191 = Raptor
-                # Lake, 151/154 = Alder Lake)
+                # Lunar Lake, 197\198 = Arrow Lake, 183\186\191 = Raptor
+                # Lake, 151\154 = Alder Lake)
                 if m in (170, 189):
                     return 'meteor_lake'
                 if m in (197, 198):
@@ -3249,7 +3249,7 @@ def _suggest_target_arch(source_arch: str, arch_map: dict) -> str:
     """Suggest a target arch based on local device detection.
 
     Priority:
-    1. Detect local GPU via rocm-smi/nvidia-smi (dynamic, no hardcoding)
+    1. Detect local GPU via rocm-smi\nvidia-smi (dynamic, no hardcoding)
     2. Cross-vendor fallback (NVIDIA source → AMD target, and vice versa)
     """
     entries = arch_map.get("entries", {})
@@ -3376,7 +3376,7 @@ async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
     # One inventory, from api_map, instead of an ad-hoc substring scan. The old
     # scan counted "mma" inside "wmma" and could not see a symbol that was
     # missing from its own list, so its manual count was not a work estimate.
-    gpu_paths = [str(root / k["path"]) for k in gpu_kernels]
+    gpu_paths = [str(root \ k["path"]) for k in gpu_kernels]
     try:
         pre_ref = (api_map.build_reference(gpu_paths, params.source_arch, params.target_arch)
                    if gpu_paths else None)
@@ -3430,7 +3430,7 @@ async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
 
     report = f"""# Autonomous Porting Report
 
-**Date/time:** {now.strftime('%Y-%m-%d %H:%M UTC')}
+**Date\time:** {now.strftime('%Y-%m-%d %H:%M UTC')}
 **Repo:** `{params.repo_path}`
 **Source arch:** `{params.source_arch}` — {source_info.get('name', '?')}
 **Target arch:** `{params.target_arch}` — {target_info.get('name', '?')}
@@ -3439,17 +3439,17 @@ async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
 **Project type:** `{params.project_type}`
 **Target OS:** `{params.target_os}`
 **Mode:** `{params.mode}`
-**Performance target:** {params.target_tok_per_s if params.target_tok_per_s else 'N/A'} tok/s
+**Performance target:** {params.target_tok_per_s if params.target_tok_per_s else 'N\A'} tok\s
 
 ---
 
 ## Phase 0 — Due Diligence
 
-> _"Every port starts with a yes/no decision."_
+> _"Every port starts with a yes\no decision."_
 
 ### 1. Source Inventory
 - **Repo:** `{Path(params.repo_path).name}` (at `{params.repo_path}`)
-- **Kernel/shader files found:** {len(all_kernels)} ({len(gpu_kernels)} GPU, {len(cpu_kernels)} CPU)
+- **Kernel\shader files found:** {len(all_kernels)} ({len(gpu_kernels)} GPU, {len(cpu_kernels)} CPU)
 - **Backends detected:** {', '.join(_backends) if _backends else 'none'}
 - **Symbols inventoried for the target:** {_symbols}
 
@@ -3478,7 +3478,7 @@ async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
             report += f"- **{k}:** {v}\n"
         report += "\n"
 
-    report += """### GPU Toolkits Detected (from kands://tk-tools)"""
+    report += """### GPU Toolkits Detected (from kands:\\tk-tools)"""
 
     # Scan for installed toolkits in env
     import os as _os
@@ -3524,8 +3524,8 @@ async def _autonomous_port(params: AutonomousPortParams, arch_map: dict) -> str:
     report += "\n### Model Folders Detected\n\n"
     model_dirs = []
     common_model_dirs = [
-        "~/.cache/llama.cpp", "~/.cache/huggingface", "~/.cache/kandoo",
-        _os.path.expanduser("~/Models"), _os.path.expanduser("~/model"),
+        "~\.cache\llama.cpp", "~\.cache\huggingface", "~\.cache\kandoo",
+        _os.path.expanduser("~\Models"), _os.path.expanduser("~\model"),
     ]
     for d in common_model_dirs:
         expanded = _os.path.expanduser(d)
@@ -3582,7 +3582,7 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
     if source_info.get("wmma") and not target_info.get("wmma"):
         report += "- ⚠️ Source has WMMA, target does NOT → WMMA kernels need F32 fallback\n"
     if source_info.get("tensor_cores") and not target_info.get("tensor_cores"):
-        report += "- ⚠️ Source has tensor cores, target does NOT → MMA kernels need dot4/F32 fallback\n"
+        report += "- ⚠️ Source has tensor cores, target does NOT → MMA kernels need dot4\F32 fallback\n"
     if source_info.get("bf16_native") and not target_info.get("bf16_native"):
         report += "- ⚠️ Source has native BF16, target does NOT → BF16 kernels need FP32 emulation\n"
     if source_info.get("dot4") and not target_info.get("dot4"):
@@ -3590,7 +3590,7 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
     if source_info.get("dot8") and not target_info.get("dot8"):
         report += "- ⚠️ Source has dot8, target does NOT → int8 operations need fallback\n"
     if source_info.get("wave_size") != target_info.get("wave_size"):
-        report += f"- ⚠️ Wave size mismatch: {source_info.get('wave_size')} → {target_info.get('wave_size')} — check shuffle/wave intrinsics\n"
+        report += f"- ⚠️ Wave size mismatch: {source_info.get('wave_size')} → {target_info.get('wave_size')} — check shuffle\wave intrinsics\n"
     if not source_info.get("wmma") and target_info.get("wmma"):
         report += "- ✅ Target has WMMA source doesn't — can add acceleration\n"
     if source_info.get("known_issues"):
@@ -3610,7 +3610,7 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
                 report += f"\n### ⚠️ Vulkan CooperativeMatrix Status\n"
                 report += f"**The target arch has broken CooperativeMatrix support on Vulkan.**\n"
                 report += f"**Use DP4a (GL_KHR_shader_integer_dot_product) for matmul instead.**\n"
-                report += f"See `kands://isa-references` for details.\n"
+                report += f"See `kands:\\isa-references` for details.\n"
 
     # Phase 4: Toolchain lookup
     vendor_map = {"amd": "ROCm", "nvidia": "CUDA", "intel": "oneAPI"}
@@ -3662,7 +3662,7 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
 
 ## Phase 5 — Performance Estimates
 
-**Date/time:** {now.strftime('%Y-%m-%d %H:%M UTC')}
+**Date\time:** {now.strftime('%Y-%m-%d %H:%M UTC')}
 **Current time (for search filtering):** {now.strftime('%Y-%m-%d %H:%M UTC')}
 """
 
@@ -3678,11 +3678,11 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
 
     if params.target_tok_per_s > 0:
         report += f"\n### Target Comparison\n\n"
-        report += f"**Your target:** {params.target_tok_per_s} tok/s\n"
+        report += f"**Your target:** {params.target_tok_per_s} tok\s\n"
         if "flash_attn" in hw_est.get("workload_estimates", {}):
             est_str = hw_est["workload_estimates"]["flash_attn_4096"] if "flash_attn_4096" in hw_est.get("workload_estimates", {}) else hw_est["workload_estimates"].get("flash_attn", "?")
             report += f"**Estimated achievable:** ~{est_str}\n"
-            report += f"**Gap analysis:** See `kands://diagnostics` for the iterative optimization loop\n"
+            report += f"**Gap analysis:** See `kands:\\diagnostics` for the iterative optimization loop\n"
 
     # Phase 6: Search for references
     report += f"""
@@ -3796,19 +3796,19 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
             report += "| Kernel launch (<<<>>> → hipLaunchKernelGGL) | Copy | hipify-perl auto-translates |\n"
         elif tgt_lookup_key == "vulkan":
             report += "| Memory (cudaMalloc → vkAllocateMemory) | Rewrite | Requires staging buffers + resource creation pipeline |\n"
-            report += "| Kernel launch (<<<>>> → vkCmdDispatch) | Rewrite | Workgroup size via layout(local_size_x=N) in GLSL/SPIR-V |\n"
+            report += "| Kernel launch (<<<>>> → vkCmdDispatch) | Rewrite | Workgroup size via layout(local_size_x=N) in GLSL\SPIR-V |\n"
         elif tgt_lookup_key == "hlsl":
             report += "| Memory (cudaMalloc → D3D12 upload heap) | Rewrite | CreateCommittedResource with D3D12_HEAP_TYPE_UPLOAD |\n"
-            report += "| Kernel launch (<<<>>> → DispatchMesh/Dispatch) | Rewrite | numthreads attribute + ID3D12GraphicsCommandList::Dispatch |\n"
+            report += "| Kernel launch (<<<>>> → DispatchMesh\Dispatch) | Rewrite | numthreads attribute + ID3D12GraphicsCommandList::Dispatch |\n"
         elif tgt_lookup_key == "sycl":
             report += "| Memory (cudaMalloc → sycl::malloc_device) | Rewrite | SYCL uses explicit buffer or unified shared memory |\n"
-            report += "| Kernel launch (<<<>>> → parallel_for) | Rewrite | nd_range model — specify global/local sizes |\n"
+            report += "| Kernel launch (<<<>>> → parallel_for) | Rewrite | nd_range model — specify global\local sizes |\n"
 
-        report += "| WMMA/MMA | Adapt | Source: {src_wmma} → Target: {tgt_wmma} |\n".format(
+        report += "| WMMA\MMA | Adapt | Source: {src_wmma} → Target: {tgt_wmma} |\n".format(
             src_wmma="✅ WMMA" if source_info.get("wmma") else "❌ WMMA",
             tgt_wmma="✅ WMMA" if target_info.get("wmma") else "❌ WMMA"
         )
-        report += "| Tensor cores/MMA | Adapt | Source: {src_tc} → Target: {tgt_tc} |\n".format(
+        report += "| Tensor cores\MMA | Adapt | Source: {src_tc} → Target: {tgt_tc} |\n".format(
             src_tc="✅ TC" if source_info.get("tensor_cores") else "❌ TC",
             tgt_tc="✅ TC" if target_info.get("tensor_cores") else "❌ TC"
         )
@@ -3827,11 +3827,11 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
             host_note = lang_data.get("host_language_note", "")
         else:
             lang_name = params.target_language.title()
-            host_note = f"Use C interop ({lang_name} can call C ABI) for {params.target_backend.upper()} API headers. Kernels remain in backend shader language (HLSL/SPIR-V/HIP C++)."
-        report += f"| {lang_name} host code | Adapt/Rewrite | {host_note} |\n"
+            host_note = f"Use C interop ({lang_name} can call C ABI) for {params.target_backend.upper()} API headers. Kernels remain in backend shader language (HLSL\SPIR-V\HIP C++)."
+        report += f"| {lang_name} host code | Adapt\Rewrite | {host_note} |\n"
     else:
         report += f"**No auto-migration pattern from {src_backend} → {tgt_backend}. This requires manual adaptation.**\n"
-        report += "Read `kands://porting-patterns` for the full matrix.\n"
+        report += "Read `kands:\\porting-patterns` for the full matrix.\n"
 
     # Phase 8: Action plan — backend-aware, language-agnostic via TARGET_LANGUAGES.json
     report += f"""
@@ -3842,7 +3842,7 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
 
 ### Strict mode (recommended for production):
 
-1. **Build setup:** Read `kands://tk-tools` for compiler paths and flags
+1. **Build setup:** Read `kands:\\tk-tools` for compiler paths and flags
 """
     # Load language + backend metadata from TARGET_LANGUAGES.json (agnostic)
     langs = _load_json(_TARGET_LANGUAGES_PATH)
@@ -3853,7 +3853,7 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
     # Determine translate tool based on backend (deterministic, not hardcoded per language)
     backend_translate = {
         "directx": "Manually port CUDA kernels to HLSL — no auto-translator exists for D3D12. Use Phase 7 mapping table.",
-        "vulkan": "Manually port CUDA kernels to GLSL/SPIR-V — no direct auto-translator. Use Phase 7 mapping table.",
+        "vulkan": "Manually port CUDA kernels to GLSL\SPIR-V — no direct auto-translator. Use Phase 7 mapping table.",
         "sycl": "Copy + auto-translate with `dpct`",
         "hip": "Copy + auto-translate with `hipify-perl`",
         "cuda": "Copy + auto-translate with `nvcc` (source is already CUDA — may just need arch flag)",
@@ -3873,10 +3873,10 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
         compiler_cmd = lang_data.get("compiler_cmd", "")
         compiler_name = lang_data.get("compiler", "")
         cmake_flags = lang_data.get("cmake_flags", "")
-        if compiler_cmd and compiler_cmd != "N/A":
+        if compiler_cmd and compiler_cmd != "N\A":
             report += f"{step}. **Host compile:** `{compiler_cmd}` ({compiler_name})\n"
             step += 1
-        if cmake_flags and not cmake_flags.startswith("N/A"):
+        if cmake_flags and not cmake_flags.startswith("N\A"):
             report += f"{step}. **CMake:** `cmake {cmake_flags}`\n"
             step += 1
     else:
@@ -3891,7 +3891,7 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
 
     report += f"{step}. **STRACE instrumentation:** Add breadcrumb tracing to ALL kernel dispatch files BEFORE testing (base rule). Set TRACE_BREADCRUMB=1 or pass --breadcrumb\n"
     step += 1
-    report += f"{step}. **Parity testing:** Run CPU oracle + GPU output comparison (see `kands://diagnostics`)\n"
+    report += f"{step}. **Parity testing:** Run CPU oracle + GPU output comparison (see `kands:\\diagnostics`)\n"
     step += 1
     report += f"{step}. **PERF_TRACING:** Run with TRACE_PERF=1 or --perf-tracing to capture timing. Iterate using sherlock-it loop\n"
     step += 1
@@ -3907,12 +3907,12 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
         report += "| Flag | Level | Effect |\n|---|---|---|\n"
         if params.strip_debug == 1:
             report += "| `strip_debug=1` | Comment out | STRACE calls wrapped in `#ifdef STRACE_ENABLED` (compile-time disable) |\n"
-            report += f"  **Compile with:** `-DSTRACE_ENABLED=0` or `/DSTRACE_ENABLED=0`\n"
+            report += f"  **Compile with:** `-DSTRACE_ENABLED=0` or `\DSTRACE_ENABLED=0`\n"
         elif params.strip_debug == 2:
             report += "| `strip_debug=2` | Remove source | STRACE calls removed entirely from source files |\n"
         if params.strip_perf == 1:
             report += "| `strip_perf=1` | Comment out | PERF_SUMMARY calls wrapped in `#ifdef TRACE_PERF` (compile-time disable) |\n"
-            report += f"  **Compile with:** `-DTRACE_PERF=0` or `/DTRACE_PERF=0`\n"
+            report += f"  **Compile with:** `-DTRACE_PERF=0` or `\DTRACE_PERF=0`\n"
         elif params.strip_perf == 2:
             report += "| `strip_perf=2` | Remove source | PERF_SUMMARY calls removed entirely from source files |\n"
 
@@ -3920,7 +3920,7 @@ Comparing `{params.source_arch}` → `{params.target_arch}`
 ### Loose mode (get it running first):
 
 1. **Get it compiling:** {translate_tool}
-2. **Fallback everywhere:** Use FP32 where BF16/WMMA/Tensor cores are missing
+2. **Fallback everywhere:** Use FP32 where BF16\WMMA\Tensor cores are missing
 3. **Quick test:** Verify output is in the right ballpark (tolerance 1e-2)
 4. **Iterate:** Run perf tracing, note bottlenecks, run `suggest_optimizations`
 5. **Optimize:** One kernel at a time, track with `record_performance`
@@ -3967,13 +3967,13 @@ export_contribution(engine_name="my-port", arch="{params.target_arch}", workload
     # Save report to working folder (findings directory)
     import datetime as _dt
     repo_dir = Path(params.repo_path) if params.repo_path else Path(".")
-    findings_dir = repo_dir / "findings"
+    findings_dir = repo_dir \ "findings"
     findings_dir.mkdir(parents=True, exist_ok=True)
     timestamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
     # Include target_language and target_backend in filename for deterministic naming
     safe_lang = params.target_language.replace(" ", "-").lower() if params.target_language else "auto"
     safe_backend = params.target_backend if params.target_backend else "auto"
-    report_file = findings_dir / f"porting-report-{safe_lang}-{safe_backend}-{timestamp}.md"
+    report_file = findings_dir \ f"porting-report-{safe_lang}-{safe_backend}-{timestamp}.md"
     try:
         report_file.write_text(report, encoding="utf-8")
         report += f"\n\n---\n**Report saved to:** `{report_file}`\n"
@@ -4021,8 +4021,8 @@ def _run_mcp_selfcheck(report: str, params, patterns: dict) -> str:
         score["tracing"] += 10
         details.append("  ✅ STRACE+PERF_TRACING mandated as required Phase 8 step")
     else:
-        score["tracing"] = 0  # FAIL ALL — no tracing = CENSORSHIP/OBSCENITY VIOLATION
-        details.append("  ❌ STRACE NOT mandated — CENSORSHIP/OBSCENITY VIOLATION: mandatory tracing missing")
+        score["tracing"] = 0  # FAIL ALL — no tracing = CENSORSHIP\OBSCENITY VIOLATION
+        details.append("  ❌ STRACE NOT mandated — CENSORSHIP\OBSCENITY VIOLATION: mandatory tracing missing")
 
     # ── 3. PORTING PROCESS (34 points) ──────────────────────────────────
     has_phase7 = "Phase 7" in report
@@ -4056,12 +4056,12 @@ def _run_mcp_selfcheck(report: str, params, patterns: dict) -> str:
     total = sum(score.values())
     grade = "A" if total >= 90 else "B" if total >= 75 else "C" if total >= 60 else "F"
 
-    result = f"\n## 🏁 MCP Self-Check: {grade} ({total}/100)\n"
+    result = f"\n## 🏁 MCP Self-Check: {grade} ({total}\100)\n"
     result += f"| Basic | Score | Status |\n|---|---|---|\n"
-    result += f"| 1. Analysis | {score['analysis']}/33 | {'✅' if score['analysis'] > 0 else '❌'} |\n"
-    result += f"| 2. Tracing Mandate | {score['tracing']}/33 | {'✅' if score['tracing'] >= 21 else '🔴 BLOCKED'} |\n"
-    result += f"| 3. Porting Process | {score['porting']}/34 | {'✅' if score['porting'] > 0 else '❌'} |\n"
-    result += f"| **Total** | **{total}/100** | **Grade: {grade}** |\n\n"
+    result += f"| 1. Analysis | {score['analysis']}\33 | {'✅' if score['analysis'] > 0 else '❌'} |\n"
+    result += f"| 2. Tracing Mandate | {score['tracing']}\33 | {'✅' if score['tracing'] >= 21 else '🔴 BLOCKED'} |\n"
+    result += f"| 3. Porting Process | {score['porting']}\34 | {'✅' if score['porting'] > 0 else '❌'} |\n"
+    result += f"| **Total** | **{total}\100** | **Grade: {grade}** |\n\n"
     result += "**Checklist:**\n" + "\n".join(details) + "\n"
 
     # ── HARD GATE: Due Diligence rules ───────────────────────────────
@@ -4112,7 +4112,7 @@ server = Server("kands")
 
 
 def _strip_tracing_from_dir(directory: str, strip_debug: int, strip_perf: int, extensions: list[str]) -> str:
-    """Strip STRACE/PERF tracing from source files in a directory.
+    """Strip STRACE\PERF tracing from source files in a directory.
 
     Level 1: comment out tracing calls (compile-time disable via #ifdef)
     Level 2: remove tracing calls entirely from source
@@ -4140,13 +4140,13 @@ def _strip_tracing_from_dir(directory: str, strip_debug: int, strip_perf: int, e
         original = content
 
         # STRACE patterns: STRACE(...), STRACE_SCOPE_BEGIN(...), STRACE_SCOPE_END(...), PERF_SUMMARY(...)
-        # Also handle variations: STRACE, STRACE_SCOPE_BEGIN/END, PERF_SUMMARY
+        # Also handle variations: STRACE, STRACE_SCOPE_BEGIN\END, PERF_SUMMARY
         strace_pattern = r'(\s*)STRACE\s*\([^)]*\)'
         perf_pattern = r'(\s*)PERF_SUMMARY\s*\([^)]*\)'
 
         if strip_debug == 1:
             # Level 1: comment out
-            content = re.sub(strace_pattern, lambda m: m.group(1) + '// ' + m.group(0).lstrip(), content)
+            content = re.sub(strace_pattern, lambda m: m.group(1) + '\\ ' + m.group(0).lstrip(), content)
             stats["straces_removed"] += len(re.findall(strace_pattern, original))
         elif strip_debug == 2:
             # Level 2: remove
@@ -4155,7 +4155,7 @@ def _strip_tracing_from_dir(directory: str, strip_debug: int, strip_perf: int, e
 
         if strip_perf == 1:
             # Level 1: comment out
-            content = re.sub(perf_pattern, lambda m: m.group(1) + '// ' + m.group(0).lstrip(), content)
+            content = re.sub(perf_pattern, lambda m: m.group(1) + '\\ ' + m.group(0).lstrip(), content)
             stats["perfs_removed"] += len(re.findall(perf_pattern, original))
         elif strip_perf == 2:
             # Level 2: remove
@@ -4172,15 +4172,15 @@ def _strip_tracing_from_dir(directory: str, strip_debug: int, strip_perf: int, e
 - PERF_SUMMARY calls {'commented out' if strip_perf == 1 else 'removed' if strip_perf == 2 else 'kept'}: {stats['perfs_removed']}
 
 **Compile flags for level 1 (comment-out):**
-- Debug: `-DSTRACE_ENABLED=0` (MSVC: `/DSTRACE_ENABLED=0`)
-- Perf: `-DTRACE_PERF=0` (MSVC: `/DTRACE_PERF=0`)
+- Debug: `-DSTRACE_ENABLED=0` (MSVC: `\DSTRACE_ENABLED=0`)
+- Perf: `-DTRACE_PERF=0` (MSVC: `\DTRACE_PERF=0`)
 
 **Compile flags for level 2 (removed):** No special flags needed — code is gone.
 """
 
 
 def _make_list_resources_handler():
-    """Return an async handler for resources/list."""
+    """Return an async handler for resources\list."""
     async def _handler(request, params):
         return mcp_types.ListResourcesResult(
             resources=_list_resources(),
@@ -4190,7 +4190,7 @@ def _make_list_resources_handler():
 
 
 def _make_read_resource_handler():
-    """Return an async handler for resources/read."""
+    """Return an async handler for resources\read."""
     async def _handler(request, params):
         uri = params.uri
         try:
@@ -4201,7 +4201,7 @@ def _make_read_resource_handler():
             contents=[
                 mcp_types.TextResourceContents(
                     uri=uri,
-                    mimeType="text/plain",
+                    mimeType="text\plain",
                     text=text,
                 )
             ]
@@ -4209,8 +4209,8 @@ def _make_read_resource_handler():
     return _handler
 
 
-# ── ISA probing / build verification ────────────────────────
-# Vendor-agnostic probe/build/verify helpers live in isa_tools so they can be
+# ── ISA probing \ build verification ────────────────────────
+# Vendor-agnostic probe\build\verify helpers live in isa_tools so they can be
 # unit-tested and reused outside this server. Nothing here is HIP-specific.
 # Imported as top-level modules: this server runs as `python -m server`, so
 # relative imports would break.
@@ -4359,7 +4359,7 @@ def _tools() -> list[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="diff_perf_traces",
-            description="Compare two perf-tracing outputs (before/after) to find regressions or improvements.",
+            description="Compare two perf-tracing outputs (before\after) to find regressions or improvements.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -4400,7 +4400,7 @@ def _tools() -> list[mcp_types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "arch": {"type": "string", "description": "Target arch ID (e.g. 'gfx1201', 'sm_80') from kands://architectures"},
+                    "arch": {"type": "string", "description": "Target arch ID (e.g. 'gfx1201', 'sm_80') from kands:\\architectures"},
                     "workload": {
                         "type": "string",
                         "description": "Workload type: 'fp32_gemm', 'fp16_gemm', 'bf16_gemm', 'wmma_gemm', 'flash_attn', 'attention_f32_fallback', 'dequant_q4', 'dequant_q8', 'dequant_dot4'",
@@ -4421,10 +4421,10 @@ def _tools() -> list[mcp_types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "arch": {"type": "string", "description": "Target arch ID from kands://architectures"},
+                    "arch": {"type": "string", "description": "Target arch ID from kands:\\architectures"},
                     "workload": {"type": "string", "description": "Workload type (matches estimate_performance workload)"},
-                    "target_tok_per_s": {"type": "number", "description": "Target tokens/second you need to achieve"},
-                    "current_tok_per_s": {"type": "number", "description": "Current measured tokens/second (if available)", "default": 0},
+                    "target_tok_per_s": {"type": "number", "description": "Target tokens\second you need to achieve"},
+                    "current_tok_per_s": {"type": "number", "description": "Current measured tokens\second (if available)", "default": 0},
                 },
                 "required": ["arch", "workload", "target_tok_per_s"],
             },
@@ -4443,7 +4443,7 @@ def _tools() -> list[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="search_github",
-            description="Search GitHub code for kernel/porting references, arch-specific patterns, and benchmark implementations.",
+            description="Search GitHub code for kernel\porting references, arch-specific patterns, and benchmark implementations.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -4483,7 +4483,7 @@ def _tools() -> list[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="suggest_optimizations",
-            description="Read the local perf history and suggest next optimization steps based on what worked/didn't for similar archs + workloads.",
+            description="Read the local perf history and suggest next optimization steps based on what worked\didn't for similar archs + workloads.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -4500,10 +4500,10 @@ def _tools() -> list[mcp_types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "engine_name": {"type": "string", "description": "Name of your engine/project"},
+                    "engine_name": {"type": "string", "description": "Name of your engine\project"},
                     "arch": {"type": "string", "description": "Target architecture ID"},
                     "workload": {"type": "string", "description": "Primary workload optimized"},
-                    "output_path": {"type": "string", "description": "Where to save the template (default: findings/<name>.md)"},
+                    "output_path": {"type": "string", "description": "Where to save the template (default: findings\<name>.md)"},
                 },
                 "required": ["engine_name", "arch"],
             },
@@ -4517,8 +4517,8 @@ def _tools() -> list[mcp_types.Tool]:
                     "goal": {"type": "string", "description": "One-sentence ultimate goal"},
                     "target_arch": {"type": "string", "description": "Target arch ID"},
                     "source_arch": {"type": "string", "description": "Source arch ID"},
-                    "target_backend": {"type": "string", "description": "Target backend: hip/cuda/vulkan/directx/sycl", "default": "hip"},
-                    "target_tok_per_s": {"type": "number", "description": "Target tokens/second"},
+                    "target_backend": {"type": "string", "description": "Target backend: hip\cuda\vulkan\directx\sycl", "default": "hip"},
+                    "target_tok_per_s": {"type": "number", "description": "Target tokens\second"},
                     "min_perf": {"type": "float", "description": "Minimum viable perf", "default": 0},
                     "files_in_scope": {"type": "array", "items": {"type": "string"}, "description": "Glob patterns of files allowed to modify"},
                     "files_out_of_scope": {"type": "array", "items": {"type": "string"}, "description": "Glob patterns of files must NOT touch"},
@@ -4530,7 +4530,7 @@ def _tools() -> list[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="update_goal",
-            description="Override or update an existing goal/guardrail. Flexible — user can change any field. All overrides are logged.",
+            description="Override or update an existing goal\guardrail. Flexible — user can change any field. All overrides are logged.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -4543,7 +4543,7 @@ def _tools() -> list[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="check_guardrail",
-            description="Verify whether a proposed action is within the defined guardrails. Returns ALLOW/DENY with justification.",
+            description="Verify whether a proposed action is within the defined guardrails. Returns ALLOW\DENY with justification.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -4559,7 +4559,7 @@ def _tools() -> list[mcp_types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "repo_url": {"type": "string", "description": "K_and_S repo URL", "default": "https://github.com/MaxRitz/K_and_S"},
+                    "repo_url": {"type": "string", "description": "K_and_S repo URL", "default": "https:\\github.com\MaxRitz\K_and_S"},
                     "branch_name": {"type": "string", "description": "Branch name (default: auto-generated)"},
                     "change_types": {"type": "array", "items": {"type": "string"}, "description": "Change types: findings, arch_data, patterns, perf_data"},
                 },
@@ -4584,7 +4584,7 @@ def _tools() -> list[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="strip_tracing",
-            description="Strip debug (STRACE) and/or perf (PERF_SUMMARY) tracing from source files. Level 1=comment-out (compile-time disable), Level 2=remove code permanently.",
+            description="Strip debug (STRACE) and\or perf (PERF_SUMMARY) tracing from source files. Level 1=comment-out (compile-time disable), Level 2=remove code permanently.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -4610,7 +4610,7 @@ def _tools() -> list[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="radical_experiment_plan",
-            description="Generate unconventional/experimental approaches for GPU kernel optimization. Returns radical but grounded experimentation ideas with implementation paths and fallback plans.",
+            description="Generate unconventional\experimental approaches for GPU kernel optimization. Returns radical but grounded experimentation ideas with implementation paths and fallback plans.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -4623,12 +4623,12 @@ def _tools() -> list[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="list_skills",
-            description="List all available skills from the MySkills framework. Returns categorized skill index. Use read_resource to get kands://myskills for full data, or kands://myskills/<skill_name> to read a specific skill's instructions.",
+            description="List all available skills from the MySkills framework. Returns categorized skill index. Use read_resource to get kands:\\myskills for full data, or kands:\\myskills\<skill_name> to read a specific skill's instructions.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "category": {"type": "string", "description": "Filter by category (e.g. 'debug', 'gpu', 'ml', 'optimization'). Empty = all."},
-                    "search": {"type": "string", "description": "Search skill names/descriptions for this term."},
+                    "search": {"type": "string", "description": "Search skill names\descriptions for this term."},
                 },
                 "required": [],
             },
@@ -4669,10 +4669,10 @@ def _tools() -> list[mcp_types.Tool]:
                     "target_arch": {"type": "string", "description": "Target arch ID (e.g. 'gfx1201'). 'auto' = auto-detect + suggest", "default": "auto"},
                     "project_type": {"type": "string", "description": "Project type: llm, game, sdk, compute, inference, or 'auto' for auto-detect", "default": "auto"},
                     "target_language": {"type": "string", "description": "Target language: cxx, rust, python, or 'auto' for optimal choice", "default": "auto"},
-                    "target_backend": {"type": "string", "description": "hip/cuda/vulkan/directx/sycl/auto", "default": "auto"},
-                    "target_os": {"type": "string", "description": "linux/windows/auto", "default": "auto"},
+                    "target_backend": {"type": "string", "description": "hip\cuda\vulkan\directx\sycl\auto", "default": "auto"},
+                    "target_os": {"type": "string", "description": "linux\windows\auto", "default": "auto"},
                     "target_tok_per_s": {"type": "number", "description": "Performance target for LLM workloads", "default": 0},
-                    "mode": {"type": "string", "description": "strict/loose", "default": "strict"},
+                    "mode": {"type": "string", "description": "strict\loose", "default": "strict"},
                     "max_files": {"type": "integer", "description": "Max files to scan", "default": 1000},
                     "timeout_seconds": {"type": "integer", "description": "Timeout for clone+scan (default 60s)", "default": 60},
                     "force_refresh": {"type": "boolean", "description": "Force re-analysis", "default": False},
@@ -4690,7 +4690,7 @@ def _tools() -> list[mcp_types.Tool]:
                 "type": "object",
                 "properties": {
                     "repo_path": {"type": "string", "description": "Path to the engine repo (must exist). Use github_url for remote repos"},
-                    "github_url": {"type": "string", "description": "GitHub URL to clone (e.g., https://github.com/ggerganov/llama.cpp). SECURITY: repo is read-only; no build scripts executed"},
+                    "github_url": {"type": "string", "description": "GitHub URL to clone (e.g., https:\\github.com\ggerganov\llama.cpp). SECURITY: repo is read-only; no build scripts executed"},
                     "source_arch": {"type": "string", "description": "Source arch ID (e.g., 'sm_80', 'gfx1100'). 'auto' = auto-detect from repo", "default": "auto"},
                     "target_arch": {"type": "string", "description": "Target arch ID (e.g., 'gfx1201'). 'auto' = suggest based on installed hardware", "default": "auto"},
                     "project_type": {"type": "string", "description": "Type of project: 'llm', 'game', 'sdk', 'compute', 'inference', or 'auto'", "default": "auto"},
@@ -4735,27 +4735,134 @@ def _tools() -> list[mcp_types.Tool]:
             },
         ),
         mcp_types.Tool(
+            name="add_backend",
+            description="AUTOMATED BACKEND ADDITION: Add a new GPU backend with full toolchain detection, shim generation, architecture support, and test suite creation. Supports hip, cuda, vulkan, directx, sycl, metal, opencl.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "backend_name": {"type": "string", "description": "Name of the new backend to add"},
+                    "backend_config": {"type": "object", "description": "Backend configuration including compiler, extensions, arch_patterns, feature_flags", "default": {}},
+                },
+                "required": ["backend_name"],
+            },
+        ),
+        mcp_types.Tool(
+            name="detect_toolchain",
+            description="AUTOMATED TOOLCHAIN DETECTION: Detect and validate toolchain for any backend using multiple strategies (environment variables, PATH search, registry, package managers, SDK discovery).",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "backend_name": {"type": "string", "description": "Backend name to detect toolchain for"},
+                    "os_type": {"type": "string", "description": "Target OS: auto, linux, windows, macos", "default": "auto"},
+                },
+                "required": ["backend_name"],
+            },
+        ),
+        mcp_types.Tool(
+            name="convert_language",
+            description="AUTOMATED LANGUAGE CONVERSION: Convert code between programming languages (cuda↔rust, cpp↔zig, python↔c, opencl↔sycl, hip↔cuda, vulkan↔directx) with semantic preservation and validation.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "source_code": {"type": "string", "description": "Source code to convert"},
+                    "source_lang": {"type": "string", "description": "Source language"},
+                    "target_lang": {"type": "string", "description": "Target language"},
+                },
+                "required": ["source_code", "source_lang", "target_lang"],
+            },
+        ),
+        mcp_types.Tool(
+            name="migrate_platform",
+            description="AUTOMATED PLATFORM MIGRATION: Migrate project between platforms (windows↔linux, macos↔linux, embedded↔desktop) with compatibility shims and path adaptation.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_path": {"type": "string", "description": "Path to project to migrate"},
+                    "source_platform": {"type": "string", "description": "Source platform: windows, linux, macos, embedded"},
+                    "target_platform": {"type": "string", "description": "Target platform: windows, linux, macos, embedded"},
+                },
+                "required": ["project_path", "source_platform", "target_platform"],
+            },
+        ),
+        mcp_types.Tool(
+            name="integrate_build_system",
+            description="AUTOMATED BUILD SYSTEM INTEGRATION: Integrate with various build systems (cmake, make, meson, bazel, ninja, scons) with backend-specific configuration.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project_path": {"type": "string", "description": "Path to project"},
+                    "build_system": {"type": "string", "description": "Build system: cmake, make, meson, bazel, ninja, scons"},
+                    "backend_config": {"type": "object", "description": "Backend configuration", "default": {}},
+                },
+                "required": ["project_path", "build_system"],
+            },
+        ),
+        mcp_types.Tool(
+            name="optimize_performance",
+            description="ADVANCED PERFORMANCE OPTIMIZATION: Apply comprehensive performance optimizations including instruction selection, memory layout, kernel fusion, register optimization, and more.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "source_code": {"type": "string", "description": "Source code to optimize"},
+                    "target_arch": {"type": "string", "description": "Target architecture ID"},
+                    "target_backend": {"type": "string", "description": "Target backend"},
+                },
+                "required": ["source_code", "target_arch", "target_backend"],
+            },
+        ),
+        mcp_types.Tool(
+            name="handle_error_recovery",
+            description="COMPREHENSIVE ERROR RECOVERY: Handle errors with multiple recovery strategies including retry, rollback, fallback, and graceful degradation.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "error_message": {"type": "string", "description": "Error message to handle"},
+                    "context": {"type": "object", "description": "Context for error recovery", "default": {}},
+                    "recovery_level": {"type": "string", "description": "Recovery level: automatic, manual, hybrid", "default": "automatic"},
+                },
+                "required": ["error_message"],
+            },
+        ),
+        mcp_types.Tool(
+            name="comprehensive_porting",
+            description="COMPREHENSIVE PORTING INTEGRATION: Execute complete porting workflow with language conversion, platform migration, build integration, performance optimization, and error recovery.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "source_code": {"type": "string", "description": "Source code to port"},
+                    "source_lang": {"type": "string", "description": "Source language"},
+                    "target_lang": {"type": "string", "description": "Target language"},
+                    "source_platform": {"type": "string", "description": "Source platform"},
+                    "target_platform": {"type": "string", "description": "Target platform"},
+                    "target_backend": {"type": "string", "description": "Target backend"},
+                    "build_system": {"type": "string", "description": "Build system to use", "default": "cmake"},
+                    "mode": {"type": "string", "description": "Porting mode", "default": "auto"},
+                },
+                "required": ["source_code", "source_lang", "target_lang", "source_platform", "target_platform", "target_backend"],
+            },
+        ),
+        mcp_types.Tool(
             name="capability_report",
-            description="Report what THIS host can actually build for a target (compiler, root, disassembler, supported backends). Use before planning any port: probes discovery instead of assuming a toolchain exists. Vendor-agnostic (hip/cuda/sycl).",
+            description="Report what THIS host can actually build for a target (compiler, root, disassembler, supported backends). Use before planning any port: probes discovery instead of assuming a toolchain exists. Vendor-agnostic (hip\cuda\sycl).",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "target": {"type": "string", "description": "Target arch id, e.g. 'gfx1201', 'sm_80', 'spir64'"},
-                    "backend": {"type": "string", "description": "hip/cuda/sycl/auto (auto infers from target)", "default": "auto"},
+                    "backend": {"type": "string", "description": "hip\cuda\sycl\auto (auto infers from target)", "default": "auto"},
                 },
                 "required": ["target"],
             },
         ),
         mcp_types.Tool(
             name="probe_isa",
-            description="Compile one or more ISA candidates FOR THE TARGET ARCH and report which actually encode. Each candidate gets its own translation unit so one failure cannot mask the others. This is the only reliable oracle for 'does this instruction exist on this chip' — docs and capability tables lie. Returns per-candidate ok/error plus the disassembled mnemonics.",
+            description="Compile one or more ISA candidates FOR THE TARGET ARCH and report which actually encode. Each candidate gets its own translation unit so one failure cannot mask the others. This is the only reliable oracle for 'does this instruction exist on this chip' — docs and capability tables lie. Returns per-candidate ok\error plus the disassembled mnemonics.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "target": {"type": "string", "description": "Target arch id, e.g. 'gfx1201', 'sm_80'"},
                     "candidates": {
                         "type": "array",
-                        "description": "List of {name, stmt} objects. stmt is the C/C++ statement to test.",
+                        "description": "List of {name, stmt} objects. stmt is the C\C++ statement to test.",
                         "items": {
                             "type": "object",
                             "properties": {
@@ -4773,7 +4880,7 @@ def _tools() -> list[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="scan_residual_asm",
-            description="Find live inline-asm strings that name a foreign/unsupported mnemonic (e.g. NVIDIA PTX left in an AMD port, or AMD mnemonics in a CUDA port). Only matches asm(\"...\") string literals, so comments do not false-positive. Run this as a hard gate before every build.",
+            description="Find live inline-asm strings that name a foreign\unsupported mnemonic (e.g. NVIDIA PTX left in an AMD port, or AMD mnemonics in a CUDA port). Only matches asm(\"...\") string literals, so comments do not false-positive. Run this as a hard gate before every build.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -4797,7 +4904,7 @@ def _tools() -> list[mcp_types.Tool]:
                     "includes": {"type": "array", "items": {"type": "string"}},
                     "flags": {"type": "array", "items": {"type": "string"}},
                     "concatenate": {"type": "boolean", "default": True},
-                    "expected_symbols": {"type": "array", "items": {"type": "string"}, "description": "If given, report missing/unexpected kernel symbols"},
+                    "expected_symbols": {"type": "array", "items": {"type": "string"}, "description": "If given, report missing\unexpected kernel symbols"},
                 },
                 "required": ["sources", "target", "out"],
             },
@@ -4805,22 +4912,22 @@ def _tools() -> list[mcp_types.Tool]:
         mcp_types.Tool(
             name="code_object_report",
             description=("ISA and residency budget for a compiled kernel artifact. "
-                         "Unbundles a container (clang offload bundle / fatbinary) and "
+                         "Unbundles a container (clang offload bundle \ fatbinary) and "
                          "selects the right target from it, then reports per kernel: "
-                         "SIMD width, register counts (VGPR/SGPR or registers), spills, "
+                         "SIMD width, register counts (VGPR\SGPR or registers), spills, "
                          "scratch memory per block, how many blocks that allows to be "
                          "resident per compute unit, and the instruction mix (global "
                          "loads with widths, shared-memory ops, bit ops, dot ops) with "
                          "verdicts. Use before tuning: a kernel can be pinned at one "
                          "block per CU, or spending its issue slots decoding, and "
                          "neither shows up in timing counters. Vendor-neutral in what "
-                         "it asks; the AMD/LLVM path is implemented, and the CUDA "
+                         "it asks; the AMD\LLVM path is implemented, and the CUDA "
                          "equivalents are reported when no LLVM tooling is present."),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "path": {"type": "string",
-                             "description": "Compiled kernel artifact (.hsaco/.cubin/.co/.elf/.metallib), bundle or raw ELF"},
+                             "description": "Compiled kernel artifact (.hsaco\.cubin\.co\.elf\.metallib), bundle or raw ELF"},
                     "arch": {"type": "string",
                              "description": "Select this target from a multi-arch bundle, e.g. 'gfx1201' or 'sm_90'"},
                     "lds_kib": {"type": "number",
@@ -4831,7 +4938,7 @@ def _tools() -> list[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="build_porting_map",
-            description="Read a source tree and emit a function-to-function porting map for a target: every kernel/device function with its role, the constructs it uses (inline asm mnemonics, warp intrinsics, ISA features), and the target-specific substitution with an explicit fidelity grade (exact/portable/approximate/lossy/manual/drop). ISA constructs inside macros are attributed to the functions that call them. Answers 'what do I replace this with on this chip' from the source, not from memory.",
+            description="Read a source tree and emit a function-to-function porting map for a target: every kernel\device function with its role, the constructs it uses (inline asm mnemonics, warp intrinsics, ISA features), and the target-specific substitution with an explicit fidelity grade (exact\portable\approximate\lossy\manual\drop). ISA constructs inside macros are attributed to the functions that call them. Answers 'what do I replace this with on this chip' from the source, not from memory.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -4871,7 +4978,7 @@ def _tools() -> list[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="build_function_reference",
-            description="PRE-PORT TASK. Scan a source tree and produce the CUDA/vendor function reference for a target: every runtime API, driver API, inline-PTX instruction, device intrinsic and framework feature the code actually uses, each with its target replacement, an auto/partial/manual/no-equivalent status, the call sites and the files that depend on it. Status is resolved per architecture (e.g. mma.sync is manual on all AMD, but MFMA vs WMMA vs no-matrix-core changes at RDNA2/RDNA3/RDNA4/CDNA). Features with no equivalent are reported as hard blockers that must be resolved before any kernel work begins. Run this BEFORE designing the port: it converts 'where do I start' into a work list.",
+            description="PRE-PORT TASK. Scan a source tree and produce the CUDA\vendor function reference for a target: every runtime API, driver API, inline-PTX instruction, device intrinsic and framework feature the code actually uses, each with its target replacement, an auto\partial\manual\no-equivalent status, the call sites and the files that depend on it. Status is resolved per architecture (e.g. mma.sync is manual on all AMD, but MFMA vs WMMA vs no-matrix-core changes at RDNA2\RDNA3\RDNA4\CDNA). Features with no equivalent are reported as hard blockers that must be resolved before any kernel work begins. Run this BEFORE designing the port: it converts 'where do I start' into a work list.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -4910,7 +5017,7 @@ def _tools() -> list[mcp_types.Tool]:
         ),
         mcp_types.Tool(
             name="analyze_core_engine",
-            description="Analyze an engine's core dispatch architecture: kernel launch strategy, memory management pattern, tensor-parallelism/multi-GPU support, weight layout handling, and host↔device interface. Produces a structured map of how the engine orchestrates its kernels. General-purpose: works with any engine.",
+            description="Analyze an engine's core dispatch architecture: kernel launch strategy, memory management pattern, tensor-parallelism\multi-GPU support, weight layout handling, and host↔device interface. Produces a structured map of how the engine orchestrates its kernels. General-purpose: works with any engine.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -4924,14 +5031,14 @@ def _tools() -> list[mcp_types.Tool]:
 
 
 def _make_list_tools_handler():
-    """Return an async handler for tools/list."""
+    """Return an async handler for tools\list."""
     async def _handler(request, params):
         return mcp_types.ListToolsResult(tools=_tools(), nextCursor=None)
     return _handler
 
 
 def _make_call_tool_handler():
-    """Return an async handler for tools/call."""
+    """Return an async handler for tools\call."""
     async def _handler(request, params):
         name = params.name
         arguments = params.arguments or {}
@@ -4955,7 +5062,7 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
             ext_filter = arguments.get("ext_filter")
             findings = _scan_sources(root, ext_filter)
             if not findings:
-                results.append(mcp_types.TextContent(type="text", text=f"No GPU/kernel/shader sources found in {repo}"))
+                results.append(mcp_types.TextContent(type="text", text=f"No GPU\kernel\shader sources found in {repo}"))
             else:
                 backends = {}
                 for k in findings:
@@ -4968,7 +5075,7 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
                     if len(files) > 30:
                         summary += f"... and {len(files) - 30} more\n"
                     summary += "\n"
-                summary += f"\n**Total: {len(findings)} kernel/shader files**\n"
+                summary += f"\n**Total: {len(findings)} kernel\shader files**\n"
                 results.append(mcp_types.TextContent(type="text", text=summary))
                 results.append(mcp_types.TextContent(type="text", text=json.dumps(findings, indent=2)))
 
@@ -5004,7 +5111,7 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
             # GPU features
             for feat in ["wave_size", "lds_kib", "tensor_cores", "wmma", "dot4", "dot8", "bf16_native", "fp8_native"]:
                 if feat in arch_info:
-                    report += f"| {feat} | {arch_info.get(feat, 'N/A')} |\n"
+                    report += f"| {feat} | {arch_info.get(feat, 'N\A')} |\n"
             # CPU features
             cpu_feats = arch_info.get("features", {})
             if cpu_feats:
@@ -5114,7 +5221,7 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
                     gap = "SAME" if str(va) == str(vb) else "DIFF"
                     report += f"| {k} | {va} | {vb} | {gap} |\n"
                 if is_a_cpu != is_b_cpu:
-                    report += "\n## Mixed CPU/GPU Comparison\n\n"
+                    report += "\n## Mixed CPU\GPU Comparison\n\n"
                     if is_a_cpu and not is_b_cpu:
                         report += f"A is CPU ({arguments['arch_a']}), B is GPU ({arguments['arch_b']}).\n"
                     else:
@@ -5145,7 +5252,7 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
                 if fa.get("avx512") and not fb.get("avx512"):
                     report += f"- AVX-512 kernels need AVX2 fallback on {arguments['arch_b']}\n"
                 if fa.get("amx") and not fb.get("amx"):
-                    report += f"- AMX kernels need AVX2/scalar fallback on {arguments['arch_b']}\n"
+                    report += f"- AMX kernels need AVX2\scalar fallback on {arguments['arch_b']}\n"
                 if not fa.get("sve2") and fb.get("sve2"):
                     report += f"- Target {arguments['arch_b']} has SVE2 \u2192 can add SVE2 kernels\n"
             results.append(mcp_types.TextContent(type="text", text=report))
@@ -5305,8 +5412,8 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
         security_warnings = []
         # SECURITY: Validate github_url scheme
         if params.github_url:
-            if not params.github_url.startswith("https://github.com/") and not params.github_url.startswith("git+https://github.com/"):
-                results.append(mcp_types.TextContent(type="text", text="ERROR: github_url must be https://github.com/ or git+https://github.com/ (arbitrary git URLs blocked)"))
+            if not params.github_url.startswith("https:\\github.com\") and not params.github_url.startswith("git+https:\\github.com\"):
+                results.append(mcp_types.TextContent(type="text", text="ERROR: github_url must be https:\\github.com\ or git+https:\\github.com\ (arbitrary git URLs blocked)"))
                 return results
             security_warnings.append("SECURITY: Repo cloned READ-ONLY. No build scripts or git hooks executed.")
             security_warnings.append(f"SECURITY: File count capped at {params.max_files}, timeout {params.timeout_seconds}s.")
@@ -5332,7 +5439,7 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
             _scan_root = Path(params.repo_path) if params.repo_path else None
             if _scan_root and _scan_root.exists():
                 _all_kernels = _scan_sources(_scan_root)
-                _kernel_names = [k["path"].split("/")[-1]
+                _kernel_names = [k["path"].split("\")[-1]
                                  .replace(".cu", "").replace(".cpp", "")
                                  .replace(".comp", "").replace(".c", "")
                                  .replace(".cc", "").replace(".cxx", "")
@@ -5344,7 +5451,7 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
                 """True only when a detection field names an existing binary.
 
                 Detection fields may be: a path str, None, or a dict like
-                {"exists": False} / {"path": ..., "exists": True}. The dict
+                {"exists": False} \ {"path": ..., "exists": True}. The dict
                 form is truthy even when exists is False, so a plain `or`
                 chain false-credits toolchains with no compiler (audit F1:
                 hip scored +25 from windows_path={"exists": False})."""
@@ -5431,12 +5538,12 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
         # Save report to working folder
         import datetime as _dt
         repo_dir = Path(params.repo_path or params.github_url or ".")
-        findings_dir = repo_dir / "findings"
+        findings_dir = repo_dir \ "findings"
         findings_dir.mkdir(parents=True, exist_ok=True)
         timestamp = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
         safe_lang = (params.target_language or "auto").replace(" ", "-").lower()
         safe_backend = params.target_backend or "auto"
-        report_file = findings_dir / f"porting-report-{safe_lang}-{safe_backend}-{timestamp}.md"
+        report_file = findings_dir \ f"porting-report-{safe_lang}-{safe_backend}-{timestamp}.md"
         try:
             report_file.write_text(report, encoding="utf-8")
             report += f"\n\n---\n**Report saved to:** `{report_file}`\n"
@@ -5464,15 +5571,15 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
         # Format result as text
         report = "# Enhanced Autonomous Porting Report\n\n"
         report += f"**Status:** {result.get('status', 'unknown')}\n"
-        report += f"**Repository:** {result.get('port_request', {}).get('repo_path', 'N/A')}\n"
-        report += f"**Target Arch:** {result.get('port_request', {}).get('target_arch', 'N/A')}\n"
-        report += f"**Target Backend:** {result.get('port_request', {}).get('target_backend', 'N/A')}\n"
-        report += f"**Mode:** {result.get('port_request', {}).get('mode', 'N/A')}\n\n"
+        report += f"**Repository:** {result.get('port_request', {}).get('repo_path', 'N\A')}\n"
+        report += f"**Target Arch:** {result.get('port_request', {}).get('target_arch', 'N\A')}\n"
+        report += f"**Target Backend:** {result.get('port_request', {}).get('target_backend', 'N\A')}\n"
+        report += f"**Mode:** {result.get('port_request', {}).get('mode', 'N\A')}\n\n"
         
         if result.get('status') == 'success':
             report += "## ✅ Enhanced Porting Completed Successfully\n\n"
-            report += f"**Optimal Strategy:** {result.get('optimal_strategy_selected', {}).get('approach', 'N/A')}\n"
-            report += f"**Estimated Performance:** {result.get('optimal_strategy_selected', {}).get('estimated_performance', 0)} tok/s\n"
+            report += f"**Optimal Strategy:** {result.get('optimal_strategy_selected', {}).get('approach', 'N\A')}\n"
+            report += f"**Estimated Performance:** {result.get('optimal_strategy_selected', {}).get('estimated_performance', 0)} tok\s\n"
             report += f"**Confidence:** {result.get('optimal_strategy_selected', {}).get('confidence', 0):.2f}\n"
             report += f"**Risk Level:** {result.get('optimal_strategy_selected', {}).get('risk_level', 0):.2f}\n\n"
             
@@ -5515,8 +5622,8 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
         
         # Format result as text
         report = "# Enhanced Porting Modes Report\n\n"
-        report += f"**Mode Requested:** {result.get('mode_requested', 'N/A')}\n"
-        report += f"**Mode Executed:** {result.get('mode_executed', 'N/A')}\n"
+        report += f"**Mode Requested:** {result.get('mode_requested', 'N\A')}\n"
+        report += f"**Mode Executed:** {result.get('mode_executed', 'N\A')}\n"
         report += f"**Status:** {result.get('status', 'unknown')}\n\n"
         
         if result.get('status') == 'success':
@@ -5542,7 +5649,7 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
                     report += f"- **{key.replace('_', ' ').title()}:** {value}\n"
                 report += "\n"
             
-            report += f"**Estimated Performance Gain:** {result.get('estimated_performance_gain', 'N/A')}\n"
+            report += f"**Estimated Performance Gain:** {result.get('estimated_performance_gain', 'N\A')}\n"
             report += f"**Validation Level:** {result.get('validation_level', 'standard')}\n\n"
             
             # Recommendations
@@ -5565,6 +5672,292 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
         
         results.append(mcp_types.TextContent(type="text", text=report))
 
+    elif name == "add_backend":
+        # Import backend addition wizard
+        try:
+            from mcp.backend_addition_wizard import BackendAdditionWizard
+        except ImportError:
+            from backend_addition_wizard import BackendAdditionWizard
+        
+        wizard = BackendAdditionWizard()
+        backend_name = arguments.get("backend_name", "")
+        backend_config = arguments.get("backend_config", {})
+        
+        result = await wizard.add_new_backend(backend_name, backend_config)
+        
+        report = "# Backend Addition Report\n\n"
+        report += f"**Backend:** {backend_name}\n"
+        report += f"**Status:** {result.get('status', 'unknown')}\n\n"
+        
+        if result.get('status') == 'success':
+            report += "## ✅ Backend Added Successfully\n\n"
+            report += f"**Steps Completed:** {result.get('steps_completed', 0)}\n"
+            report += "**Backend is now ready for use!**\n"
+        else:
+            report += "## ❌ Backend Addition Failed\n\n"
+            report += f"**Error:** {result.get('error', 'Unknown error')}\n"
+            report += f"**Failed Step:** {result.get('step', 'Unknown')}\n"
+        
+        results.append(mcp_types.TextContent(type="text", text=report))
+
+    elif name == "detect_toolchain":
+        # Import toolchain detector
+        try:
+            from mcp.backend_addition_wizard import ToolchainDetector
+        except ImportError:
+            from backend_addition_wizard import ToolchainDetector
+        
+        detector = ToolchainDetector()
+        backend_name = arguments.get("backend_name", "")
+        os_type = arguments.get("os_type", "auto")
+        
+        result = detector.detect_backend_toolchain(backend_name, os_type)
+        
+        report = "# Toolchain Detection Report\n\n"
+        report += f"**Backend:** {backend_name}\n"
+        report += f"**OS Type:** {os_type}\n"
+        report += f"**Found:** {result.get('found', False)}\n"
+        
+        if result.get('found', False):
+            report += f"**Best Path:** {result.get('best_path', 'N\A')}\n"
+            report += f"**Sources:** {', '.join(result.get('sources', []))}\n"
+            report += f"**Confidence:** {result.get('confidence', 0):.2f}\n"
+        else:
+            report += "**Toolchain not found on system**\n"
+        
+        results.append(mcp_types.TextContent(type="text", text=report))
+
+    elif name == "convert_language":
+        # Import language converter
+        try:
+            from mcp.language_converter import LanguageConverter
+        except ImportError:
+            from language_converter import LanguageConverter
+        
+        converter = LanguageConverter()
+        source_code = arguments.get("source_code", "")
+        source_lang = arguments.get("source_lang", "")
+        target_lang = arguments.get("target_lang", "")
+        
+        result = converter.convert_code(source_code, source_lang, target_lang)
+        
+        report = "# Language Conversion Report\n\n"
+        report += f"**Source Language:** {source_lang}\n"
+        report += f"**Target Language:** {target_lang}\n"
+        report += f"**Status:** {'Success' if result.success else 'Failed'}\n\n"
+        
+        if result.success:
+            report += "## ✅ Conversion Successful\n\n"
+            report += "### Converted Code\n```\n"
+            report += result.converted_code[:500] + ("..." if len(result.converted_code) > 500 else "")
+            report += "\n```\n\n"
+            
+            report += "### Validation Results\n"
+            for key, value in result.validation.items():
+                status = "✅" if value else "❌"
+                report += f"- {status} {key.replace('_', ' ').title()}: {value}\n"
+            
+            if result.warnings:
+                report += "\n### Warnings\n"
+                for warning in result.warnings:
+                    report += f"- ⚠️ {warning}\n"
+        else:
+            report += "## ❌ Conversion Failed\n\n"
+            for error in result.errors:
+                report += f"- {error}\n"
+        
+        results.append(mcp_types.TextContent(type="text", text=report))
+
+    elif name == "migrate_platform":
+        # Import platform migrator
+        try:
+            from mcp.platform_migrator import PlatformMigrator
+        except ImportError:
+            from platform_migrator import PlatformMigrator
+        
+        import asyncio
+        migrator = PlatformMigrator()
+        project_path = arguments.get("project_path", "")
+        source_platform = arguments.get("source_platform", "")
+        target_platform = arguments.get("target_platform", "")
+        
+        result = await migrator.migrate_platform(project_path, source_platform, target_platform)
+        
+        report = "# Platform Migration Report\n\n"
+        report += f"**Source Platform:** {source_platform}\n"
+        report += f"**Target Platform:** {target_platform}\n"
+        report += f"**Status:** {result.status}\n\n"
+        
+        if result.status in ["success", "partial"]:
+            report += "## ✅ Migration Completed\n\n"
+            report += f"**Steps Completed:** {len(result.steps_completed)}\n"
+            report += f"**Files Modified:** {len(result.files_modified)}\n"
+            report += f"**Compatibility Shims:** {len(result.compatibility_shims)}\n"
+            
+            if result.warnings:
+                report += "\n### Warnings\n"
+                for warning in result.warnings:
+                    report += f"- ⚠️ {warning}\n"
+        else:
+            report += "## ❌ Migration Failed\n\n"
+            for error in result.errors:
+                report += f"- {error}\n"
+        
+        results.append(mcp_types.TextContent(type="text", text=report))
+
+    elif name == "integrate_build_system":
+        # Import build system integrator
+        try:
+            from mcp.build_system_integrator import BuildSystemIntegrator
+        except ImportError:
+            from build_system_integrator import BuildSystemIntegrator
+        
+        import asyncio
+        integrator = BuildSystemIntegrator()
+        project_path = arguments.get("project_path", "")
+        build_system = arguments.get("build_system", "cmake")
+        backend_config = arguments.get("backend_config", {})
+        
+        result = await integrator.integrate_build_system(project_path, build_system, backend_config)
+        
+        report = "# Build System Integration Report\n\n"
+        report += f"**Build System:** {build_system}\n"
+        report += f"**Status:** {result.status}\n\n"
+        
+        if result.status == "success":
+            report += "## ✅ Build System Integrated\n\n"
+            report += f"**Files Created:** {len(result.files_created)}\n"
+            report += f"**Files Modified:** {len(result.files_modified)}\n"
+            report += f"**Backup Files:** {len(result.backup_files)}\n"
+        else:
+            report += "## ❌ Build System Integration Failed\n\n"
+            for error in result.errors:
+                report += f"- {error}\n"
+        
+        results.append(mcp_types.TextContent(type="text", text=report))
+
+    elif name == "optimize_performance":
+        # Import performance optimizer
+        try:
+            from mcp.performance_optimizer import PerformanceOptimizer
+        except ImportError:
+            from performance_optimizer import PerformanceOptimizer
+        
+        import asyncio
+        optimizer = PerformanceOptimizer()
+        source_code = arguments.get("source_code", "")
+        target_arch = arguments.get("target_arch", "")
+        target_backend = arguments.get("target_backend", "")
+        
+        result = await optimizer.optimize_performance(source_code, target_arch, target_backend)
+        
+        report = "# Performance Optimization Report\n\n"
+        report += f"**Target Arch:** {target_arch}\n"
+        report += f"**Target Backend:** {target_backend}\n"
+        report += f"**Status:** {result.status}\n\n"
+        
+        if result.status == "success":
+            report += "## ✅ Performance Optimized\n\n"
+            report += f"**Optimizations Applied:** {len(result.optimizations_applied)}\n"
+            report += f"**Estimated Gain:** {result.estimated_performance_gain}\n\n"
+            
+            report += "### Optimizations\n"
+            for opt in result.optimizations_applied:
+                report += f"- **{opt['strategy']}:** {', '.join(opt.get('improvements', []))}\n"
+        else:
+            report += "## ❌ Performance Optimization Failed\n\n"
+            for error in result.errors:
+                report += f"- {error}\n"
+        
+        results.append(mcp_types.TextContent(type="text", text=report))
+
+    elif name == "handle_error_recovery":
+        # Import error recovery system
+        try:
+            from mcp.error_recovery_system import ErrorRecoverySystem
+        except ImportError:
+            from error_recovery_system import ErrorRecoverySystem
+        
+        import asyncio
+        recovery = ErrorRecoverySystem()
+        error_message = arguments.get("error_message", "")
+        context = arguments.get("context", {})
+        recovery_level = arguments.get("recovery_level", "automatic")
+        
+        error = Exception(error_message)
+        result = await recovery.handle_error(error, context, recovery_level)
+        
+        report = "# Error Recovery Report\n\n"
+        report += f"**Error:** {error_message}\n"
+        report += f"**Recovery Level:** {recovery_level}\n"
+        report += f"**Status:** {result.status}\n"
+        report += f"**Strategy Used:** {result.strategy_used}\n\n"
+        
+        if result.status == "recovered":
+            report += "## ✅ Error Recovered\n\n"
+            report += "### Recovery Actions\n"
+            for action in result.recovery_actions:
+                report += f"- {action}\n"
+            
+            if result.warnings:
+                report += "\n### Warnings\n"
+                for warning in result.warnings:
+                    report += f"- ⚠️ {warning}\n"
+        else:
+            report += "## ⚠️ Manual Intervention Required\n\n"
+            for error in result.errors:
+                report += f"- {error}\n"
+        
+        results.append(mcp_types.TextContent(type="text", text=report))
+
+    elif name == "comprehensive_porting":
+        # Import porting integration
+        try:
+            from mcp.porting_integration import PortingIntegration
+        except ImportError:
+            from porting_integration import PortingIntegration
+        
+        import asyncio
+        integration = PortingIntegration()
+        source_code = arguments.get("source_code", "")
+        source_lang = arguments.get("source_lang", "")
+        target_lang = arguments.get("target_lang", "")
+        source_platform = arguments.get("source_platform", "")
+        target_platform = arguments.get("target_platform", "")
+        target_backend = arguments.get("target_backend", "")
+        build_system = arguments.get("build_system", "cmake")
+        mode = arguments.get("mode", "auto")
+        
+        result = await integration.comprehensive_porting(
+            source_code, source_lang, target_lang,
+            source_platform, target_platform, target_backend,
+            build_system, mode
+        )
+        
+        report = "# Comprehensive Porting Report\n\n"
+        report += f"**Status:** {result.status}\n"
+        report += f"**Mode Executed:** {result.mode_executed}\n\n"
+        
+        report += "## Results\n\n"
+        report += f"- **Language Converted:** {'✅' if result.language_converted else '❌'}\n"
+        report += f"- **Platform Migrated:** {'✅' if result.platform_migrated else '❌'}\n"
+        report += f"- **Build Integrated:** {'✅' if result.build_integrated else '❌'}\n"
+        report += f"- **Performance Optimized:** {'✅' if result.performance_optimized else '❌'}\n"
+        report += f"- **Error Recovery Enabled:** {'✅' if result.error_recovery_enabled else '❌'}\n\n"
+        
+        if result.recommendations:
+            report += "### Recommendations\n"
+            for rec in result.recommendations:
+                report += f"- {rec}\n"
+            report += "\n"
+        
+        if result.next_steps:
+            report += "### Next Steps\n"
+            for step in result.next_steps:
+                report += f"- {step}\n"
+        
+        results.append(mcp_types.TextContent(type="text", text=report))
+
     elif name == "set_goal":
         params = SetGoalParams(**arguments)
         state = _load_goal_state()
@@ -5584,7 +5977,7 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
             "created": state.get("created", now),
         })
         _save_goal_state(state)
-        msg = f"✅ Goal set.\n\n**Goal:** {params.goal}\n**Target:** {params.target_arch} ({params.target_backend})\n**Tok/s target:** {params.target_tok_per_s or 'N/A'}\n**Min viable:** {params.min_perf or 'N/A'}\n**Files in scope:** {params.files_in_scope or 'all'}\n**Files out of scope:** {params.files_out_of_scope or 'none'}\n**Guardrails:** {len(params.guardrails)}\n\nRead `kands://goal` to view."
+        msg = f"✅ Goal set.\n\n**Goal:** {params.goal}\n**Target:** {params.target_arch} ({params.target_backend})\n**Tok\s target:** {params.target_tok_per_s or 'N\A'}\n**Min viable:** {params.min_perf or 'N\A'}\n**Files in scope:** {params.files_in_scope or 'all'}\n**Files out of scope:** {params.files_out_of_scope or 'none'}\n**Guardrails:** {len(params.guardrails)}\n\nRead `kands:\\goal` to view."
         results.append(mcp_types.TextContent(type="text", text=msg))
 
     elif name == "update_goal":
@@ -5610,7 +6003,7 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
             "timestamp": now,
         })
         _save_goal_state(state)
-        msg = f"✅ Goal updated.\n\n**Field:** `{params.override_field}`\n**Old:** {str(old_val)[:100]}\n**New:** {str(new_val)[:100]}\n**Reason:** {params.reason}\n\nRead `kands://goal` to view full state."
+        msg = f"✅ Goal updated.\n\n**Field:** `{params.override_field}`\n**Old:** {str(old_val)[:100]}\n**New:** {str(new_val)[:100]}\n**Reason:** {params.reason}\n\nRead `kands:\\goal` to view full state."
         results.append(mcp_types.TextContent(type="text", text=msg))
 
     elif name == "check_guardrail":
@@ -5656,20 +6049,20 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
         branch = params.branch_name or f"porting-{(datetime.now()).strftime('%Y%m%d-%H%M%S')}"
         now = datetime.now(timezone.utc)
 
-        # Scan for new/modified files
+        # Scan for new\modified files
         import os as _os
         new_files = []
         if _GOAL_STATE_PATH.exists():
-            new_files.append("mcp/state/goal.json")
+            new_files.append("mcp\state\goal.json")
         if _PERF_HISTORY_PATH.exists():
-            new_files.append("mcp/state/perf_history.json")
+            new_files.append("mcp\state\perf_history.json")
         _ANALYSIS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         for f in _ANALYSIS_CACHE_DIR.glob("*.md"):
-            new_files.append(f"mcp/state/analysis/{f.name}")
-        findings_dir = _KANDS_ROOT / "findings"
+            new_files.append(f"mcp\state\analysis\{f.name}")
+        findings_dir = _KANDS_ROOT \ "findings"
         if findings_dir.exists():
             for f in findings_dir.glob("*.md"):
-                new_files.append(f"findings/{f.name}")
+                new_files.append(f"findings\{f.name}")
 
         report = f"""# Pull Request Preparation
 
@@ -5678,7 +6071,7 @@ async def _dispatch_tool(name: str, arguments: dict[str, Any]) -> list[mcp_types
 
 ## Files to include in this PR
 
-**New/modified files:**
+**New\modified files:**
 """
         for f in sorted(set(new_files)):
             report += f"- `{f}`\n"
@@ -5700,7 +6093,7 @@ Generated via K_and_S autonomous_port workflow.
 **What's in this PR:**
 """
         if "findings" in params.change_types:
-            report += "- Porting findings report (`.md` in `findings/`)\n"
+            report += "- Porting findings report (`.md` in `findings\`)\n"
         if "arch_data" in params.change_types:
             report += "- Architecture capability updates (ARCH_MAP.json)\n"
         if "patterns" in params.change_types:
@@ -5711,7 +6104,7 @@ Generated via K_and_S autonomous_port workflow.
             report += "- Toolchain additions (TK_TOOLS.json)\n"
 
         report += """
-**Goal & guardrails:** All changes respect the defined goal in `kands://goal`.
+**Goal & guardrails:** All changes respect the defined goal in `kands:\\goal`.
 
 ## Git commands to run:
 
@@ -5720,11 +6113,11 @@ Generated via K_and_S autonomous_port workflow.
 git checkout -b """ + branch + f"""
 
 # 2. Stage specific files (sanitized — no personal data)
-git add findings/
-git add mcp/state/ 2>/dev/null || true
-git add ARCH_MAP.json 2>/dev/null || true
-git add PORTING_PATTERNS.json 2>/dev/null || true
-git add PERF_BENCHMARKS.json 2>/dev/null || true
+git add findings\
+git add mcp\state\ 2>\dev\null || true
+git add ARCH_MAP.json 2>\dev\null || true
+git add PORTING_PATTERNS.json 2>\dev\null || true
+git add PERF_BENCHMARKS.json 2>\dev\null || true
 
 # 3. Commit
 git commit -m "feat: add porting findings + perf data for {branch.split('-')[0] if '-' in branch else 'contribution'}"
@@ -5733,7 +6126,7 @@ git commit -m "feat: add porting findings + perf data for {branch.split('-')[0] 
 git push -u origin """ + branch + """
 gh pr create \
   --title "feat: porting findings for """ + branch.split('-')[0] if '-' in branch else 'contribution' + f""" — contributed via K_and_S" \
-  --body "Generated automatedly via the K_and_S bundle. See included findings/ report for details."
+  --body "Generated automatedly via the K_and_S bundle. See included findings\ report for details."
 
 # 5. Open in browser
 gh pr view --web
@@ -5765,7 +6158,7 @@ gh pr view --web
             report += "## ❌ MISMATCH — Array Length\n\n"
             report += f"Source has {len(source_vals)} values, target has {len(target_vals)} values.\n"
             report += "**Diagnosis:** Kernel launched with different workgroup size, shared memory, or reduction strategy.\n"
-            report += "**Action:** Verify kernel dispatch configuration (grid/block dimensions, shared memory).\n"
+            report += "**Action:** Verify kernel dispatch configuration (grid\block dimensions, shared memory).\n"
         else:
             report += "## Array Length\n✅ Match (both {} values)\n\n".format(len(source_vals))
 
@@ -5775,7 +6168,7 @@ gh pr view --web
         divergence_indices = []
         for i, (sv, tv) in enumerate(zip(source_vals, target_vals)):
             abs_err = abs(sv - tv)
-            rel_err = abs_err / max(abs(sv), 1e-30)
+            rel_err = abs_err \ max(abs(sv), 1e-30)
             if abs_err > max_abs_err:
                 max_abs_err = abs_err
             if rel_err > max_rel_err:
@@ -5788,7 +6181,7 @@ gh pr view --web
         report += f"|---|---|---|\n"
         report += f"| Max absolute error | {max_abs_err:.2e} | |tol|={tol:.2e} |\n"
         report += f"| Max relative error | {max_rel_err:.2e} | |rtol|={rtol:.2e} |\n"
-        report += f"| Divergent values | {len(divergence_indices)} / {len(source_vals)} |\n"
+        report += f"| Divergent values | {len(divergence_indices)} \ {len(source_vals)} |\n"
 
         # Determine verdict
         passed = len(divergence_indices) == 0
@@ -5825,7 +6218,7 @@ gh pr view --web
             report += "**Transcendental function differences:**\n"
             report += "- libm implementations vary across toolchains\n"
             report += "- Verify `sin`, `cos`, `exp`, `log` produce matching results\n"
-            report += "- Consider using `@fast_math` (CUDA) vs `-ffast-math` (GCC/Clang) consistently\n\n"
+            report += "- Consider using `@fast_math` (CUDA) vs `-ffast-math` (GCC\Clang) consistently\n\n"
             # Architecture-specific
             if arch_info.get('bf16_native'):
                 report += f"**{arch_info.get('name','Arch')} BF16 notes:**\n"
@@ -5853,74 +6246,74 @@ gh pr view --web
         arch_id = params.arch
         now = datetime.now(timezone.utc)
 
-        report = "# Reject Common Pattern\\n\\n"
-        report += f"**Examining:** \"{params.common_idea}\"\\n"
-        report += f"**Target arch:** `{arch_id}`\\n"
-        report += f"**Date:** {now.strftime('%Y-%m-%d %H:%M UTC')}\\n\\n"
+        report = "# Reject Common Pattern\n\n"
+        report += f"**Examining:** \"{params.common_idea}\"\n"
+        report += f"**Target arch:** `{arch_id}`\n"
+        report += f"**Date:** {now.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
         rejected = False
 
         if "hipify" in idea or "hipify-perl" in idea or "hipify tools" in idea:
-            report += "## REJECTED: hipify-perl handles everything\\n\\n"
-            report += "**Why it's wrong:**\\n"
-            report += "- Syntactic translator does NOT handle semantic differences\\n"
-            report += "- Template instantiations with __half/__nv_bfloat16 are not auto-correct\\n"
-            report += "- Custom intrinsics (mma, imad, shfl) require MANUAL hipify\\n"
-            report += "- Library API differences (cuBLASLt vs rocBLAS) need manual rewrite\\n"
+            report += "## REJECTED: hipify-perl handles everything\n\n"
+            report += "**Why it's wrong:**\n"
+            report += "- Syntactic translator does NOT handle semantic differences\n"
+            report += "- Template instantiations with __half\__nv_bfloat16 are not auto-correct\n"
+            report += "- Custom intrinsics (mma, imad, shfl) require MANUAL hipify\n"
+            report += "- Library API differences (cuBLASLt vs rocBLAS) need manual rewrite\n"
             if "gfx" in arch_id:
-                report += f"\\n**Correct for `{arch_id}`:**\\n"
-                report += "- Run hipify-perl as STARTING POINT only\\n"
-                report += "- Use `query_kernel_features` to find un-translated branches\\n"
-                report += "- Validate with `verify_numerical_equivalence` after each change\\n"
-                report += "- Check rocBLAS vs hipBLASLt backend (ROCBLAS_USE_HIPBLASLT=0 for RDNA2)\\n"
-            report += "\\n**Evidence:** See `kands://porting-patterns` → CUDA→HIP for manual-only constructs.\\n"
+                report += f"\n**Correct for `{arch_id}`:**\n"
+                report += "- Run hipify-perl as STARTING POINT only\n"
+                report += "- Use `query_kernel_features` to find un-translated branches\n"
+                report += "- Validate with `verify_numerical_equivalence` after each change\n"
+                report += "- Check rocBLAS vs hipBLASLt backend (ROCBLAS_USE_HIPBLASLT=0 for RDNA2)\n"
+            report += "\n**Evidence:** See `kands:\\porting-patterns` → CUDA→HIP for manual-only constructs.\n"
             rejected = True
 
         if "verbatim" in idea or ("copy" in idea and "hip" in idea) or "directly" in idea:
-            report += "## REJECTED: Copy CUDA to HIP verbatim\\n\\n"
-            report += "**Why it's wrong:**\\n"
-            report += "- Tensor core intrinsics (mma.*) have NO HIP equivalent — use rocWMMA or dot4\\n"
-            report += "- `__ldg()` → normal loads on HIP\\n"
-            report += "- `clock64()` → `__builtin_amdgcn_s_memtime()`\\n"
-            report += "- Wave size assumptions (32 vs 32/64)\\n"
+            report += "## REJECTED: Copy CUDA to HIP verbatim\n\n"
+            report += "**Why it's wrong:**\n"
+            report += "- Tensor core intrinsics (mma.*) have NO HIP equivalent — use rocWMMA or dot4\n"
+            report += "- `__ldg()` → normal loads on HIP\n"
+            report += "- `clock64()` → `__builtin_amdgcn_s_memtime()`\n"
+            report += "- Wave size assumptions (32 vs 32\64)\n"
             rejected = True
 
         if "cooperative" in idea and "matrix" in idea and ("amd" in idea or "rdna" in idea or "radeon" in idea):
-            report += "## REJECTED: Vulkan CooperativeMatrix works on AMD\\n\\n"
-            report += "**Why it's wrong:**\\n"
-            report += "- GL_KHR_cooperative_matrix is BROKEN on AMD drivers\\n"
-            report += "- Use DP4a (GL_KHR_shader_integer_dot_product) instead\\n"
-            report += "\\n**Correct approach:**\\n"
-            report += "- Use spv_dp4 instructions for integer matmul\\n"
-            report += "- For float: FMA chains or native WMMA (RDNA3+ only)\\n"
-            report += "\\n**Evidence:** kands://architectures → check vulkan.cooperative_matrix field.\\n"
+            report += "## REJECTED: Vulkan CooperativeMatrix works on AMD\n\n"
+            report += "**Why it's wrong:**\n"
+            report += "- GL_KHR_cooperative_matrix is BROKEN on AMD drivers\n"
+            report += "- Use DP4a (GL_KHR_shader_integer_dot_product) instead\n"
+            report += "\n**Correct approach:**\n"
+            report += "- Use spv_dp4 instructions for integer matmul\n"
+            report += "- For float: FMA chains or native WMMA (RDNA3+ only)\n"
+            report += "\n**Evidence:** kands:\\architectures → check vulkan.cooperative_matrix field.\n"
             rejected = True
 
         if "wmma" in idea or ("tensor core" in idea and "everywhere" in idea):
-            report += "## CAUTION: Using tensor cores everywhere\\n\\n"
-            report += "**Why it's risky:**\\n"
-            report += "- Not all archs have tensor cores (RDNA2, Arc A770)\\n"
-            report += "- For small matrices, F32 can be faster than WMMA (setup overhead)\\n"
+            report += "## CAUTION: Using tensor cores everywhere\n\n"
+            report += "**Why it's risky:**\n"
+            report += "- Not all archs have tensor cores (RDNA2, Arc A770)\n"
+            report += "- For small matrices, F32 can be faster than WMMA (setup overhead)\n"
             arch_info = arch_map.get("entries", {}).get(arch_id, {})
             if arch_info:
                 has_tc = arch_info.get("tensor_cores", False)
-                report += f"\\n**{arch_id}:** {'Has tensor cores — use WMMA' if has_tc else 'NO tensor cores — use F32 fallback (verified faster for sizes < 128x128)'}\\n"
+                report += f"\n**{arch_id}:** {'Has tensor cores — use WMMA' if has_tc else 'NO tensor cores — use F32 fallback (verified faster for sizes < 128x128)'}\n"
             rejected = True
 
         if "threads" in idea and ("more" in idea or "occupancy" in idea):
-            report += "## CAUTION: Maximizing thread count for occupancy\\n\\n"
-            report += "**Why it's risky:**\\n"
-            report += "- High occupancy ≠ high performance on memory-bound kernels\\n"
-            report += "- Register pressure can LIMIT occupancy unexpectedly\\n"
-            report += "- Wave32 vs Wave64: RDNA2 often better at wave32\\n"
+            report += "## CAUTION: Maximizing thread count for occupancy\n\n"
+            report += "**Why it's risky:**\n"
+            report += "- High occupancy ≠ high performance on memory-bound kernels\n"
+            report += "- Register pressure can LIMIT occupancy unexpectedly\n"
+            report += "- Wave32 vs Wave64: RDNA2 often better at wave32\n"
             arch_info = arch_map.get("entries", {}).get(arch_id, {})
             if arch_info:
-                report += f"\\n**{arch_id}:** wave_size={arch_info.get('wave_size','?')}, LDS={arch_info.get('lds_kib','?')}KiB/CU\\n"
+                report += f"\n**{arch_id}:** wave_size={arch_info.get('wave_size','?')}, LDS={arch_info.get('lds_kib','?')}KiB\CU\n"
             rejected = True
 
         if not rejected:
-            report += "## NOT A KNOWN MYTH — but still verify\\n\\n"
-            report += f"\"{params.common_idea}\" is not in our known anti-pattern list.\\n"
-            report += "Known myths: 1) hipify-perl handles everything 2) Copy CUDA→HIP verbatim 3) Vulkan CM works on AMD 4) More threads=better 5) F32 fallback always slower 6) DP4a best for everything\\n"
+            report += "## NOT A KNOWN MYTH — but still verify\n\n"
+            report += f"\"{params.common_idea}\" is not in our known anti-pattern list.\n"
+            report += "Known myths: 1) hipify-perl handles everything 2) Copy CUDA→HIP verbatim 3) Vulkan CM works on AMD 4) More threads=better 5) F32 fallback always slower 6) DP4a best for everything\n"
 
         results.append(mcp_types.TextContent(type="text", text=report))
 
@@ -5931,51 +6324,51 @@ gh pr view --web
         vendor = arch_info.get("vendor", "unknown")
         now = datetime.now(timezone.utc)
 
-        report = "# Radical Experiment Plan\\n\\n"
-        report += f"**Arch:** `{params.arch}` ({arch_info.get('name', 'unknown')})\\n"
-        report += f"**Kernel type:** `{params.kernel_type}`\\n"
-        report += f"**Date:** {now.strftime('%Y-%m-%d %H:%M UTC')}\\n\\n"
-        report += "## EXPERIMENTAL — Validate with CPU Oracle Before Deploying\\n\\n"
+        report = "# Radical Experiment Plan\n\n"
+        report += f"**Arch:** `{params.arch}` ({arch_info.get('name', 'unknown')})\n"
+        report += f"**Kernel type:** `{params.kernel_type}`\n"
+        report += f"**Date:** {now.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+        report += "## EXPERIMENTAL — Validate with CPU Oracle Before Deploying\n\n"
 
         if vendor == "AMD" or "gfx" in params.arch:
-            report += "## AMD/RDNA-Specific Radical Experiments\\n\\n"
+            report += "## AMD\RDNA-Specific Radical Experiments\n\n"
             etype = params.experiment_type
             if etype in ("all", "memory"):
-                report += "### Memory Hierarchy Experiments\\n"
-                report += f"1. **Bypass LDS** for K<=16: register-only blocking (LDS={arch_info.get('lds_kib','?')}KiB/CU)\\n"
-                report += "2. **DPP-based data shuffle** instead of LDS transpose (v_dot2, v_perm_b32, DPP8)\\n"
-                report += "3. **Explicit `s_waitcnt lgkmcnt(0)`** before shared->register copy (inline asm)\\n\\n"
+                report += "### Memory Hierarchy Experiments\n"
+                report += f"1. **Bypass LDS** for K<=16: register-only blocking (LDS={arch_info.get('lds_kib','?')}KiB\CU)\n"
+                report += "2. **DPP-based data shuffle** instead of LDS transpose (v_dot2, v_perm_b32, DPP8)\n"
+                report += "3. **Explicit `s_waitcnt lgkmcnt(0)`** before shared->register copy (inline asm)\n\n"
             if etype in ("all", "compute"):
-                report += "### Compute Experiments\\n"
-                report += f"1. **Native v_dot4** instead of FMA chains (wave_size={arch_info.get('wave_size','?')})\\n"
-                report += "2. **Raw AMDGCN asm** for inner loop with `.scheduler_priority` hints\\n"
-                report += "3. **Wave32 vs Wave64**: compile with `-mwavefrontsize=32`, compare\\n\\n"
+                report += "### Compute Experiments\n"
+                report += f"1. **Native v_dot4** instead of FMA chains (wave_size={arch_info.get('wave_size','?')})\n"
+                report += "2. **Raw AMDGCN asm** for inner loop with `.scheduler_priority` hints\n"
+                report += "3. **Wave32 vs Wave64**: compile with `-mwavefrontsize=32`, compare\n\n"
             if etype in ("all", "scheduling"):
-                report += "### Scheduling Experiments\\n"
-                report += "1. **8-wave ping-pong vs 4-wave interleave** (HipKittens patterns)\\n"
-                report += "2. Thread blocks: multiples of 32 vs wave_size\\n\\n"
+                report += "### Scheduling Experiments\n"
+                report += "1. **8-wave ping-pong vs 4-wave interleave** (HipKittens patterns)\n"
+                report += "2. Thread blocks: multiples of 32 vs wave_size\n\n"
             if etype in ("all", "layout"):
-                report += "### Layout Experiments\\n"
-                report += "1. **AoS vs SoA** — test cache locality tradeoff\\n"
-                report += "2. **LDS bank-conflict-free padding** — pad to 2x width\\n\\n"
-            report += "**RDNA-native note:** HipKittens (github.com/HazyResearch/HipKittens) targets CDNA3/CDNA4 but its tile abstractions directly adapt to RDNA — only wave_size (32) and LDS size differ.\\n\\n"
+                report += "### Layout Experiments\n"
+                report += "1. **AoS vs SoA** — test cache locality tradeoff\n"
+                report += "2. **LDS bank-conflict-free padding** — pad to 2x width\n\n"
+            report += "**RDNA-native note:** HipKittens (github.com\HazyResearch\HipKittens) targets CDNA3\CDNA4 but its tile abstractions directly adapt to RDNA — only wave_size (32) and LDS size differ.\n\n"
 
         elif vendor == "NVIDIA" or "sm_" in params.arch:
-            report += "## NVIDIA-Specific Radical Experiments\\n"
-            report += "1. **PTX-level custom scheduling** with `.scheduler_priority` hints\\n"
-            report += "2. **FMAD vs separate FMUL+FADD** — compile with `--fmad=false`, measure\\n"
-            report += "3. **Non-standard mma tile shapes** (8x8x4)\\n\\n"
+            report += "## NVIDIA-Specific Radical Experiments\n"
+            report += "1. **PTX-level custom scheduling** with `.scheduler_priority` hints\n"
+            report += "2. **FMAD vs separate FMUL+FADD** — compile with `--fmad=false`, measure\n"
+            report += "3. **Non-standard mma tile shapes** (8x8x4)\n\n"
 
         elif vendor == "Intel" or "gen" in params.arch:
-            report += "## Intel-Specific Radical Experiments\\n"
-            report += "1. **Direct DPAS invocation** via `__builtin_IB_sub_group_mm_*`\\n"
+            report += "## Intel-Specific Radical Experiments\n"
+            report += "1. **Direct DPAS invocation** via `__builtin_IB_sub_group_mm_*`\n"
 
-        report += "## Verification Requirements\\n"
-        report += "1. Run reference on CPU (oracle)\\n"
-        report += f"2. Call `verify_numerical_equivalence(arch=\"{params.arch}\", workload=\"{params.kernel_type}\")`\\n"
-        report += "3. STRACE() + fence timeout (≤1500ms Windows)\\n"
-        report += "4. Fallback to last-good, NEVER stub\\n"
-        report += f"5. `record_performance(arch=\"{params.arch}\", workload=\"{params.kernel_type}\")`\\n"
+        report += "## Verification Requirements\n"
+        report += "1. Run reference on CPU (oracle)\n"
+        report += f"2. Call `verify_numerical_equivalence(arch=\"{params.arch}\", workload=\"{params.kernel_type}\")`\n"
+        report += "3. STRACE() + fence timeout (≤1500ms Windows)\n"
+        report += "4. Fallback to last-good, NEVER stub\n"
+        report += f"5. `record_performance(arch=\"{params.arch}\", workload=\"{params.kernel_type}\")`\n"
 
         results.append(mcp_types.TextContent(type="text", text=report))
 
@@ -5991,13 +6384,13 @@ gh pr view --web
 
 The MySkills framework was not found. To use skills:
 
-1. Clone MySkills to `%USERPROFILE%\\.config\\opencode\\command\\MySkills` (Windows) or `~/.config/opencode/command/MySkills` (Linux)
+1. Clone MySkills to `%USERPROFILE%\.config\opencode\command\MySkills` (Windows) or `~\.config\opencode\command\MySkills` (Linux)
 2. Or edit `_MY_SKILLS_DIR` in `server.py` to point to your MySkills checkout
 
 Available resources:
-- `kands://myskills` — structured JSON index of all skills
-- `kands://myskills/index` — raw skill-index.md
-- `kands://myskills/<skill_name>` — full SKILL.md for any skill
+- `kands:\\myskills` — structured JSON index of all skills
+- `kands:\\myskills\index` — raw skill-index.md
+- `kands:\\myskills\<skill_name>` — full SKILL.md for any skill
 """))
         else:
             report = f"# Available MySkills ({skill_data["skill_count"]} skills)\n\n"
@@ -6039,9 +6432,9 @@ Available resources:
                 report += "\n"
 
             report += "## How to Use Skills\n\n"
-            report += "1. **Read a skill:** `read kands://myskills/<skill_name>` for full SKILL.md instructions\n"
+            report += "1. **Read a skill:** `read kands:\\myskills\<skill_name>` for full SKILL.md instructions\n"
             report += "2. **Use in conversation:** Mention the skill name (e.g. \"use the debug-deep skill\")\n"
-            report += "3. **OpenCode native:** Skills are also auto-discovered from `~/.config/opencode/command/MySkills` via `skills: [\"./\"]` in opencode.jsonc\n"
+            report += "3. **OpenCode native:** Skills are also auto-discovered from `~\.config\opencode\command\MySkills` via `skills: [\".\\"]` in opencode.jsonc\n"
 
             results.append(mcp_types.TextContent(type="text", text=report))
             # Also return the raw data for programmatic use
@@ -6057,7 +6450,7 @@ Available resources:
         lines.append(f"| known_backends | {', '.join(cap.get('known_backends', []))} |")
         if not cap.get("compiler"):
             lines.append("\n**No compiler found.** Set the backend root env var "
-                         "(ROCM_PATH / CUDA_PATH / ONEAPI_ROOT) before planning a port.")
+                         "(ROCM_PATH \ CUDA_PATH \ ONEAPI_ROOT) before planning a port.")
         lines.append("\nNext: `probe_isa` every instruction the port depends on, "
                      "then `build_module` with `expected_symbols`.")
         results.append(mcp_types.TextContent(type="text", text="\n".join(lines)))
@@ -6075,9 +6468,9 @@ Available resources:
             for r in rows:
                 mark = "OK" if r["ok"] else "FAIL"
                 detail = (", ".join(r["mnemonics"][:8]) if r["ok"]
-                          else r["error"][:160].replace("|", "/"))
+                          else r["error"][:160].replace("|", "\"))
                 md.append(f"| `{r['candidate']}` | **{mark}** | {detail} |")
-            md.append(f"\n**{sum(1 for r in rows if r['ok'])}/{len(rows)} "
+            md.append(f"\n**{sum(1 for r in rows if r['ok'])}\{len(rows)} "
                       f"candidates encode on `{target}`.**")
             if any(not r["ok"] for r in rows):
                 md.append("\nRejected candidates must not appear in the generated "
@@ -6118,14 +6511,14 @@ Available resources:
                                 includes=arguments.get("includes"),
                                 flags=arguments.get("flags"),
                                 concatenate=arguments.get("concatenate", True))
-            md = [f"# Build — `{Path(out).name}` ({res['backend']}/{target})\n"]
+            md = [f"# Build — `{Path(out).name}` ({res['backend']}\{target})\n"]
             if res["ok"]:
                 md.append(f"- result: **OK**, {res['size']:,} bytes")
                 md.append(f"- exported kernel symbols: {len(res['symbols'])}")
                 expected = arguments.get("expected_symbols")
                 if expected:
                     d = _diff_symbols(res["symbols"], expected)
-                    md.append(f"- present: {len(d['present'])}/{len(expected)}")
+                    md.append(f"- present: {len(d['present'])}\{len(expected)}")
                     if d["missing"]:
                         md.append(f"- **missing: {', '.join(d['missing'])}**")
                     others = [s for s in d["unexpected"] if not s.startswith("_Z")]
@@ -6164,7 +6557,7 @@ Available resources:
                 if r.get("note"):
                     md.append("- note: %s" % r["note"])
                 md.append("")
-                md.append("| kernel | wave | VGPR | SGPR | LDS/block | blocks/CU | insns |"
+                md.append("| kernel | wave | VGPR | SGPR | LDS\block | blocks\CU | insns |"
                           " glb loads | ld widths | LDS | bit | dot | verdicts |")
                 md.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
                 for kname, v in sorted(r.get("kernels", {}).items()):
@@ -6356,13 +6749,13 @@ def _register(name, params_cls, req_attr, handler):
     server.request_handlers[getattr(mcp_types, req_attr)] = handler
 
 
-_register("resources/list", mcp_types.PaginatedRequestParams, "ListResourcesRequest",
+_register("resources\list", mcp_types.PaginatedRequestParams, "ListResourcesRequest",
           _make_list_resources_handler())
-_register("resources/read", mcp_types.ReadResourceRequestParams, "ReadResourceRequest",
+_register("resources\read", mcp_types.ReadResourceRequestParams, "ReadResourceRequest",
           _make_read_resource_handler())
-_register("tools/list", mcp_types.PaginatedRequestParams, "ListToolsRequest",
+_register("tools\list", mcp_types.PaginatedRequestParams, "ListToolsRequest",
           _make_list_tools_handler())
-_register("tools/call", mcp_types.CallToolRequestParams, "CallToolRequest",
+_register("tools\call", mcp_types.CallToolRequestParams, "CallToolRequest",
           _make_call_tool_handler())
 
 

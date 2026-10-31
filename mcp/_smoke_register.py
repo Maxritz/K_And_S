@@ -2,7 +2,7 @@
 does every resource it advertises actually read?
 
 The resource URIs are taken from the server's own list rather than hardcoded. The
-previous version hardcoded two invented URIs ("kands://arch-map", "kands://lessons"),
+previous version hardcoded two invented URIs ("kands:\\arch-map", "kands:\\lessons"),
 which never existed and produced two false FAILs while the server was fine.
 """
 import os

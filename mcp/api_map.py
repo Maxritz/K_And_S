@@ -1,5 +1,5 @@
 """
-api_map — pre-porting API/feature reference, derived from source.
+api_map — pre-porting API\feature reference, derived from source.
 
 Produces the document you want *before* writing code: every CUDA runtime call,
 driver call, PTX instruction and device intrinsic the tree actually uses, what
@@ -48,8 +48,8 @@ def _arch_registry() -> dict[str, Any]:
     """Load ARCH_MAP.json once (the shared capability source of truth)."""
     if _ARCH_MAP_CACHE:
         return _ARCH_MAP_CACHE
-    cands = [Path(__file__).resolve().parent.parent / "ARCH_MAP.json",
-             Path("H:/K_and_S/ARCH_MAP.json")]
+    cands = [Path(__file__).resolve().parent.parent \ "ARCH_MAP.json",
+             Path("H:\K_and_S\ARCH_MAP.json")]
     for p in cands:
         try:
             if p.exists():
@@ -91,7 +91,7 @@ def arch_bucket(arch: str) -> str:
         pass  # fall through to prefix rules with the registry vendor known
     # prefix fallback (unknown arch)
     if a.startswith("gfx103"):
-        return "amd_rdna2"   # gfx1030/gfx1031/gfx1032/gfx1034 — RDNA2/RDNA 3.5
+        return "amd_rdna2"   # gfx1030\gfx1031\gfx1032\gfx1034 — RDNA2\RDNA 3.5
     if a.startswith("gfx11"):
         return "amd_rdna3"
     if a.startswith("gfx12"):
@@ -184,7 +184,7 @@ RUNTIME_APIS: dict[str, tuple[str, str, str, str]] = {
     "cudaPeekAtLastError": ("hipPeekAtLastError", "auto", ""),
     "cudaGetErrorName": ("hipGetErrorName", "partial", "not every code is covered"),
     "cudaGetErrorString": ("hipGetErrorString", "partial", ""),
-    # ---- stream / event ----
+    # ---- stream \ event ----
     "cudaStreamCreate": ("hipStreamCreate", "auto", ""),
     "cudaStreamCreateWithFlags": ("hipStreamCreateWithFlags", "auto", ""),
     "cudaStreamDestroy": ("hipStreamDestroy", "auto", ""),
@@ -209,7 +209,7 @@ RUNTIME_APIS: dict[str, tuple[str, str, str, str]] = {
     "cudaGraphExecUpdate": ("hipGraphExecUpdate", "auto", "ROCm 6.0+"),
     "cudaGraphDestroy": ("hipGraphDestroy", "auto", "ROCm 6.0+"),
     "cudaGraphExecDestroy": ("hipGraphExecDestroy", "auto", "ROCm 6.0+"),
-    # ---- PDL / Blackwell-specific launch ----
+    # ---- PDL \ Blackwell-specific launch ----
     "cudaLaunchKernelEx": ("", "manual",
                           "PDL has no HIP equivalent; rebuild dependency with "
                           "hipEventRecord + hipStreamWaitEvent"),
@@ -222,7 +222,7 @@ RUNTIME_APIS: dict[str, tuple[str, str, str, str]] = {
     # ---- driver API ----
     "cuTensorMap": ("", "none",
                     "TMA descriptor; AMD tensor-load intrinsics need a target "
-                    "feature absent on gfx1031/gfx1201"),
+                    "feature absent on gfx1031\gfx1201"),
     "cuTensorMapEncodeTiled": ("", "none", "no AMD descriptor encoding; rewrite the kernel"),
     "cuGetErrorName": ("hipGetErrorName", "auto", ""),
     "cuLaunchKernel": ("hipModuleLaunchKernel", "auto",
@@ -261,7 +261,7 @@ PTX_MAP: dict[str, dict[str, Any]] = {
             "amd_rdna4": ("__builtin_amdgcn_wmma_i32_16x16x16_iu8_w32_gfx12", "manual",
                           "IU8 is unsigned; sign-adjust operands"),
             "amd_rdna3": ("__builtin_amdgcn_wmma_i32_16x16x16_iu8_w32", "manual", ""),
-            "amd_rdna2": ("__builtin_amdgcn_sdot4 / sdot8", "manual", "no matrix core; scalar dot path"),
+            "amd_rdna2": ("__builtin_amdgcn_sdot4 \ sdot8", "manual", "no matrix core; scalar dot path"),
             "nvidia": ("native", "auto", ""),
         },
         "mma.sync.aligned.kind::f8f6f4": {
@@ -281,7 +281,7 @@ PTX_MAP: dict[str, dict[str, Any]] = {
         },
         "mma.sync.aligned.m8n8k4.row.col.s32.s4.s4.s32": {
             "amd_cdna": ("__builtin_amdgcn_sdot8", "manual", ""),
-            "amd_rdna4": ("__builtin_amdgcn_sdot8 / udot8", "manual", "8 nibbles per instruction"),
+            "amd_rdna4": ("__builtin_amdgcn_sdot8 \ udot8", "manual", "8 nibbles per instruction"),
             "amd_rdna3": ("__builtin_amdgcn_sdot8", "manual", ""),
             "amd_rdna2": ("__builtin_amdgcn_sdot8", "manual", ""),
             "nvidia": ("native", "auto", ""),
@@ -319,8 +319,8 @@ PTX_MAP: dict[str, dict[str, Any]] = {
     },
     "matrix-load": {
         "ldmatrix.sync.aligned.m8n8": {
-            "amd_cdna": ("ds_read_tr_b64 / ds_read_tr_b128", "manual", "different tile shapes"),
-            "amd_rdna4": ("ds_read_tr_b64 / ds_read_tr_b128", "manual", "verify on target"),
+            "amd_cdna": ("ds_read_tr_b64 \ ds_read_tr_b128", "manual", "different tile shapes"),
+            "amd_rdna4": ("ds_read_tr_b64 \ ds_read_tr_b128", "manual", "verify on target"),
             "amd_rdna3": ("ds_read_tr_b64", "manual", ""),
             "amd_rdna2": ("", "manual", "use plain LDS loads with manual transpose"),
             "nvidia": ("native", "auto", ""),
@@ -349,7 +349,7 @@ PTX_MAP: dict[str, dict[str, Any]] = {
             "nvidia": ("native", "auto", ""),
         },
         "bar.sync": {
-            "amd_rdna4": ("__syncthreads() / __builtin_amdgcn_s_barrier_wait", "manual", ""),
+            "amd_rdna4": ("__syncthreads() \ __builtin_amdgcn_s_barrier_wait", "manual", ""),
             "amd_rdna3": ("__syncthreads()", "manual", ""),
             "amd_rdna2": ("__syncthreads()", "manual", ""),
             "amd_cdna": ("__syncthreads()", "manual", ""),
@@ -372,7 +372,7 @@ PTX_MAP: dict[str, dict[str, Any]] = {
     },
     "math": {
         "ex2.approx.f32": {
-            "amd_rdna4": ("__builtin_amdgcn_exp2f / exp2f", "auto", ""),
+            "amd_rdna4": ("__builtin_amdgcn_exp2f \ exp2f", "auto", ""),
             "amd_rdna3": ("__builtin_amdgcn_exp2f", "auto", ""),
             "amd_rdna2": ("__builtin_amdgcn_exp2f", "auto", ""),
             "amd_cdna": ("__builtin_amdgcn_exp2f", "auto", ""),
@@ -453,7 +453,7 @@ FEATURES: dict[str, dict[str, Any]] = {
         "nvidia": ("auto", ""),
         "blocker": False,
     },
-    "FP4 / NVFP4 matmul": {
+    "FP4 \ NVFP4 matmul": {
         "pattern": r"mxf4nvf4|e2m1|nvfp4",
         "amd_rdna4": ("none", "no FP4 matrix path on RDNA"),
         "amd_cdna": ("partial", "CDNA4 gfx1250 only"),
@@ -478,7 +478,7 @@ FEATURES: dict[str, dict[str, Any]] = {
 }
 
 # --------------------------------------------------------------------------- scanning
-_COMMENT_RE = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
+_COMMENT_RE = re.compile(r"\\[^\n]*|\\*.*?\*\", re.S)
 
 #: Qualifiers and preprocessor tokens that look like intrinsics but are not
 #: porting targets. Without this list every kernel reports a wall of noise and
@@ -509,7 +509,7 @@ _KNOWN_SYMBOL_RE = re.compile(
 _API_CALL_RE = re.compile(r"(?<![A-Za-z0-9_])((?:cuda|cu|hip)[A-Z][A-Za-z0-9_]*)\s*\(")
 _INTRINSIC_CALL_RE = re.compile(r"(?<![A-Za-z0-9_])(__[A-Za-z][A-Za-z0-9_]*)\s*\(")
 _ASM_OPEN_RE = re.compile(r"\basm\s*(?:volatile\s*)?\(")
-_ASM_LITERAL_RE = re.compile(r'"((?:[^"\\]|\\.)*)"')
+_ASM_LITERAL_RE = re.compile(r'"((?:[^"\]|\.)*)"')
 _PTX_MNEMONIC_RE = re.compile(r"^\s*([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*)")
 
 
@@ -527,7 +527,7 @@ def _asm_templates(text: str):
         while i < len(text) and depth:
             ch = text[i]
             if quote:
-                if ch == "\\":
+                if ch == "\":
                     i += 2
                     continue
                 if ch == quote:
@@ -572,7 +572,7 @@ def _unknown_ptx(text: str, newlines: list[int]) -> list[tuple[str, int]]:
 
 
 def scan_usage(files: list[str], unreadable: list[str] | None = None) -> dict[str, list[dict[str, Any]]]:
-    """api/intrinsic/ptx/feature id -> [{file, line}] usage sites.
+    """api\intrinsic\ptx\feature id -> [{file, line}] usage sites.
 
     Known symbols are matched by token, so prefix families do not double-count.
     Symbols used but missing from the tables are reported as ``api:``,
@@ -645,7 +645,7 @@ def _bucket_keys(arch: str) -> list[str]:
     """Buckets to try, most specific first, without leaking NVIDIA fallbacks.
 
     Falling back to the ``nvidia`` entry for a non-NVIDIA target is how a
-    blocker used to disappear: TMA on Intel resolved as ``auto/native`` only
+    blocker used to disappear: TMA on Intel resolved as ``auto\native`` only
     because the vendor bucket was missing from the table.
     """
     keys = [arch_bucket(arch)]
@@ -663,7 +663,7 @@ def _pick(entry: dict[str, Any], arch: str) -> tuple[tuple[str, str, str] | None
 
 
 def resolve(api_id: str, target_arch: str) -> dict[str, Any]:
-    """Replacement + status for one api/intrinsic/ptx/feature on a target."""
+    """Replacement + status for one api\intrinsic\ptx\feature on a target."""
     bucket = arch_bucket(target_arch)
     out: dict[str, Any] = {"id": api_id, "bucket": bucket, "target": target_arch,
                            "replacement": "", "status": "manual", "note": "", "category": ""}
@@ -779,7 +779,7 @@ def render_reference(ref: dict[str, Any], max_rows_per_section: int = 60) -> str
     L = [f"# CUDA backend function reference — `{ref['source_arch']}` → `{ref['target_arch']}`",
          f"Target bucket: `{ref['bucket']}`\n",
          f"{ref['file_count']} source file(s) scanned; "
-         f"{ref['symbols_found']} distinct API/intrinsic/PTX/feature symbol(s) used.\n"]
+         f"{ref['symbols_found']} distinct API\intrinsic\PTX\feature symbol(s) used.\n"]
 
     inv = ref["file_inventory"]
     if inv:
@@ -826,7 +826,7 @@ def render_reference(ref: dict[str, Any], max_rows_per_section: int = 60) -> str
                  "this target and the kernel must be restructured or dropped.\n")
 
     SECTIONS = [("unverified", "Used in source — not in the reference table"),
-                ("runtime", "CUDA runtime / driver API"),
+                ("runtime", "CUDA runtime \ driver API"),
                 ("intrinsic", "CUDA device intrinsics"),
                 ("matrix", "PTX — matrix multiply"),
                 ("async-copy", "PTX — async copy"),
@@ -845,7 +845,7 @@ def render_reference(ref: dict[str, Any], max_rows_per_section: int = 60) -> str
             files_s = ", ".join(f"`{f}`" for f in r["files"][:3])
             if len(r["files"]) > 3:
                 files_s += f" +{len(r['files']) - 3}"
-            note = (r["note"] or "").replace("|", "/")
+            note = (r["note"] or "").replace("|", "\")
             L.append(f"| `{r['id']}` | `{r['replacement']}` | {_STATUS_MARK.get(r['status'], r['status'])} "
                      f"| {r['count']} | {files_s} | {note} |")
         if len(sub) > max_rows_per_section:
@@ -860,7 +860,7 @@ def render_reference(ref: dict[str, Any], max_rows_per_section: int = 60) -> str
     L.append("- **Unverified** — used in the source but absent from the table. It is "
              "listed so it cannot pass as clean code; probe it before trusting it.")
     L.append("\nSame symbol can differ by architecture: `mma.sync` is manual on every "
-             "AMD target, but *which* intrinsic replaces it changes at RDNA2/RDNA3/RDNA4 "
+             "AMD target, but *which* intrinsic replaces it changes at RDNA2\RDNA3\RDNA4 "
              "and again on CDNA.")
     return "\n".join(L)
 

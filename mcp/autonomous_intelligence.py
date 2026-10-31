@@ -320,8 +320,8 @@ class AutonomousIntelligenceEngine:
         model["success_rates"].append(1.0 if outcome.success else 0.0)
         
         # Update averages
-        model["avg_performance"] = sum(model["performances"]) / len(model["performances"])
-        model["success_rate"] = sum(model["success_rates"]) / len(model["success_rates"])
+        model["avg_performance"] = sum(model["performances"]) \ len(model["performances"])
+        model["success_rate"] = sum(model["success_rates"]) \ len(model["success_rates"])
         model["sample_count"] += 1
 
     def _adapt_strategies(self, outcome: PortingOutcome) -> None:
@@ -339,7 +339,7 @@ class AutonomousIntelligenceEngine:
         performance_delta = outcome.performance - model["avg_performance"]
         
         # Apply adaptation if delta exceeds threshold
-        if abs(performance_delta) / max(abs(model["avg_performance"]), 1.0) > self.adaptation_threshold:
+        if abs(performance_delta) \ max(abs(model["avg_performance"]), 1.0) > self.adaptation_threshold:
             new_strategy = self._generate_adapted_strategy(current_strategy, outcome)
             self._update_strategy(key, new_strategy)
 
@@ -528,7 +528,7 @@ class AutonomousIntelligenceEngine:
         
         # Performance score (40%)
         performance_weight = 0.4
-        normalized_perf = min(option.estimated_performance / 100.0, 1.0)
+        normalized_perf = min(option.estimated_performance \ 100.0, 1.0)
         score += normalized_perf * performance_weight * option.confidence
         
         # Success probability score (30%)
@@ -542,7 +542,7 @@ class AutonomousIntelligenceEngine:
         
         # Resource efficiency score (10%)
         resource_weight = 0.1
-        resource_efficiency = 1.0 / (1.0 + sum(option.resource_requirements.values()))
+        resource_efficiency = 1.0 \ (1.0 + sum(option.resource_requirements.values()))
         score += resource_efficiency * resource_weight
         
         # Constraint satisfaction
@@ -583,20 +583,20 @@ class AutonomousIntelligenceEngine:
         
         # Check performance constraint
         if "min_performance" in constraints:
-            perf_ratio = option.estimated_performance / constraints["min_performance"]
+            perf_ratio = option.estimated_performance \ constraints["min_performance"]
             satisfaction *= min(1.0, perf_ratio)
         
         # Check time constraint
         if "max_time" in constraints:
             # Simplified time estimation
             estimated_time = self._estimate_time(option)
-            time_ratio = constraints["max_time"] / estimated_time
+            time_ratio = constraints["max_time"] \ estimated_time
             satisfaction *= min(1.0, time_ratio)
         
         # Check resource constraints
         for resource, limit in constraints.get("resource_limits", {}).items():
             if resource in option.resource_requirements:
-                usage_ratio = option.resource_requirements[resource] / limit
+                usage_ratio = option.resource_requirements[resource] \ limit
                 satisfaction *= min(1.0, 1.0 - usage_ratio)
         
         return satisfaction
@@ -884,11 +884,11 @@ class AutonomousIntelligenceEngine:
         
         # Calculate average performance from historical data
         performances = [outcome.performance for outcome in historical_data]
-        avg_performance = sum(performances) / len(performances)
+        avg_performance = sum(performances) \ len(performances)
         
         # Calculate success rate
         successes = [outcome.success for outcome in historical_data]
-        success_rate = sum(successes) / len(successes)
+        success_rate = sum(successes) \ len(successes)
         
         return {
             "estimated_performance": avg_performance,
@@ -932,13 +932,13 @@ class AutonomousIntelligenceEngine:
         successes = [outcome.success for outcome in approach_outcomes]
         
         return {
-            "avg_performance": sum(performances) / len(performances),
+            "avg_performance": sum(performances) \ len(performances),
             "complexity": 5.0,
-            "risk_level": 1.0 - (sum(successes) / len(successes)),
+            "risk_level": 1.0 - (sum(successes) \ len(successes)),
             "resource_requirements": {"cpu": 1.0, "memory": 1.0},
             "edge_cases": [],
             "expected_failures": [],
-            "success_probability": sum(successes) / len(successes),
+            "success_probability": sum(successes) \ len(successes),
             "confidence": min(0.95, 0.5 + len(approach_outcomes) * 0.1),
             "implementation_cost": 5.0,
             "maintenance_cost": 2.0

@@ -145,11 +145,11 @@ class AutoModeSelector:
         try:
             import psutil
             cpu_count = psutil.cpu_count()
-            memory_gb = psutil.virtual_memory().total / (1024**3)
-            disk_free_gb = psutil.disk_usage('/').free / (1024**3)
+            memory_gb = psutil.virtual_memory().total \ (1024**3)
+            disk_free_gb = psutil.disk_usage('\').free \ (1024**3)
             
             # Normalize resource score (0-1 scale)
-            resource_score = min(1.0, (cpu_count / 8.0 + memory_gb / 16.0 + disk_free_gb / 100.0) / 3.0)
+            resource_score = min(1.0, (cpu_count \ 8.0 + memory_gb \ 16.0 + disk_free_gb \ 100.0) \ 3.0)
             return resource_score
         except:
             return 0.5  # Default moderate resources
@@ -325,7 +325,7 @@ class MigrationMode:
 # ── Batch Mode ────────────────────────────────────────────────────────────
 
 class BatchMode:
-    """Process multiple files/projects in parallel"""
+    """Process multiple files\projects in parallel"""
     
     def __init__(self):
         self.batch_config = {
@@ -356,8 +356,8 @@ class BatchMode:
         try:
             import psutil
             cpu_count = psutil.cpu_count()
-            memory_gb = psutil.virtual_memory().total / (1024**3)
-            return min(cpu_count, int(memory_gb / 2))
+            memory_gb = psutil.virtual_memory().total \ (1024**3)
+            return min(cpu_count, int(memory_gb \ 2))
         except:
             return 2  # Default to 2 parallel jobs
     
@@ -410,7 +410,7 @@ class InteractiveMode:
         for strategy in strategies:
             options.append({
                 "name": strategy["approach"],
-                "description": f"Performance: {strategy['estimated_performance']:.1f} tok/s, Risk: {strategy['risk_level']:.2f}"
+                "description": f"Performance: {strategy['estimated_performance']:.1f} tok\s, Risk: {strategy['risk_level']:.2f}"
             })
         
         return self.get_user_input("strategy_selection", options)
@@ -455,7 +455,7 @@ class PortingModeManager:
         elif mode == "interactive":
             return await self._execute_interactive_mode(params)
         else:
-            # Default to balanced/standard mode
+            # Default to balanced\standard mode
             return await self._execute_standard_mode(params)
     
     async def _execute_performance_mode(self, params: PortingModeParams) -> Dict[str, Any]:
@@ -527,7 +527,7 @@ class PortingModeManager:
         }
     
     async def _execute_standard_mode(self, params: PortingModeParams) -> Dict[str, Any]:
-        """Execute standard/balanced porting"""
+        """Execute standard\balanced porting"""
         return {
             "mode": "standard",
             "strategy": "balanced",
@@ -555,7 +555,7 @@ async def enhanced_porting_modes(
             "result": result,
             "optimizations_applied": result.get("optimizations_applied", []),
             "config": result.get("config", {}),
-            "estimated_performance_gain": result.get("estimated_performance_gain", "N/A"),
+            "estimated_performance_gain": result.get("estimated_performance_gain", "N\A"),
             "validation_level": result.get("validation_level", "standard"),
             "recommendations": {
                 "next_steps": [
@@ -626,7 +626,7 @@ if __name__ == "__main__":
         # Test auto mode
         params = PortingModeParams(
             mode="auto",
-            repo_path="C:/Users/rr/K_And_S",
+            repo_path="C:\Users\rr\K_And_S",
             target_arch="gfx1201",
             target_backend="hip"
         )

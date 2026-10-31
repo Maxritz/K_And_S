@@ -1,6 +1,6 @@
 import sys, asyncio, os, importlib.util, datetime as dt, types, pathlib, importlib, json
-_KARDS_ROOT = os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')
-mcp_server_path = os.path.join(_KARDS_ROOT, 'mcp', 'server.py').replace('\\', '/')
+_KARDS_ROOT = os.path.dirname(os.path.abspath(__file__)).replace('/', '/')
+mcp_server_path = os.path.join(_KARDS_ROOT, 'mcp', 'server.py').replace('/', '/')
 
 _repo_root = pathlib.Path(mcp_server_path).resolve().parent.parent
 
@@ -16,7 +16,7 @@ for _entry in sorted(os.listdir(_mcp_dir)):
     _name = _entry[:-3]
     if _name in ('__init__', '_final_test', '_smoke_register', '_test_gpu', '_validate_bundle', 'server'):
         continue
-    _path = os.path.join(_mcp_dir, _entry).replace('\\', '/')
+    _path = os.path.join(_mcp_dir, _entry).replace('/', '/')
     if _name not in sys.modules:
         _spec_sibling = importlib.util.spec_from_file_location(_name, _path)
         _sibling_mod = importlib.util.module_from_spec(_spec_sibling)
